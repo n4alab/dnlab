@@ -17,6 +17,8 @@ const Canvas = (() => {
   let mode = 'select';          // 'select' | 'link'
   let linkSource = null;
   const listeners = {};
+  let _annotations = [];
+  let _selectedAnnotationId = null;
   // (kind, linuxIface) -> vendorIface. Default is passthrough until
   // the caller installs a real resolver (see setInterfaceResolver).
   let _ifaceResolver = (_kind, linux) => linux;
@@ -39,6 +41,12 @@ const Canvas = (() => {
   const FOLLOW_RABBIT_AFTERGLOW_MS = 30000;
   const FOLLOW_RABBIT_IDLE_TTL_MS = 10000;
   const EDGE_BEZIER_STEP_PX = 40;
+  // VD stay on one fixed plane. Annotation z_index values are relative to it.
+  const VD_Z_INDEX = 10;
+  const ANNOTATION_Z_INDEX_STEP = 10;
+  const MAX_ANNOTATION_Z_INDEX = 999;
+  const ANNOTATION_HANDLE_Z_INDEX = VD_Z_INDEX
+    + ((MAX_ANNOTATION_Z_INDEX + 1) * ANNOTATION_Z_INDEX_STEP);
   const _isMgmtId = id => id === MGMT_ID;
   const _isMgmtEdge = e => e.hasClass && e.hasClass(MGMT_EDGE_CLS);
   const _isMgmtEdgeLike = e =>
@@ -165,6 +173,62 @@ const Canvas = (() => {
           'background-repeat': 'no-repeat',
           'background-clip': 'node',            // Vincola l'image ai confini del node (evita il drifting)
           'background-image-containment': 'inside',
+          'z-index-compare': 'manual',
+          'z-index': VD_Z_INDEX,
+        },
+      },
+      {
+        selector: 'node.canvas-annotation',
+        style: {
+          'shape': 'data(cy_shape)',
+          'background-color': 'data(fill_color)',
+          'background-opacity': 'data(fill_opacity)',
+          'opacity': 'data(opacity)',
+          'background-image': 'none',
+          'border-color': 'data(stroke_color)',
+          'border-width': 'data(border_width)',
+          'border-style': 'solid',
+          'width': 'data(width)',
+          'height': 'data(height)',
+          'label': 'data(text)',
+          'text-wrap': 'wrap',
+          'text-max-width': 'data(text_width)',
+          'text-valign': 'center',
+          'text-halign': 'center',
+          'font-size': 'data(font_size)',
+          'font-family': 'data(font_family)',
+          'font-weight': 'data(font_weight)',
+          'font-style': 'data(font_style)',
+          'color': 'data(text_color)',
+          'text-background-opacity': 0,
+          'text-margin-y': 0,
+          'padding': 0,
+          'events': 'yes',
+          'z-index-compare': 'manual',
+          'z-index': 'data(cy_z_index)',
+        },
+      },
+      {
+        selector: 'node.canvas-annotation:selected',
+        style: {
+          'border-color': t.selectColor,
+          'overlay-color': t.selectColor,
+          'overlay-opacity': 0.12,
+          'overlay-padding': 6,
+        },
+      },
+      {
+        selector: 'node.canvas-annotation-resize-handle',
+        style: {
+          'shape': 'ellipse',
+          'width': 14,
+          'height': 14,
+          'background-color': t.selectColor,
+          'border-width': 2,
+          'border-color': '#ffffff',
+          'label': '',
+          'z-index-compare': 'manual',
+          'z-index': 'data(cy_z_index)',
         },
       },
       {
@@ -211,13 +275,27 @@ const Canvas = (() => {
           'target-arrow-shape': 'none',
           'curve-style': 'bezier',
           'control-point-step-size': `${EDGE_BEZIER_STEP_PX}px`,
-          'label': 'data(label)',
+          'label': '',
+          'source-label': 'data(source_label)',
+          'target-label': 'data(target_label)',
           'font-size': '9px',
           'color': t.edgeLabelColor,
+          'source-text-offset': 34,
+          'target-text-offset': 34,
+          'source-text-margin-y': -8,
+          'target-text-margin-y': -8,
           'text-background-color': t.textBg,
           'text-background-opacity': 0.7,
           'text-background-padding': '2px',
-          'text-rotation': 'autorotate',
+          'source-text-rotation': 'none',
+          'target-text-rotation': 'none',
+        },
+      },
+      {
+        selector: 'edge.custom-link-color',
+        style: {
+          'line-color': 'data(color)',
+          'color': 'data(label_color)',
         },
       },
       {
@@ -388,6 +466,12 @@ const Canvas = (() => {
     // Single click on node → link drawing (select mode just selects)
     cy.on('tap', 'node', (evt) => {
       const node = evt.target;
+      if (_isAnnotationHandle(node)) return;
+      if (_isAnnotationNode(node)) {
+        _selectedAnnotationId = node.data('annotation_id');
+        _syncAnnotationHandles();
+        return;
+      }
       // The mgmt cloud has its dedicated handler (opens the modal).
       if (_isMgmtId(node.data('id'))) {
         _emit('mgmt-click', {});
@@ -403,6 +487,20 @@ const Canvas = (() => {
     // Right-click on node → context menu
     cy.on('cxttap', 'node', (evt) => {
       const node        = evt.target;
+      if (_isAnnotationHandle(node)) return;
+      if (_isAnnotationNode(node)) {
+        const ann = _annotationById(node.data('annotation_id'));
+        if (!ann) return;
+        const oe = evt.originalEvent;
+        _selectedAnnotationId = ann.id;
+        _syncAnnotationHandles();
+        _emit('annotation-rightclick', {
+          annotation: _annotationCopy(ann),
+          screenX: oe ? oe.clientX : 0,
+          screenY: oe ? oe.clientY : 0,
+        });
+        return;
+      }
       // Mgmt cloud: no device menu, only opens the modal.
       if (_isMgmtId(node.data('id'))) {
         _emit('mgmt-click', {});
@@ -420,6 +518,16 @@ const Canvas = (() => {
         return rect.top + rp.y;
       })();
       _emit('node-rightclick', { data: node.data(), screenX, screenY });
+    });
+
+    cy.on('dbltap', 'node.canvas-annotation', (evt) => {
+      const ann = _annotationById(evt.target.data('annotation_id'));
+      if (!ann) return;
+      const next = window.prompt('Annotation text', ann.text);
+      if (next === null) return;
+      ann.text = next;
+      _syncAnnotationNodes();
+      _emit('annotations-change', getAnnotations());
     });
 
     // Right-click on edge → context menu
@@ -447,10 +555,39 @@ const Canvas = (() => {
       }
     });
 
+    cy.on('cxttap', (evt) => {
+      if (evt.target !== cy) return;
+      const ann = _annotationAt(evt.position);
+      if (!ann) return;
+      const oe = evt.originalEvent;
+      _selectedAnnotationId = ann.id;
+      _syncAnnotationHandles();
+      _emit('annotation-rightclick', {
+        annotation: _annotationCopy(ann),
+        screenX: oe ? oe.clientX : 0,
+        screenY: oe ? oe.clientY : 0,
+      });
+    });
+
     // Drag node → persist position
     cy.on('dragfree', 'node', (evt) => {
       const n = evt.target;
+      if (_isAnnotationNode(n)) {
+        _updateAnnotationPositionFromNode(n);
+        _syncAnnotationHandles();
+        _emit('annotations-change', getAnnotations());
+        return;
+      }
+      if (_isAnnotationHandle(n)) {
+        _resizeAnnotationFromHandle(n);
+        _emit('annotations-change', getAnnotations());
+        return;
+      }
       _emit('node-move', { id: n.data('id'), position: n.position() });
+    });
+
+    cy.on('drag', 'node.canvas-annotation-resize-handle', (evt) => {
+      _resizeAnnotationFromHandle(evt.target);
     });
 
     // Hover effects in link mode + RealNet quick info balloon.
@@ -504,6 +641,8 @@ const Canvas = (() => {
     _stopRabbitPulse();
     cy.elements().remove();
     const { nodes = [], links = [] } = topoData;
+    _annotations = _normalizeAnnotations(topoData.gui_canvas_annotations_state || []);
+    _selectedAnnotationId = null;
 
     nodes.forEach(n => {
       const node = cy.add({
@@ -517,22 +656,24 @@ const Canvas = (() => {
 
     links.forEach(lk => {
       if (cy.getElementById(lk.source).length && cy.getElementById(lk.target).length) {
-        cy.add({
+        const edge = cy.add({
           group: 'edges',
-          data: _edgeData(lk),
+          data: _edgeData(lk, topoData.gui_link_styles_state || {}),
         });
+        _applyEdgeStyleClass(edge);
       }
     });
     // Il cloud viene ri-added separatamente dal caller via setMgmt()
     // — qui puliamo edge mgmt rimasti orfani da un topology precedente.
     _refreshMgmtEdges();
+    _syncAnnotationNodes();
   }
 
   function getTopologyData() {
     // Il cloud mgmt e i suoi edge fittizi non fanno parte della topology
     // persistita: sono rendering-only.
     const nodes = cy.nodes()
-      .filter(n => !_isMgmtId(n.data('id')))
+      .filter(n => !_isMgmtId(n.data('id')) && !_isAnnotationLike(n))
       .map(n => ({
         name:     n.data('id'),
         kind:     n.data('kind'),
@@ -548,7 +689,17 @@ const Canvas = (() => {
         target:       e.data('target'),
         target_iface: e.data('target_iface') || '',
       }));
-    return { nodes, links };
+    const gui_link_styles_state = {};
+    cy.edges().filter(e => !_isMgmtEdgeLike(e)).forEach(e => {
+      const style = _edgeStyleData(e);
+      if (Object.keys(style).length) gui_link_styles_state[_edgeStyleKeyForData(e.data())] = style;
+    });
+    return {
+      nodes,
+      links,
+      gui_link_styles_state,
+      gui_canvas_annotations_state: getAnnotations(),
+    };
   }
 
   function addNode(nodeData) {
@@ -635,7 +786,7 @@ const Canvas = (() => {
     if (!cy) return;
     cy.nodes().forEach(node => {
       const id = node.data('id');
-      if (_isMgmtId(id)) return;
+      if (_isMgmtId(id) || _isAnnotationLike(node)) return;
       const info = (byNode && byNode[id]) || {};
       node.data('runtime_mgmt_ipv4', info.mgmt_ipv4 || info.ipv4_address || info.ipv4 || '');
       node.data('runtime_mgmt_ipv6', info.mgmt_ipv6 || info.ipv6_address || info.ipv6 || '');
@@ -647,7 +798,7 @@ const Canvas = (() => {
     if (!cy) return;
     cy.nodes().forEach(node => {
       const id = node.data('id');
-      if (_isMgmtId(id)) return;
+      if (_isMgmtId(id) || _isAnnotationLike(node)) return;
       const info = (byNode && byNode[id]) || {};
       node.data('runtime_host', info.host || '');
       node.data('scheduled_host', info.scheduled_host || '');
@@ -660,7 +811,7 @@ const Canvas = (() => {
     if (!cy) return;
     cy.nodes().forEach(node => {
       const id = node.data('id');
-      if (_isMgmtId(id)) return;
+      if (_isMgmtId(id) || _isAnnotationLike(node)) return;
       const info = (byNode && byNode[id]) || {};
       node.data('runtime_state', info.state || '');
       node.data('runtime_container', info.container || '');
@@ -691,7 +842,7 @@ const Canvas = (() => {
 
   function hasActiveNodeOperations() {
     if (!cy) return false;
-    return cy.nodes().some(node => !_isMgmtId(node.id()) && !!node.data('operation_active'));
+    return cy.nodes().some(node => !_isMgmtId(node.id()) && !_isAnnotationLike(node) && !!node.data('operation_active'));
   }
 
   function _ensureRuntimeGearLayer() {
@@ -708,7 +859,7 @@ const Canvas = (() => {
     const active = new Set();
     cy.nodes().forEach(node => {
       const id = node.data('id');
-      if (_isMgmtId(id) || !node.data('operation_active')) return;
+      if (_isMgmtId(id) || _isAnnotationLike(node) || !node.data('operation_active')) return;
       active.add(id);
       if (!_runtimeGearBadges.has(id)) {
         const badge = document.createElement('div');
@@ -817,7 +968,7 @@ const Canvas = (() => {
   function addEdge(source, target, sourceIface = '', targetIface = '') {
     const edgeId = _edgeId(source, target, sourceIface, targetIface);
     if (cy.getElementById(edgeId).length) return;
-    cy.add({
+    const edge = cy.add({
       group: 'edges',
       data: {
         id: edgeId,
@@ -828,8 +979,13 @@ const Canvas = (() => {
         source_kind: cy.getElementById(source).data('kind') || '',
         target_kind: cy.getElementById(target).data('kind') || '',
         label: _edgeLabel(source, target, sourceIface, targetIface),
+        source_label: _edgeSourceLabel(source, target, sourceIface, targetIface),
+        target_label: _edgeTargetLabel(source, target, sourceIface, targetIface),
+        color: '',
+        label_color: '',
       },
     });
+    _applyEdgeStyleClass(edge);
   }
 
   function removeEdge(source, target, sourceIface, targetIface) {
@@ -850,7 +1006,7 @@ const Canvas = (() => {
 
   function getSelected() {
     return {
-      nodes: cy.nodes(':selected').map(n => n.data('id')),
+      nodes: cy.nodes(':selected').filter(n => !_isAnnotationLike(n)).map(n => n.data('id')),
       edges: cy.edges(':selected').map(e => ({
         id: e.id(),
         source: e.data('source'),
@@ -1086,8 +1242,11 @@ const Canvas = (() => {
   function clear() {
     _clearRabbitDots();
     _stopRabbitPulse();
+    _annotations = [];
+    _selectedAnnotationId = null;
     cy.elements().remove();
     _syncRuntimeGears();
+    _syncAnnotationNodes();
   }
 
   /**
@@ -1439,7 +1598,7 @@ const Canvas = (() => {
   }
 
   function _refreshNodeLabel(node) {
-    if (!node || !node.length || _isMgmtId(node.data('id'))) return;
+    if (!node || !node.length || _isMgmtId(node.data('id')) || _isAnnotationLike(node)) return;
     node.data('label', _nodeLabel(
       node.data('id'),
       node.data('kind') || '',
@@ -1455,7 +1614,7 @@ const Canvas = (() => {
   }
 
   function _applyNodeLabelWidth(node) {
-    if (!node || !node.length || _isMgmtId(node.data('id'))) return;
+    if (!node || !node.length || _isMgmtId(node.data('id')) || _isAnnotationLike(node)) return;
     node.style('text-max-width', `${_nodeLabelWidth(node.data('label'))}px`);
   }
 
@@ -1465,7 +1624,8 @@ const Canvas = (() => {
     return Math.max(120, Math.min(420, Math.ceil(maxLen * 6.2) + 24));
   }
 
-  function _edgeData(lk) {
+  function _edgeData(lk, linkStyles = {}) {
+    const style = linkStyles[_edgeStyleKey(lk.source, lk.source_iface || '', lk.target, lk.target_iface || '')] || {};
     return {
       id:           _edgeId(lk.source, lk.target, lk.source_iface, lk.target_iface),
       source:       lk.source,
@@ -1475,6 +1635,10 @@ const Canvas = (() => {
       source_kind:  cy ? (cy.getElementById(lk.source).data('kind') || '') : '',
       target_kind:  cy ? (cy.getElementById(lk.target).data('kind') || '') : '',
       label: _edgeLabel(lk.source, lk.target, lk.source_iface || '', lk.target_iface || ''),
+      source_label: _edgeSourceLabel(lk.source, lk.target, lk.source_iface || '', lk.target_iface || ''),
+      target_label: _edgeTargetLabel(lk.source, lk.target, lk.source_iface || '', lk.target_iface || ''),
+      color: style.color || '',
+      label_color: style.label_color || style.color || '',
     };
   }
 
@@ -1530,6 +1694,22 @@ const Canvas = (() => {
       .filter(Boolean).join(' – ');
   }
 
+  function _edgeSourceLabel(source, target, sIf, tIf) {
+    const srcKind = cy ? (cy.getElementById(source).data('kind') || '') : '';
+    const tgtKind = cy ? (cy.getElementById(target).data('kind') || '') : '';
+    if (srcKind === '_real_net') return '';
+    if (tgtKind === '_real_net') return _ifaceResolver(srcKind, sIf);
+    return _ifaceResolver(srcKind, sIf);
+  }
+
+  function _edgeTargetLabel(source, target, sIf, tIf) {
+    const srcKind = cy ? (cy.getElementById(source).data('kind') || '') : '';
+    const tgtKind = cy ? (cy.getElementById(target).data('kind') || '') : '';
+    if (srcKind === '_real_net') return _ifaceResolver(tgtKind, tIf);
+    if (tgtKind === '_real_net') return '';
+    return _ifaceResolver(tgtKind, tIf);
+  }
+
   function setInterfaceResolver(fn) {
     _ifaceResolver = typeof fn === 'function' ? fn : ((_, l) => l);
     // Relabel existing edges so a late-arriving resolver is reflected.
@@ -1539,7 +1719,413 @@ const Canvas = (() => {
         e.data('source'), e.data('target'),
         e.data('source_iface') || '', e.data('target_iface') || '',
       ));
+      e.data('source_label', _edgeSourceLabel(
+        e.data('source'), e.data('target'),
+        e.data('source_iface') || '', e.data('target_iface') || '',
+      ));
+      e.data('target_label', _edgeTargetLabel(
+        e.data('source'), e.data('target'),
+        e.data('source_iface') || '', e.data('target_iface') || '',
+      ));
     });
+  }
+
+  function setLinkStyle(edgeData, style = {}) {
+    if (!cy || !edgeData) return;
+    const edge = cy.getElementById(_edgeId(
+      edgeData.source, edgeData.target,
+      edgeData.source_iface || '', edgeData.target_iface || '',
+    ));
+    if (!edge.length) return;
+    edge.data('color', _validHex(style.color) ? style.color.toLowerCase() : '');
+    const labelColor = _validHex(style.label_color) ? style.label_color.toLowerCase() : edge.data('color');
+    edge.data('label_color', labelColor || '');
+    _applyEdgeStyleClass(edge);
+  }
+
+  function _applyEdgeStyleClass(edge) {
+    const hasColor = _validHex(edge.data('color'));
+    edge.toggleClass('custom-link-color', !!hasColor);
+    if (hasColor && !edge.data('label_color')) edge.data('label_color', edge.data('color'));
+  }
+
+  function _edgeStyleData(edge) {
+    const style = {};
+    if (_validHex(edge.data('color'))) style.color = edge.data('color').toLowerCase();
+    if (_validHex(edge.data('label_color')) && edge.data('label_color') !== style.color) {
+      style.label_color = edge.data('label_color').toLowerCase();
+    }
+    return style;
+  }
+
+  function _edgeStyleKeyForData(data) {
+    return _edgeStyleKey(data.source, data.source_iface || '', data.target, data.target_iface || '');
+  }
+
+  function _edgeStyleKey(source, sourceIface, target, targetIface) {
+    return [`${source}:${sourceIface || ''}`, `${target}:${targetIface || ''}`].sort().join('|');
+  }
+
+  function _validHex(value) {
+    return /^#[0-9a-fA-F]{6}$/.test(String(value || ''));
+  }
+
+  function setAnnotations(annotations) {
+    _annotations = _normalizeAnnotations(annotations);
+    _syncAnnotationNodes();
+  }
+
+  function getAnnotations() {
+    return _annotations.map(_annotationCopy);
+  }
+
+  function addAnnotation(type, position = null) {
+    if (!cy || !['note', 'rectangle', 'ellipse'].includes(type)) return null;
+    const center = position || cy.extent();
+    const pos = position
+      ? position
+      : { x: (center.x1 + center.x2) / 2 - 80, y: (center.y1 + center.y2) / 2 - 40 };
+    const ann = _normalizeAnnotation({
+      id: `ann-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+      type,
+      text: type === 'note' ? 'Nota' : '',
+      z_index: _nextAnnotationZIndex(),
+      position: pos,
+      width: type === 'note' ? 180 : 140,
+      height: type === 'note' ? 60 : 100,
+      style: {},
+    }, _annotations.length);
+    _annotations.push(ann);
+    _selectedAnnotationId = ann.id;
+    _syncAnnotationNodes();
+    _emit('annotations-change', getAnnotations());
+    return ann;
+  }
+
+  function _normalizeAnnotations(annotations) {
+    return (Array.isArray(annotations) ? annotations : [])
+      .map((a, idx) => _normalizeAnnotation(a, idx))
+      .filter(Boolean);
+  }
+
+  function _normalizeAnnotation(a, idx) {
+    if (!a || !['note', 'rectangle', 'ellipse'].includes(a.type)) return null;
+    const pos = a.position || {};
+    const style = a.style || {};
+    const zIndex = _annotationZIndex(a.z_index, a.layer);
+    return {
+      id: String(a.id || `annotation-${idx + 1}`),
+      type: a.type,
+      text: String(a.text || ''),
+      // layer stays for legacy sidecars and draw.io files; z_index is canonical.
+      layer: _annotationLayerName(zIndex),
+      z_index: zIndex,
+      position: { x: Number(pos.x ?? 100), y: Number(pos.y ?? 100) },
+      width: Math.max(32, Number(a.width || 160)),
+      height: Math.max(24, Number(a.height || 80)),
+      style: {
+        stroke_color: _validHex(style.stroke_color) ? style.stroke_color.toLowerCase() : (a.type === 'note' ? 'transparent' : '#64748b'),
+        fill_color: _validHex(style.fill_color) ? style.fill_color.toLowerCase() : (a.type === 'note' ? 'transparent' : '#fef3c7'),
+        text_color: _validHex(style.text_color) ? style.text_color.toLowerCase() : '#111827',
+        font_size: Number(style.font_size || 14),
+        font_family: String(style.font_family || 'Arial'),
+        font_weight: ['400', '500', '600', '700'].includes(String(style.font_weight)) ? String(style.font_weight) : '400',
+        font_style: style.font_style === 'italic' ? 'italic' : 'normal',
+        border_width: Number(style.border_width ?? (a.type === 'note' ? 0 : 2)),
+        opacity: Math.max(0.1, Math.min(1, Number(style.opacity ?? 0.9))),
+      },
+    };
+  }
+
+  function _syncAnnotationNodes() {
+    if (!cy) return;
+    const wanted = new Set();
+    _annotations.forEach(ann => {
+      const id = _annotationCyId(ann.id);
+      wanted.add(id);
+      let node = cy.getElementById(id);
+      const data = _annotationCyData(ann);
+      const position = _annotationCenter(ann);
+      if (!node.length) {
+        node = cy.add({
+          group: 'nodes',
+          data,
+          position,
+          classes: _annotationClasses(ann),
+        });
+      } else {
+        node.data(data);
+        node.position(position);
+        node.classes(_annotationClasses(ann));
+      }
+    });
+    cy.nodes('.canvas-annotation').forEach(node => {
+      if (!wanted.has(node.id())) node.remove();
+    });
+    _syncAnnotationHandles();
+  }
+
+  function _annotationCyData(ann) {
+    const style = ann.style || {};
+    const isNote = ann.type === 'note';
+    return {
+      id: _annotationCyId(ann.id),
+      annotation_id: ann.id,
+      kind: '_annotation',
+      type: ann.type,
+      layer: ann.layer,
+      z_index: ann.z_index,
+      cy_z_index: _annotationCyZIndex(ann.z_index),
+      cy_shape: ann.type === 'ellipse' ? 'ellipse' : 'rectangle',
+      width: ann.width,
+      height: ann.height,
+      text_width: Math.max(20, ann.width - 12),
+      text: ann.text || '',
+      fill_color: isNote ? '#ffffff' : style.fill_color,
+      fill_opacity: isNote ? 0 : style.opacity,
+      opacity: style.opacity,
+      stroke_color: isNote ? '#ffffff' : style.stroke_color,
+      border_width: isNote ? 0 : style.border_width,
+      text_color: style.text_color,
+      font_size: style.font_size,
+      font_family: style.font_family,
+      font_weight: style.font_weight,
+      font_style: style.font_style,
+    };
+  }
+
+  function _annotationClasses(ann) {
+    return `canvas-annotation canvas-annotation-${ann.type}`;
+  }
+
+  function _annotationCenter(ann) {
+    return {
+      x: ann.position.x + ann.width / 2,
+      y: ann.position.y + ann.height / 2,
+    };
+  }
+
+  function _updateAnnotationPositionFromNode(node) {
+    const ann = _annotationById(node.data('annotation_id'));
+    if (!ann) return;
+    const p = node.position();
+    ann.position = {
+      x: Math.round(p.x - ann.width / 2),
+      y: Math.round(p.y - ann.height / 2),
+    };
+  }
+
+  function _syncAnnotationHandles() {
+    cy.nodes('.canvas-annotation-resize-handle').remove();
+    const ann = _annotationById(_selectedAnnotationId);
+    if (!ann) return;
+    cy.add({
+      group: 'nodes',
+      data: {
+        id: _annotationHandleId(ann.id),
+        annotation_id: ann.id,
+        kind: '_annotation_handle',
+        cy_z_index: ANNOTATION_HANDLE_Z_INDEX,
+      },
+      position: {
+        x: ann.position.x + ann.width,
+        y: ann.position.y + ann.height,
+      },
+      classes: 'canvas-annotation-resize-handle',
+    });
+  }
+
+  function _resizeAnnotationFromHandle(handle) {
+    const ann = _annotationById(handle.data('annotation_id'));
+    if (!ann) return;
+    const p = handle.position();
+    ann.width = Math.max(32, Math.round(p.x - ann.position.x));
+    ann.height = Math.max(24, Math.round(p.y - ann.position.y));
+    const node = cy.getElementById(_annotationCyId(ann.id));
+    if (node.length) {
+      node.data(_annotationCyData(ann));
+      node.position(_annotationCenter(ann));
+    }
+    handle.position({
+      x: ann.position.x + ann.width,
+      y: ann.position.y + ann.height,
+    });
+  }
+
+  function updateAnnotation(id, updates = {}) {
+    const ann = _annotations.find(a => a.id === id);
+    if (!ann) return;
+    if (updates.text !== undefined) ann.text = String(updates.text || '');
+    if (updates.z_index !== undefined) {
+      ann.z_index = _annotationZIndex(updates.z_index, ann.layer);
+      ann.layer = _annotationLayerName(ann.z_index);
+    } else if (updates.layer !== undefined) {
+      ann.z_index = _annotationZIndex(undefined, updates.layer);
+      ann.layer = _annotationLayerName(ann.z_index);
+    }
+    if (updates.style && typeof updates.style === 'object') {
+      ann.style = { ...ann.style, ...updates.style };
+    }
+    _annotations = _normalizeAnnotations(_annotations);
+    _selectedAnnotationId = id;
+    _syncAnnotationNodes();
+    _emit('annotations-change', getAnnotations());
+  }
+
+  function deleteAnnotation(id) {
+    const before = _annotations.length;
+    _annotations = _annotations.filter(a => a.id !== id);
+    if (_selectedAnnotationId === id) _selectedAnnotationId = null;
+    if (_annotations.length !== before) {
+      _syncAnnotationNodes();
+      _emit('annotations-change', getAnnotations());
+    }
+  }
+
+  function _annotationCopy(a) {
+    return {
+      ...a,
+      position: { ...a.position },
+      style: { ...(a.style || {}) },
+    };
+  }
+
+  function _annotationAt(position) {
+    const order = new Map(_annotations.map((ann, idx) => [ann.id, idx]));
+    const hitOrder = [..._annotations].sort((a, b) => (
+      b.z_index - a.z_index || order.get(b.id) - order.get(a.id)
+    ));
+    for (const ann of hitOrder) {
+      if (
+        position.x >= ann.position.x
+        && position.x <= ann.position.x + ann.width
+        && position.y >= ann.position.y
+        && position.y <= ann.position.y + ann.height
+      ) {
+        return ann;
+      }
+    }
+    return null;
+  }
+
+  function moveAnnotationLayer(id, direction) {
+    const ann = _annotationById(id);
+    if (!ann) return;
+    const { below, above } = _annotationLayerLists();
+    const belowIndex = below.indexOf(ann);
+    const aboveIndex = above.indexOf(ann);
+
+    if (direction === 'front') {
+      _removeFromAnnotationLayerLists(ann, below, above);
+      above.push(ann);
+    } else if (direction === 'back') {
+      _removeFromAnnotationLayerLists(ann, below, above);
+      below.unshift(ann);
+    } else if (direction === 'forward') {
+      if (belowIndex >= 0 && belowIndex < below.length - 1) {
+        [below[belowIndex], below[belowIndex + 1]] = [below[belowIndex + 1], below[belowIndex]];
+      } else if (belowIndex >= 0) {
+        below.splice(belowIndex, 1);
+        above.unshift(ann);
+      } else if (aboveIndex >= 0 && aboveIndex < above.length - 1) {
+        [above[aboveIndex], above[aboveIndex + 1]] = [above[aboveIndex + 1], above[aboveIndex]];
+      } else {
+        return;
+      }
+    } else if (direction === 'backward') {
+      if (aboveIndex > 0) {
+        [above[aboveIndex], above[aboveIndex - 1]] = [above[aboveIndex - 1], above[aboveIndex]];
+      } else if (aboveIndex === 0) {
+        above.splice(aboveIndex, 1);
+        below.push(ann);
+      } else if (belowIndex > 0) {
+        [below[belowIndex], below[belowIndex - 1]] = [below[belowIndex - 1], below[belowIndex]];
+      } else {
+        return;
+      }
+    } else {
+      return;
+    }
+
+    _reindexAnnotationLayers(below, above);
+    _selectedAnnotationId = id;
+    _syncAnnotationNodes();
+    _emit('annotations-change', getAnnotations());
+  }
+
+  function _annotationLayerLists() {
+    const order = new Map(_annotations.map((ann, idx) => [ann.id, idx]));
+    const sorted = [..._annotations].sort((a, b) => (
+      a.z_index - b.z_index || order.get(a.id) - order.get(b.id)
+    ));
+    return {
+      below: sorted.filter(ann => ann.z_index < 0),
+      above: sorted.filter(ann => ann.z_index > 0),
+    };
+  }
+
+  function _removeFromAnnotationLayerLists(ann, below, above) {
+    const list = below.includes(ann) ? below : above;
+    const idx = list.indexOf(ann);
+    if (idx >= 0) list.splice(idx, 1);
+  }
+
+  function _reindexAnnotationLayers(below, above) {
+    below.forEach((ann, idx) => {
+      ann.z_index = idx - below.length;
+      ann.layer = 'below_vd';
+    });
+    above.forEach((ann, idx) => {
+      ann.z_index = idx + 1;
+      ann.layer = 'above_vd';
+    });
+  }
+
+  function _nextAnnotationZIndex() {
+    const highest = _annotations.reduce((max, ann) => Math.max(max, ann.z_index || 0), 0);
+    return Math.min(MAX_ANNOTATION_Z_INDEX, highest + 1) || 1;
+  }
+
+  function _annotationZIndex(value, legacyLayer = '') {
+    let zIndex = Number(value);
+    if (!Number.isFinite(zIndex)) {
+      zIndex = ['back', 'background', 'below_vd'].includes(legacyLayer) ? -1 : 1;
+    }
+    zIndex = Math.max(-MAX_ANNOTATION_Z_INDEX, Math.min(MAX_ANNOTATION_Z_INDEX, Math.round(zIndex)));
+    if (zIndex === 0) zIndex = ['back', 'background', 'below_vd'].includes(legacyLayer) ? -1 : 1;
+    return zIndex;
+  }
+
+  function _annotationCyZIndex(zIndex) {
+    return VD_Z_INDEX + (_annotationZIndex(zIndex) * ANNOTATION_Z_INDEX_STEP);
+  }
+
+  function _annotationLayerName(zIndex) {
+    return Number(zIndex) < 0 ? 'below_vd' : 'above_vd';
+  }
+
+  function _annotationCyId(id) {
+    return `__ann__${id}`;
+  }
+
+  function _annotationHandleId(id) {
+    return `__ann_handle__${id}`;
+  }
+
+  function _annotationById(id) {
+    return _annotations.find(a => a.id === id) || null;
+  }
+
+  function _isAnnotationNode(node) {
+    return node && node.hasClass && node.hasClass('canvas-annotation');
+  }
+
+  function _isAnnotationHandle(node) {
+    return node && node.hasClass && node.hasClass('canvas-annotation-resize-handle');
+  }
+
+  function _isAnnotationLike(node) {
+    return _isAnnotationNode(node) || _isAnnotationHandle(node);
   }
 
   // Delega a DeviceCatalog (config/devices.json) — niente hardcoded qui.
@@ -1674,7 +2260,7 @@ const Canvas = (() => {
     if (!mgmt.length) return;
     cy.nodes().forEach(n => {
       const id = n.data('id');
-      if (_isMgmtId(id)) return;
+      if (_isMgmtId(id) || _isAnnotationLike(n)) return;
       const kind = n.data('kind') || 'linux';
       if (kind === '_real_net') return;
       const iface = DeviceCatalog.kindMgmtIface(kind);
@@ -1705,6 +2291,7 @@ const Canvas = (() => {
     init, loadTopology, getTopologyData,
     addNode, updateNode, removeNode, renameNode,
     addEdge, removeEdge, removeEdgeById, getSelected,
+    setLinkStyle, addAnnotation, updateAnnotation, moveAnnotationLayer, deleteAnnotation, setAnnotations, getAnnotations,
     setActiveCaptures, setFollowRabbitSessions,
     setMode, setTheme, setInterfaceResolver,
     fit, clear, on, projectPosition,

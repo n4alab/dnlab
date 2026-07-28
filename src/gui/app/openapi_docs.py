@@ -343,6 +343,18 @@ OPERATION_DOCS: dict[tuple[str, str], OperationDoc] = {
         "interface names. This requires write access, returns the updated topology, "
         "and does not automatically remove a live link.",
     ),
+    ("patch", "/api/labs/{lab_id}/topology/links/style"): _doc(
+        "Set a topology link visual style",
+        "Set or clear GUI-only visual styling for one saved link, such as its "
+        "custom color. This requires write access, returns the updated topology, "
+        "and does not change ContainerLab configuration or live runtime state.",
+    ),
+    ("put", "/api/labs/{lab_id}/topology/canvas-annotations"): _doc(
+        "Set canvas annotations",
+        "Replace the saved GUI-only canvas annotations for the selected lab, "
+        "including notes and simple shapes. This requires write access, returns "
+        "the updated topology, and does not create ContainerLab nodes or links.",
+    ),
     ("post", "/api/labs/{lab_id}/topology/import-drawio"): _doc(
         "Import a draw.io topology",
         "Parse the uploaded draw.io XML and persist its supported graph content in "

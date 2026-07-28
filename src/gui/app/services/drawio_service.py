@@ -61,16 +61,23 @@ class DrawioService:
         nodes: list[Node] = []
         links: list[Link] = []
         extra: dict[str, Any] = {}
+        link_styles: dict[str, dict[str, Any]] = {}
+        annotations: list[dict[str, Any]] = []
         meta = cells.get("dnlab_meta")
         if meta is not None:
             mgmt = self._json_attr_or(meta.get("dnlab_mgmt"), {})
             if isinstance(mgmt, dict) and mgmt:
                 extra["mgmt"] = mgmt
 
-        # First pass: vertices (nodes)
+        # First pass: vertices (nodes) and dNLab canvas annotations.
         vertex_ids: dict[str, str] = {}  # mxCell id → node name
         for cell_id, cell in cells.items():
             if cell.get("vertex") == "1" and cell.get("parent") not in ("", None, "0"):
+                if cell.get("dnlab_annotation") == "1":
+                    annotation = self._annotation_from_cell(cell)
+                    if annotation:
+                        annotations.append(annotation)
+                    continue
                 label = cell.get("value") or cell_id
                 node_name = self._sanitize_name(label)
                 style = cell.get("style", "")
@@ -106,16 +113,25 @@ class DrawioService:
                     if src_iface is None and tgt_iface is None:
                         label = cell.get("value") or ""
                         src_iface, tgt_iface = self._parse_link_label(label)
-                    links.append(
-                        Link(
-                            source=vertex_ids[src_id],
-                            source_iface=src_iface or "",
-                            target=vertex_ids[tgt_id],
-                            target_iface=tgt_iface or "",
-                        )
+                    link = Link(
+                        source=vertex_ids[src_id],
+                        source_iface=src_iface or "",
+                        target=vertex_ids[tgt_id],
+                        target_iface=tgt_iface or "",
                     )
+                    links.append(link)
+                    style_data = self._json_attr_or(cell.get("dnlab_link_style"), {})
+                    if isinstance(style_data, dict) and style_data:
+                        link_styles[self._link_style_key_for_link(link)] = style_data
 
-        return Topology(name=topology_name, nodes=nodes, links=links, extra=extra)
+        return Topology(
+            name=topology_name,
+            nodes=nodes,
+            links=links,
+            extra=extra,
+            gui_link_styles_state=link_styles,
+            gui_canvas_annotations_state=annotations,
+        )
 
     # ------------------------------------------------------------------
     # Export
@@ -138,6 +154,21 @@ class DrawioService:
 
         node_ids: dict[str, str] = {}
         cell_id = 2
+        annotations = list(topology.gui_canvas_annotations_state or [])
+        indexed_annotations = list(enumerate(annotations))
+        below_annotations = sorted(
+            ((idx, annotation) for idx, annotation in indexed_annotations if self._annotation_z_index(annotation) < 0),
+            key=lambda item: (self._annotation_z_index(item[1]), item[0]),
+        )
+        above_annotations = sorted(
+            ((idx, annotation) for idx, annotation in indexed_annotations if self._annotation_z_index(annotation) > 0),
+            key=lambda item: (self._annotation_z_index(item[1]), item[0]),
+        )
+
+        for _, annotation in below_annotations:
+            cid = str(cell_id)
+            cell_id += 1
+            self._append_annotation(root_el, cid, annotation)
 
         for node in topology.nodes:
             cid = str(cell_id)
@@ -182,18 +213,27 @@ class DrawioService:
             target_node = topology.get_node(link.target)
             label = self._link_label(link, source_node, target_node)
             link_type = self._link_type(source_node, target_node)
+            link_style = (topology.gui_link_styles_state or {}).get(
+                self._link_style_key_for_link(link),
+                {},
+            )
 
             cid = str(cell_id)
             cell_id += 1
 
+            edge_attrs = {
+                "id": cid, "value": label,
+                "style": self._edge_style(link_style),
+                "edge": "1", "source": src_id, "target": tgt_id, "parent": "1",
+                "dnlab_source_iface": link.source_iface or "",
+                "dnlab_target_iface": link.target_iface or "",
+                "dnlab_link_type": link_type,
+            }
+            if link_style:
+                edge_attrs["dnlab_link_style"] = self._json_attr(link_style)
             cell = ET.SubElement(
                 root_el, "mxCell",
-                id=cid, value=label,
-                style=self._edge_style(),
-                edge="1", source=src_id, target=tgt_id, parent="1",
-                dnlab_source_iface=link.source_iface or "",
-                dnlab_target_iface=link.target_iface or "",
-                dnlab_link_type=link_type,
+                **edge_attrs,
             )
             geometry = ET.SubElement(cell, "mxGeometry", relative="1", **{"as": "geometry"})
             waypoint = self._parallel_link_waypoint(link, topology, parallel_groups)
@@ -205,6 +245,11 @@ class DrawioService:
                     x=self._fmt_float(waypoint[0]),
                     y=self._fmt_float(waypoint[1]),
                 )
+
+        for _, annotation in above_annotations:
+            cid = str(cell_id)
+            cell_id += 1
+            self._append_annotation(root_el, cid, annotation)
 
         return ET.tostring(graph_model, encoding="unicode", xml_declaration=False)
 
@@ -277,8 +322,11 @@ class DrawioService:
         )
 
     @staticmethod
-    def _edge_style() -> str:
-        return (
+    def _edge_style(style_data: dict[str, Any] | None = None) -> str:
+        style_data = style_data or {}
+        color = style_data.get("color")
+        label_color = style_data.get("label_color") or color
+        style = (
             "html=1;"
             "rounded=0;"
             "curved=1;"
@@ -287,6 +335,11 @@ class DrawioService:
             "sourceArrow=none;"
             "targetArrow=none;"
         )
+        if isinstance(color, str) and color.startswith("#"):
+            style += f"strokeColor={color};"
+        if isinstance(label_color, str) and label_color.startswith("#"):
+            style += f"fontColor={label_color};"
+        return style
 
     @staticmethod
     def _link_type(source_node: Node | None, target_node: Node | None) -> str:
@@ -328,6 +381,112 @@ class DrawioService:
     @staticmethod
     def _link_sort_key(link: Link) -> tuple[str, str, str, str]:
         return (link.source, link.target, link.source_iface or "", link.target_iface or "")
+
+    @classmethod
+    def _link_style_key_for_link(cls, link: Link) -> str:
+        endpoints = [
+            f"{link.source}:{link.source_iface or ''}",
+            f"{link.target}:{link.target_iface or ''}",
+        ]
+        return "|".join(sorted(endpoints))
+
+    def _append_annotation(self, root_el: ET.Element, cid: str, annotation: dict[str, Any]) -> None:
+        ann_type = annotation.get("type")
+        if ann_type not in ("note", "rectangle", "ellipse"):
+            return
+        z_index = self._annotation_z_index(annotation)
+        annotation = {
+            **annotation,
+            "layer": self._annotation_layer(annotation),
+            "z_index": z_index,
+        }
+        pos = annotation.get("position") if isinstance(annotation.get("position"), dict) else {}
+        style_data = annotation.get("style") if isinstance(annotation.get("style"), dict) else {}
+        value = annotation.get("text") or ""
+        cell = ET.SubElement(
+            root_el,
+            "mxCell",
+            id=cid,
+            value=str(value),
+            style=self._annotation_style(ann_type, style_data),
+            vertex="1",
+            parent="1",
+            dnlab_annotation="1",
+            dnlab_annotation_data=self._json_attr(annotation),
+        )
+        ET.SubElement(
+            cell,
+            "mxGeometry",
+            x=self._fmt_float(float(pos.get("x", 100))),
+            y=self._fmt_float(float(pos.get("y", 100))),
+            width=self._fmt_float(float(annotation.get("width", 160))),
+            height=self._fmt_float(float(annotation.get("height", 80))),
+            **{"as": "geometry"},
+        )
+
+    @staticmethod
+    def _annotation_style(ann_type: str, style_data: dict[str, Any]) -> str:
+        shape = "text" if ann_type == "note" else ("ellipse" if ann_type == "ellipse" else "rectangle")
+        stroke = style_data.get("stroke_color") or ("none" if ann_type == "note" else "#64748b")
+        fill = style_data.get("fill_color") or ("none" if ann_type == "note" else "#fef3c7")
+        font = style_data.get("text_color") or "#111827"
+        font_size = style_data.get("font_size") or 14
+        border_width = style_data.get("border_width") if style_data.get("border_width") is not None else (0 if ann_type == "note" else 2)
+        opacity = style_data.get("opacity") if style_data.get("opacity") is not None else 1
+        font_family = style_data.get("font_family") or "Arial"
+        font_style_bits = 0
+        if str(style_data.get("font_weight") or "") in ("600", "700"):
+            font_style_bits += 1
+        if style_data.get("font_style") == "italic":
+            font_style_bits += 2
+        return (
+            f"shape={shape};html=1;whiteSpace=wrap;rounded=0;"
+            f"strokeColor={stroke};fillColor={fill};fontColor={font};"
+            f"fontSize={font_size};fontFamily={font_family};fontStyle={font_style_bits};"
+            f"strokeWidth={border_width};opacity={float(opacity) * 100:g};"
+        )
+
+    def _annotation_from_cell(self, cell: ET.Element) -> dict[str, Any] | None:
+        data = self._json_attr_or(cell.get("dnlab_annotation_data"), {})
+        if not isinstance(data, dict):
+            return None
+        geo = cell.find("mxGeometry")
+        if geo is not None:
+            data["position"] = {
+                "x": float(geo.get("x", data.get("position", {}).get("x", 100))),
+                "y": float(geo.get("y", data.get("position", {}).get("y", 100))),
+            }
+            data["width"] = float(geo.get("width", data.get("width", 160)))
+            data["height"] = float(geo.get("height", data.get("height", 80)))
+        if not data.get("id"):
+            data["id"] = cell.get("id") or "annotation"
+        if not data.get("text"):
+            data["text"] = cell.get("value") or ""
+        data["z_index"] = self._annotation_z_index(data)
+        data["layer"] = self._annotation_layer(data)
+        return data
+
+    @staticmethod
+    def _annotation_layer(annotation: dict[str, Any]) -> str:
+        return "below_vd" if DrawioService._annotation_z_index(annotation) < 0 else "above_vd"
+
+    @staticmethod
+    def _annotation_z_index(annotation: dict[str, Any]) -> int:
+        raw_z_index = annotation.get("z_index") if isinstance(annotation, dict) else None
+        legacy_layer = annotation.get("layer") if isinstance(annotation, dict) else None
+        legacy_below = legacy_layer in ("back", "background", "below_vd")
+        if (
+            isinstance(raw_z_index, (int, float))
+            and not isinstance(raw_z_index, bool)
+            and math.isfinite(raw_z_index)
+        ):
+            z_index = int(round(raw_z_index))
+        else:
+            z_index = -1 if legacy_below else 1
+        z_index = max(-999, min(999, z_index))
+        if z_index == 0:
+            z_index = -1 if legacy_below else 1
+        return z_index
 
     @classmethod
     def _parallel_link_waypoint(

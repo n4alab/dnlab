@@ -32,6 +32,12 @@ class Topology(BaseModel):
     # Keyed by current display node name and serialized as
     # ``# dnlab-gui-node-ids:`` so renaming a VD does not change its disk.
     gui_node_ids_state: dict[str, str] = Field(default_factory=dict)
+    # GUI-only per-link visual styles. Keys are canonical endpoint pairs:
+    # ``node:iface|node:iface`` sorted lexicographically.
+    gui_link_styles_state: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    # GUI-only canvas decorations (notes, rectangles, ellipses). These do
+    # not become ContainerLab nodes and are ignored by deploy/runtime logic.
+    gui_canvas_annotations_state: list[dict[str, Any]] = Field(default_factory=list)
 
     def get_node(self, name: str) -> Node | None:
         return next((n for n in self.nodes if n.name == name), None)
@@ -51,6 +57,11 @@ class Topology(BaseModel):
         self.gui_node_overrides_state.pop(name, None)
         self.gui_node_features_state.pop(name, None)
         self.gui_node_ids_state.pop(name, None)
+        self.gui_link_styles_state = {
+            key: style
+            for key, style in self.gui_link_styles_state.items()
+            if not key.startswith(f"{name}:") and f"|{name}:" not in key
+        }
 
     def add_link(self, link: Link) -> None:
         self.links.append(link)

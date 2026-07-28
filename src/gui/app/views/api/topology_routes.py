@@ -19,7 +19,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, status
 from fastapi.responses import Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import audit
@@ -103,6 +103,18 @@ class NodeMgmtIpRequest(BaseModel):
 
 class NodeMgmtIpv6Request(BaseModel):
     mgmt_ipv6: str = ""
+
+
+class LinkStyleRequest(BaseModel):
+    source: str
+    source_iface: str = ""
+    target: str
+    target_iface: str = ""
+    style: dict = Field(default_factory=dict)
+
+
+class CanvasAnnotationsRequest(BaseModel):
+    annotations: list[dict] = Field(default_factory=list)
 
 
 # ── Createte ────────────────────────────────────────────────────────
@@ -388,6 +400,43 @@ async def remove_link(
         )
     except FileNotFoundError as exc:
         raise HTTPException(404, str(exc))
+    return _dump_topology_for_user(topo, lab, user)
+
+
+@router.patch("/{lab_id}/topology/links/style")
+async def set_link_style(
+    lab_id: UUID,
+    req: LinkStyleRequest,
+    db: Annotated[AsyncSession, Depends(get_session)],
+    user: Annotated[User, Depends(get_current_user)],
+):
+    lab = await resolve_for_write(db, lab_id, user)
+    try:
+        topo = _ctrl.set_link_style_by_path(
+            lab.yaml_path, lab.netname,
+            req.source, req.source_iface, req.target, req.target_iface,
+            req.style,
+        )
+    except (ValueError, FileNotFoundError) as exc:
+        raise HTTPException(400, str(exc))
+    return _dump_topology_for_user(topo, lab, user)
+
+
+@router.put("/{lab_id}/topology/canvas-annotations")
+async def set_canvas_annotations(
+    lab_id: UUID,
+    req: CanvasAnnotationsRequest,
+    db: Annotated[AsyncSession, Depends(get_session)],
+    user: Annotated[User, Depends(get_current_user)],
+):
+    lab = await resolve_for_write(db, lab_id, user)
+    try:
+        topo = _ctrl.set_canvas_annotations_by_path(
+            lab.yaml_path, lab.netname,
+            req.annotations,
+        )
+    except (ValueError, FileNotFoundError) as exc:
+        raise HTTPException(400, str(exc))
     return _dump_topology_for_user(topo, lab, user)
 
 

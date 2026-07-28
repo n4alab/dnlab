@@ -17,6 +17,13 @@
  *   ContextMenu.on('capture-mgmt', cb)
  *   ContextMenu.on('capture-link', cb) // cb({edge, side})
  *   ContextMenu.on('delete-link', cb) // cb(edgeData)
+ *   ContextMenu.on('color-link', cb) // cb(edgeData)
+ *   ContextMenu.on('edit-annotation', cb)
+ *   ContextMenu.on('annotation-front', cb)
+ *   ContextMenu.on('annotation-forward', cb)
+ *   ContextMenu.on('annotation-backward', cb)
+ *   ContextMenu.on('annotation-back', cb)
+ *   ContextMenu.on('delete-annotation', cb)
  */
 const ContextMenu = (() => {
   let _el = null;
@@ -231,12 +238,42 @@ const ContextMenu = (() => {
       ${stopCaptureItem}
       ${captureItems}
       <div class="cm-sep"></div>
+      <div class="cm-item" data-action="color-link">
+        🎨 Color Link
+      </div>
       <div class="cm-item cm-danger" data-action="delete-link">
         🗑️ Delete Link
       </div>
     `;
 
     _bindItems(_currentEdge);
+    _position(screenX, screenY);
+  }
+
+  function showAnnotation(annotation, screenX, screenY) {
+    _currentEdge = null;
+    _currentNode = null;
+    const typeLabel = annotation.type === 'note'
+      ? 'Note'
+      : (annotation.type === 'ellipse' ? 'Circle' : 'Rectangle');
+    const zIndex = Number(annotation.z_index);
+    const layerLabel = `${Number.isFinite(zIndex) ? zIndex : (annotation.layer === 'below_vd' ? -1 : 1)} · ${annotation.layer === 'below_vd' ? 'below VD icons' : 'above VD icons'}`;
+    _el.innerHTML = `
+      <div class="cm-header">
+        <span class="cm-node-icon" style="background:#64748b">A</span>
+        <span class="cm-node-label">${_esc(typeLabel)}</span>
+        <span class="cm-node-kind">${_esc(layerLabel)}</span>
+      </div>
+      <div class="cm-sep"></div>
+      <div class="cm-item" data-action="edit-annotation">✏️ Style / Text</div>
+      <div class="cm-item" data-action="annotation-front">⇡ Bring to Front</div>
+      <div class="cm-item" data-action="annotation-forward">↑ Bring Forward</div>
+      <div class="cm-item" data-action="annotation-backward">↓ Send Backward</div>
+      <div class="cm-item" data-action="annotation-back">⇣ Send to Back</div>
+      <div class="cm-sep"></div>
+      <div class="cm-item cm-danger" data-action="delete-annotation">🗑️ Delete</div>
+    `;
+    _bindItems(annotation);
     _position(screenX, screenY);
   }
 
@@ -305,5 +342,5 @@ const ContextMenu = (() => {
     (listeners[event] || []).forEach(cb => cb(data));
   }
 
-  return { init, show, showEdge, hide, on };
+  return { init, show, showEdge, showAnnotation, hide, on };
 })();

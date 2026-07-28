@@ -20,6 +20,8 @@ topology editor relies on.
 import asyncio
 import json
 import logging
+import math
+import re
 import uuid
 from pathlib import Path
 from typing import Any
@@ -57,6 +59,10 @@ _NODE_OVERRIDES_COMMENT_PREFIX = "# dnlab-gui-node-overrides: "
 _NODE_FEATURES_COMMENT_PREFIX = "# dnlab-gui-node-features: "
 _GUI_KINDS_COMMENT_PREFIX = "# dnlab-gui-kinds: "
 _RESOURCES_COMMENT_PREFIX = "# dnlab-gui-resources: "
+_LINK_STYLES_COMMENT_PREFIX = "# dnlab-gui-link-styles: "
+_CANVAS_ANNOTATIONS_COMMENT_PREFIX = "# dnlab-gui-canvas-annotations: "
+
+_HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 
 def _gui_node_feature_state_from_sidecar(sidecar: dict[str, dict]) -> dict[str, dict]:
@@ -80,6 +86,102 @@ def _gui_node_feature_state_from_sidecar(sidecar: dict[str, dict]) -> dict[str, 
                 node_state[str(feature_key)] = dict(payload)
         if node_state:
             out[str(node)] = node_state
+    return out
+
+
+def _link_style_key(source: str, source_iface: str, target: str, target_iface: str) -> str:
+    endpoints = [f"{source}:{source_iface or ''}", f"{target}:{target_iface or ''}"]
+    return "|".join(sorted(endpoints))
+
+
+def _link_style_key_for_link(link) -> str:
+    return _link_style_key(link.source, link.source_iface, link.target, link.target_iface)
+
+
+def _clean_link_styles(raw: dict[str, Any], valid_keys: set[str] | None = None) -> dict[str, dict[str, Any]]:
+    out: dict[str, dict[str, Any]] = {}
+    if not isinstance(raw, dict):
+        return out
+    for key, style in raw.items():
+        key = str(key)
+        if valid_keys is not None and key not in valid_keys:
+            continue
+        if not isinstance(style, dict):
+            continue
+        clean: dict[str, Any] = {}
+        for attr in ("color", "label_color"):
+            value = style.get(attr)
+            if isinstance(value, str) and _HEX_COLOR_RE.match(value):
+                clean[attr] = value.lower()
+        if clean:
+            out[key] = clean
+    return out
+
+
+def _clean_canvas_annotations(raw: Any) -> list[dict[str, Any]]:
+    if not isinstance(raw, list):
+        return []
+    out: list[dict[str, Any]] = []
+    for idx, item in enumerate(raw):
+        if not isinstance(item, dict):
+            continue
+        ann_type = item.get("type")
+        if ann_type not in ("note", "rectangle", "ellipse"):
+            continue
+        position = item.get("position") if isinstance(item.get("position"), dict) else {}
+        style = item.get("style") if isinstance(item.get("style"), dict) else {}
+        clean_style: dict[str, Any] = {}
+        for attr in ("stroke_color", "fill_color", "text_color"):
+            value = style.get(attr)
+            if isinstance(value, str) and _HEX_COLOR_RE.match(value):
+                clean_style[attr] = value.lower()
+        for attr, min_value, max_value in (
+            ("font_size", 6, 72),
+            ("border_width", 0, 20),
+            ("opacity", 0, 1),
+        ):
+            value = style.get(attr)
+            if isinstance(value, (int, float)) and min_value <= value <= max_value:
+                clean_style[attr] = value
+        font_family = style.get("font_family")
+        if isinstance(font_family, str) and 0 < len(font_family) <= 64:
+            clean_style["font_family"] = font_family
+        font_weight = style.get("font_weight")
+        if str(font_weight) in ("400", "500", "600", "700"):
+            clean_style["font_weight"] = str(font_weight)
+        font_style = style.get("font_style")
+        if font_style in ("normal", "italic"):
+            clean_style["font_style"] = font_style
+        legacy_layer = item.get("layer")
+        is_legacy_below = legacy_layer in ("back", "background", "below_vd")
+        raw_z_index = item.get("z_index")
+        if (
+            isinstance(raw_z_index, (int, float))
+            and not isinstance(raw_z_index, bool)
+            and math.isfinite(raw_z_index)
+        ):
+            z_index = int(round(raw_z_index))
+        else:
+            z_index = -1 if is_legacy_below else 1
+        z_index = max(-999, min(999, z_index))
+        # The VD plane is reserved: annotations are always above or below it.
+        if z_index == 0:
+            z_index = -1 if is_legacy_below else 1
+        layer = "below_vd" if z_index < 0 else "above_vd"
+        out.append({
+            "id": str(item.get("id") or f"annotation-{idx + 1}"),
+            "type": ann_type,
+            "text": str(item.get("text") or ""),
+            "layer": layer,
+            "z_index": z_index,
+            "position": {
+                "x": float(position.get("x", 100)),
+                "y": float(position.get("y", 100)),
+            },
+            "width": float(item.get("width", 160)),
+            "height": float(item.get("height", 80)),
+            "style": clean_style,
+        })
     return out
 
 
@@ -220,6 +322,19 @@ class ContainerLabService:
             with path.open("a") as fh:
                 fh.write(f"{_RESOURCES_COMMENT_PREFIX}{json.dumps(resource_state)}\n")
 
+        valid_link_keys = {_link_style_key_for_link(link) for link in topology.links}
+        link_styles = _clean_link_styles(topology.gui_link_styles_state or {}, valid_link_keys)
+        topology.gui_link_styles_state = link_styles
+        if link_styles:
+            with path.open("a") as fh:
+                fh.write(f"{_LINK_STYLES_COMMENT_PREFIX}{json.dumps(link_styles)}\n")
+
+        annotations = _clean_canvas_annotations(topology.gui_canvas_annotations_state)
+        topology.gui_canvas_annotations_state = annotations
+        if annotations:
+            with path.open("a") as fh:
+                fh.write(f"{_CANVAS_ANNOTATIONS_COMMENT_PREFIX}{json.dumps(annotations)}\n")
+
         return path
 
     def load_topology_from_file(self, path: Path) -> Topology:
@@ -232,6 +347,8 @@ class ContainerLabService:
         gui_node_ids: dict[str, str] = {}
         gui_node_overrides: dict[str, dict] = {}
         gui_node_features: dict[str, dict] = {}
+        gui_link_styles: dict[str, dict] = {}
+        gui_canvas_annotations: list[dict] = []
         for line in raw_text.splitlines():
             if line.startswith(_POS_COMMENT_PREFIX):
                 try:
@@ -281,6 +398,20 @@ class ContainerLabService:
                         gui_node_features = parsed
                 except json.JSONDecodeError:
                     log.warning("Sidecar node-features malformato in %s", path)
+            elif line.startswith(_LINK_STYLES_COMMENT_PREFIX):
+                try:
+                    parsed = json.loads(line[len(_LINK_STYLES_COMMENT_PREFIX):])
+                    if isinstance(parsed, dict):
+                        gui_link_styles = parsed
+                except json.JSONDecodeError:
+                    log.warning("Sidecar link-styles malformato in %s", path)
+            elif line.startswith(_CANVAS_ANNOTATIONS_COMMENT_PREFIX):
+                try:
+                    parsed = json.loads(line[len(_CANVAS_ANNOTATIONS_COMMENT_PREFIX):])
+                    if isinstance(parsed, list):
+                        gui_canvas_annotations = parsed
+                except json.JSONDecodeError:
+                    log.warning("Sidecar canvas-annotations malformato in %s", path)
 
         data: dict[str, Any] = yaml.safe_load(raw_text) or {}
         data.setdefault("name", path.stem)
@@ -332,6 +463,9 @@ class ContainerLabService:
             }
         if gui_node_features:
             topo.gui_node_features_state = _gui_node_feature_state_from_sidecar(gui_node_features)
+        valid_link_keys = {_link_style_key_for_link(link) for link in topo.links}
+        topo.gui_link_styles_state = _clean_link_styles(gui_link_styles, valid_link_keys)
+        topo.gui_canvas_annotations_state = _clean_canvas_annotations(gui_canvas_annotations)
 
         # Silent migration: vecchio formato ``webui_ports:`` in
         # ``node.extra``. Move to ``gui_webui_state`` IF there is not

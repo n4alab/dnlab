@@ -40,6 +40,7 @@
   let lastLab = null;
   let lastLiveStatus = null;
   let capturePollTimer = null;
+  let annotationSaveTimer = null;
   const activeNodeStarts = new Map();
   let statusPollTimer = null;
   const _containerForNode = (name) =>
@@ -384,6 +385,66 @@
     }
   });
 
+  ContextMenu.on('color-link', (edgeData) => {
+    if (!currentLabId) return;
+    const current = edgeData.color || '#3b82f6';
+    showModal('Color Link', `
+      <div class="props-form">
+        <label>Color
+          <input id="link-color-picker" class="props-input" type="color" value="${_escHtml(_validHex(current) ? current : '#3b82f6')}">
+        </label>
+        <label>Hex
+          <input id="link-color-hex" class="props-input" type="text" value="${_escHtml(_validHex(current) ? current : '#3b82f6')}" placeholder="#3b82f6">
+        </label>
+      </div>
+    `, [
+      {
+        label: 'Apply', class: 'btn-primary', action: async () => {
+          const value = document.getElementById('link-color-hex').value.trim();
+          if (!_validHex(value)) {
+            showToast('Use a hex color like #3b82f6', 'warn');
+            return;
+          }
+          await _saveLinkStyle(edgeData, { color: value.toLowerCase() });
+        },
+      },
+      {
+        label: 'Reset', class: 'btn-secondary', action: async () => {
+          await _saveLinkStyle(edgeData, {});
+        },
+      },
+      { label: 'Cancel' },
+    ]);
+    const picker = document.getElementById('link-color-picker');
+    const hex = document.getElementById('link-color-hex');
+    picker?.addEventListener('input', () => { hex.value = picker.value; });
+    hex?.addEventListener('input', () => {
+      if (_validHex(hex.value.trim())) picker.value = hex.value.trim();
+    });
+  });
+
+  ContextMenu.on('edit-annotation', (annotation) => _showAnnotationStyleModal(annotation));
+
+  ContextMenu.on('annotation-front', (annotation) => {
+    Canvas.moveAnnotationLayer(annotation.id, 'front');
+  });
+
+  ContextMenu.on('annotation-forward', (annotation) => {
+    Canvas.moveAnnotationLayer(annotation.id, 'forward');
+  });
+
+  ContextMenu.on('annotation-backward', (annotation) => {
+    Canvas.moveAnnotationLayer(annotation.id, 'backward');
+  });
+
+  ContextMenu.on('annotation-back', (annotation) => {
+    Canvas.moveAnnotationLayer(annotation.id, 'back');
+  });
+
+  ContextMenu.on('delete-annotation', (annotation) => {
+    Canvas.deleteAnnotation(annotation.id);
+  });
+
   ContextMenu.on('stop-capture', async (edgeData) => {
     if (!currentLabId) return;
     const sessions = Array.isArray(edgeData.capture_sessions) ? edgeData.capture_sessions : [];
@@ -426,6 +487,16 @@
   });
 
   Toolbar.on('open', ({ id, name }) => _loadLab(id, name));
+
+  Toolbar.on('add-annotation', (type) => {
+    if (!currentLabId) { showToast('No topology open', 'warn'); return; }
+    Canvas.addAnnotation(type);
+  });
+
+  Canvas.on('annotations-change', () => _scheduleAnnotationSave());
+  Canvas.on('annotation-rightclick', ({ annotation, screenX, screenY }) => {
+    ContextMenu.showAnnotation(annotation, screenX, screenY);
+  });
 
   Toolbar.on('export-drawio', async () => {
     if (!currentLabId) { showToast('No topology open', 'warn'); return; }
@@ -1847,6 +1918,125 @@
       showToast('Link applied live', 'success');
     }
     return runtime;
+  }
+
+  async function _saveLinkStyle(edgeData, style) {
+    try {
+      const link = {
+        source: edgeData.source,
+        source_iface: edgeData.source_iface || '',
+        target: edgeData.target,
+        target_iface: edgeData.target_iface || '',
+      };
+      const topo = await API.Labs.setLinkStyle(currentLabId, link, style || {});
+      const key = _edgeStyleKey(link.source, link.source_iface, link.target, link.target_iface);
+      const nextStyle = (topo.gui_link_styles_state || {})[key] || {};
+      Canvas.setLinkStyle(link, nextStyle);
+      showToast(Object.keys(nextStyle).length ? 'Link color updated' : 'Link color reset', 'success');
+    } catch (e) {
+      showToast('Link color failed: ' + e.message, 'error');
+    }
+  }
+
+  function _showAnnotationStyleModal(annotation) {
+    if (!annotation) return;
+    const style = annotation.style || {};
+    const isNote = annotation.type === 'note';
+    const zIndex = Number.isFinite(Number(annotation.z_index))
+      ? Math.round(Number(annotation.z_index))
+      : (annotation.layer === 'below_vd' ? -1 : 1);
+    showModal('Annotation', `
+      <div class="props-form">
+        <label>Text
+          <textarea id="ann-text" class="props-input" rows="4">${_escHtml(annotation.text || '')}</textarea>
+        </label>
+        <label>Layer
+          <input id="ann-z-index" class="props-input" type="number" min="-999" max="999" step="1" value="${zIndex}">
+        </label>
+        <label>Text color
+          <input id="ann-text-color" class="props-input" type="color" value="${_escAttr(_validHex(style.text_color) ? style.text_color : '#111827')}">
+        </label>
+        <label>Font
+          <select id="ann-font-family" class="props-input">
+            ${['Arial', 'Inter', 'Verdana', 'Georgia', 'Courier New', 'monospace'].map(font =>
+              `<option value="${_escAttr(font)}" ${font === (style.font_family || 'Arial') ? 'selected' : ''}>${_escHtml(font)}</option>`
+            ).join('')}
+          </select>
+        </label>
+        <label>Font size
+          <input id="ann-font-size" class="props-input" type="number" min="6" max="72" value="${Number(style.font_size || 14)}">
+        </label>
+        <label>
+          <span><input id="ann-bold" type="checkbox" ${Number(style.font_weight || 400) >= 600 ? 'checked' : ''}> Bold</span>
+        </label>
+        <label>
+          <span><input id="ann-italic" type="checkbox" ${style.font_style === 'italic' ? 'checked' : ''}> Italic</span>
+        </label>
+        ${isNote ? '' : `
+          <label>Fill color
+            <input id="ann-fill-color" class="props-input" type="color" value="${_escAttr(_validHex(style.fill_color) ? style.fill_color : '#fef3c7')}">
+          </label>
+          <label>Border color
+            <input id="ann-stroke-color" class="props-input" type="color" value="${_escAttr(_validHex(style.stroke_color) ? style.stroke_color : '#64748b')}">
+          </label>
+          <label>Border width
+            <input id="ann-border-width" class="props-input" type="number" min="0" max="20" value="${Number(style.border_width ?? 2)}">
+          </label>
+        `}
+        <label>Opacity
+          <input id="ann-opacity" class="props-input" type="number" min="0.1" max="1" step="0.05" value="${Number(style.opacity ?? 0.9)}">
+        </label>
+      </div>
+    `, [
+      {
+        label: 'Apply', class: 'btn-primary', action: () => {
+          const nextStyle = {
+            ...style,
+            text_color: document.getElementById('ann-text-color').value,
+            font_family: document.getElementById('ann-font-family').value,
+            font_size: Number(document.getElementById('ann-font-size').value || 14),
+            font_weight: document.getElementById('ann-bold').checked ? '700' : '400',
+            font_style: document.getElementById('ann-italic').checked ? 'italic' : 'normal',
+            opacity: Number(document.getElementById('ann-opacity').value || 0.9),
+          };
+          if (isNote) {
+            nextStyle.fill_color = 'transparent';
+            nextStyle.stroke_color = 'transparent';
+            nextStyle.border_width = 0;
+          } else {
+            nextStyle.fill_color = document.getElementById('ann-fill-color').value;
+            nextStyle.stroke_color = document.getElementById('ann-stroke-color').value;
+            nextStyle.border_width = Number(document.getElementById('ann-border-width').value || 0);
+          }
+          Canvas.updateAnnotation(annotation.id, {
+            text: document.getElementById('ann-text').value,
+            z_index: Number(document.getElementById('ann-z-index').value),
+            style: nextStyle,
+          });
+        },
+      },
+      { label: 'Cancel' },
+    ]);
+  }
+
+  function _scheduleAnnotationSave() {
+    if (!currentLabId) return;
+    clearTimeout(annotationSaveTimer);
+    annotationSaveTimer = setTimeout(async () => {
+      try {
+        await API.Labs.setCanvasAnnotations(currentLabId, Canvas.getAnnotations());
+      } catch (e) {
+        showToast('Annotation save failed: ' + e.message, 'error');
+      }
+    }, 400);
+  }
+
+  function _edgeStyleKey(source, sourceIface, target, targetIface) {
+    return [`${source}:${sourceIface || ''}`, `${target}:${targetIface || ''}`].sort().join('|');
+  }
+
+  function _validHex(value) {
+    return /^#[0-9a-fA-F]{6}$/.test(String(value || ''));
   }
 
   function _escAttr(s) {

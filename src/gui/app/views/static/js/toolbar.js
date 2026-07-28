@@ -26,6 +26,9 @@ const Toolbar = (() => {
 
     _bind('btn-mode-select', () => _setMode('select'));
     _bind('btn-mode-link',   () => _setMode('link'));
+    _bind('btn-add-note',    () => _emit('add-annotation', 'note'));
+    _bind('btn-add-rect',    () => _emit('add-annotation', 'rectangle'));
+    _bind('btn-add-ellipse', () => _emit('add-annotation', 'ellipse'));
 
     // Mgmt visibility toggle: nasconde il cloud, i link tratteggiati
     // e gli IP mgmt mostrati sotto i nodi. Stato persistito in

@@ -1,0 +1,17 @@
+id: 20260728-090137-annotate-canvas-topology-diagrams
+type: feature
+title: Annotate canvas topology diagrams
+description: The GUI can color individual links, add editable text, rectangle and
+  circle annotations with ordered layers around VD icons, and preserve those visual
+  aids through draw.io export and import.
+components:
+- drawio
+- gui
+audience:
+- operator
+- user
+visibility: public
+breaking: false
+upgrade_notes: []
+references:
+- plan:canvas-annotations-link-colors-drawio-roundtrip

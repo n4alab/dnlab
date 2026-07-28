@@ -61,6 +61,22 @@ def test_import_round_trip_preserves_dnlab_topology_data():
             Link(source="r1", source_iface="eth2", target="wan", target_iface="real"),
         ],
         extra={"mgmt": {"ipv4-subnet": "172.20.20.0/24", "canvas_pos": {"x": 80, "y": 80}}},
+        gui_link_styles_state={
+            "r1:eth1|wan:real": {"color": "#22c55e"},
+        },
+        gui_canvas_annotations_state=[
+            {
+                "id": "note-1",
+                "type": "note",
+                "text": "WAN edge",
+                "position": {"x": 20, "y": 40},
+                "width": 180,
+                "height": 80,
+                "layer": "above_vd",
+                "z_index": 3,
+                "style": {"fill_color": "#fef9c3"},
+            }
+        ],
     )
 
     xml = DrawioService().to_xml(original)
@@ -70,6 +86,8 @@ def test_import_round_trip_preserves_dnlab_topology_data():
     assert imported.extra == original.extra
     assert [node.model_dump() for node in imported.nodes] == [node.model_dump() for node in original.nodes]
     assert [link.model_dump() for link in imported.links] == [link.model_dump() for link in original.links]
+    assert imported.gui_link_styles_state == original.gui_link_styles_state
+    assert imported.gui_canvas_annotations_state == original.gui_canvas_annotations_state
 
 
 def test_import_legacy_drawio_without_dnlab_metadata_still_uses_style_and_label_fallback():

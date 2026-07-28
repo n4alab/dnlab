@@ -171,6 +171,10 @@ const API = (() => {
       if (tgtIface) url += `&target_iface=${encodeURIComponent(tgtIface)}`;
       return request('DELETE', url);
     },
+    setLinkStyle: (id, link, style) =>
+      request('PATCH', `/api/labs/${id}/topology/links/style`, { ...link, style }),
+    setCanvasAnnotations: (id, annotations) =>
+      request('PUT', `/api/labs/${id}/topology/canvas-annotations`, { annotations }),
 
     // draw.io
     exportDrawio: (id) =>

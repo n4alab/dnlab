@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import ipaddress
 import logging
+import re
 import uuid as uuidlib
 from pathlib import Path
 from uuid import UUID
@@ -28,6 +29,17 @@ from app.services import node_overrides
 from app.services import realnet_bgp
 
 log = logging.getLogger(__name__)
+
+_HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
+
+
+def _link_style_key(source: str, source_iface: str, target: str, target_iface: str) -> str:
+    endpoints = [f"{source}:{source_iface or ''}", f"{target}:{target_iface or ''}"]
+    return "|".join(sorted(endpoints))
+
+
+def _link_style_key_for_link(link: Link) -> str:
+    return _link_style_key(link.source, link.source_iface, link.target, link.target_iface)
 
 
 class TopologyValidationError(ValueError):
@@ -189,12 +201,23 @@ class TopologyController:
             node_overrides.rename_state(topo.gui_node_overrides_state, node_name, new_name)
             if node_name in topo.gui_node_features_state:
                 topo.gui_node_features_state[new_name] = topo.gui_node_features_state.pop(node_name)
+            old_link_styles = dict(topo.gui_link_styles_state or {})
+            old_link_keys = {
+                id(link): _link_style_key_for_link(link)
+                for link in topo.links
+                if link.source == node_name or link.target == node_name
+            }
             node.name = new_name
             for link in topo.links:
                 if link.source == node_name:
                     link.source = new_name
                 if link.target == node_name:
                     link.target = new_name
+            for link in topo.links:
+                old_key = old_link_keys.get(id(link))
+                if old_key and old_key in old_link_styles:
+                    topo.gui_link_styles_state[_link_style_key_for_link(link)] = old_link_styles[old_key]
+                    topo.gui_link_styles_state.pop(old_key, None)
             renamed_override = topo.gui_node_overrides_state.get(new_name)
             if renamed_override:
                 applied = node_overrides.apply_state(node, renamed_override)
@@ -467,6 +490,17 @@ class TopologyController:
                  netname, source, source_iface or '*', target, target_iface or '*')
         topo = self._require_path(path)
         if source_iface and target_iface:
+            removed_keys = {
+                _link_style_key_for_link(lk)
+                for lk in topo.links
+                if (
+                    lk.source == source and lk.target == target
+                    and lk.source_iface == source_iface and lk.target_iface == target_iface
+                ) or (
+                    lk.source == target and lk.target == source
+                    and lk.source_iface == target_iface and lk.target_iface == source_iface
+                )
+            }
             topo.links = [
                 lk for lk in topo.links
                 if not (
@@ -478,14 +512,74 @@ class TopologyController:
                 )
             ]
         else:
+            removed_keys = {
+                _link_style_key_for_link(lk)
+                for lk in topo.links
+                if (lk.source == source and lk.target == target)
+                or (lk.source == target and lk.target == source)
+            }
             topo.links = [
                 lk for lk in topo.links
                 if not (lk.source == source and lk.target == target)
                 and not (lk.source == target and lk.target == source)
             ]
+        for key in removed_keys:
+            topo.gui_link_styles_state.pop(key, None)
         topo.name = netname
         self._clab.save_topology_to(path, topo)
         return topo
+
+    def set_link_style_by_path(
+        self,
+        path: Path,
+        netname: str,
+        source: str,
+        source_iface: str,
+        target: str,
+        target_iface: str,
+        style: dict,
+    ) -> Topology:
+        topo = self._require_path(path)
+        key = _link_style_key(source, source_iface, target, target_iface)
+        if not any(_link_style_key_for_link(lk) == key for lk in topo.links):
+            raise ValueError("Link not found")
+        clean = self._clean_link_style(style)
+        if clean:
+            topo.gui_link_styles_state[key] = clean
+        else:
+            topo.gui_link_styles_state.pop(key, None)
+        topo.name = netname
+        self._clab.save_topology_to(path, topo)
+        return topo
+
+    def set_canvas_annotations_by_path(
+        self,
+        path: Path,
+        netname: str,
+        annotations: list[dict],
+    ) -> Topology:
+        topo = self._require_path(path)
+        topo.gui_canvas_annotations_state = self._clean_annotations(annotations)
+        topo.name = netname
+        self._clab.save_topology_to(path, topo)
+        return topo
+
+    @staticmethod
+    def _clean_link_style(style: dict) -> dict:
+        clean = {}
+        for key in ("color", "label_color"):
+            value = (style or {}).get(key)
+            if isinstance(value, str) and _HEX_COLOR_RE.match(value):
+                clean[key] = value.lower()
+        return clean
+
+    @classmethod
+    def _clean_annotations(cls, annotations: list[dict]) -> list[dict]:
+        # Reuse the Pydantic model's permissive JSON path by importing the
+        # persistence sanitizer locally, keeping one canonical schema filter.
+        from app.services.containerlab_service import _clean_canvas_annotations
+
+        return _clean_canvas_annotations(annotations)
 
     # ── draw.io import/export (path-based) ────────────────────────
 

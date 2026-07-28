@@ -138,6 +138,85 @@ def test_export_data_link_label_and_endpoint_metadata():
     assert edge.get("dnlab_link_type") == "data"
     assert _edge_point(edge) is None
     _assert_network_edge_style(edge)
+    assert "strokeColor=" not in (edge.get("style") or "")
+
+
+def test_export_link_style_and_canvas_annotations():
+    topo = Topology(
+        name="lab",
+        nodes=[
+            Node(name="r1", kind="linux", image="alpine:latest"),
+            Node(name="r2", kind="linux", image="alpine:latest"),
+        ],
+        links=[Link(source="r1", source_iface="eth1", target="r2", target_iface="eth2")],
+        gui_link_styles_state={"r1:eth1|r2:eth2": {"color": "#22c55e"}},
+        gui_canvas_annotations_state=[
+            {
+                "id": "note-1",
+                "type": "note",
+                "text": "Read this path",
+                "position": {"x": 20, "y": 30},
+                "width": 180,
+                "height": 90,
+                "layer": "below_vd",
+                "z_index": -2,
+                "style": {"fill_color": "#fef9c3", "text_color": "#111827"},
+            },
+            {
+                "id": "below-node-1",
+                "type": "rectangle",
+                "text": "",
+                "position": {"x": 80, "y": 120},
+                "width": 120,
+                "height": 80,
+                "z_index": -1,
+                "style": {"fill_color": "#e0f2fe"},
+            },
+            {
+                "id": "shape-1",
+                "type": "ellipse",
+                "text": "",
+                "position": {"x": 220, "y": 30},
+                "width": 120,
+                "height": 80,
+                "layer": "above_vd",
+                "z_index": 1,
+                "style": {"stroke_color": "#ef4444", "fill_color": "#fee2e2"},
+            },
+            {
+                "id": "frontmost-1",
+                "type": "note",
+                "text": "Front",
+                "position": {"x": 360, "y": 30},
+                "width": 120,
+                "height": 60,
+                "z_index": 2,
+                "style": {"text_color": "#1d4ed8"},
+            },
+        ],
+    )
+
+    xml = DrawioService().to_xml(topo)
+    edge = next(cell for cell in _edges(xml))
+    annotations = [cell for cell in _cells(xml) if cell.get("dnlab_annotation") == "1"]
+
+    assert "strokeColor=#22c55e;" in (edge.get("style") or "")
+    assert json.loads(edge.get("dnlab_link_style") or "{}") == {"color": "#22c55e"}
+    assert len(annotations) == 4
+    annotation_data = [json.loads(cell.get("dnlab_annotation_data") or "{}") for cell in annotations]
+    assert [(data["id"], data["z_index"]) for data in annotation_data] == [
+        ("note-1", -2),
+        ("below-node-1", -1),
+        ("shape-1", 1),
+        ("frontmost-1", 2),
+    ]
+    cells = _cells(xml)
+    note_idx = next(i for i, cell in enumerate(cells) if cell.get("dnlab_annotation_data") and "note-1" in cell.get("dnlab_annotation_data"))
+    below_idx = next(i for i, cell in enumerate(cells) if cell.get("dnlab_annotation_data") and "below-node-1" in cell.get("dnlab_annotation_data"))
+    node_idx = next(i for i, cell in enumerate(cells) if cell.get("value") == "r1")
+    shape_idx = next(i for i, cell in enumerate(cells) if cell.get("dnlab_annotation_data") and "shape-1" in cell.get("dnlab_annotation_data"))
+    frontmost_idx = next(i for i, cell in enumerate(cells) if cell.get("dnlab_annotation_data") and "frontmost-1" in cell.get("dnlab_annotation_data"))
+    assert note_idx < below_idx < node_idx < shape_idx < frontmost_idx
 
 
 def test_export_mgmt_is_metadata_not_graphical_cells():

@@ -19,6 +19,92 @@
 /* Drop-zone highlight */
 #cy.drag-over { outline: 2px dashed var(--accent); }
 
+#cy > canvas {
+  position: absolute;
+  z-index: 10;
+}
+
+.canvas-annotation-layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.canvas-annotation-layer-below-vd,
+.canvas-annotation-layer-background {
+  z-index: 5;
+  pointer-events: none;
+}
+
+.canvas-annotation-layer-above-vd,
+.canvas-annotation-layer-foreground {
+  z-index: 15;
+}
+
+.canvas-annotation {
+  position: absolute;
+  box-sizing: border-box;
+  border-style: solid;
+  padding: 8px;
+  min-width: 24px;
+  min-height: 20px;
+  overflow: visible;
+  pointer-events: auto;
+  cursor: move;
+  user-select: none;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
+}
+
+.canvas-annotation-note {
+  border-radius: 4px;
+}
+
+.canvas-annotation-rectangle {
+  border-radius: 2px;
+}
+
+.canvas-annotation-ellipse {
+  border-radius: 999px;
+}
+
+.canvas-annotation.selected {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.canvas-annotation-text {
+  width: 100%;
+  height: 100%;
+  white-space: pre-wrap;
+  overflow: hidden;
+}
+
+.canvas-annotation-resize {
+  position: absolute;
+  right: -7px;
+  bottom: -7px;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  background: transparent;
+  cursor: nwse-resize;
+  opacity: 0;
+}
+
+.canvas-annotation.selected .canvas-annotation-resize,
+.canvas-annotation:hover .canvas-annotation-resize {
+  opacity: 1;
+}
+
+.canvas-annotation-note {
+  padding: 0;
+  box-shadow: none;
+  background: transparent;
+}
+
 .runtime-gear-layer {
   position: absolute;
   inset: 0;
