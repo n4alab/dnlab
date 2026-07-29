@@ -1,0 +1,17 @@
+id: 20260729-v020-release-prep
+type: internal
+title: Prepare v0.2.0 release metadata
+description: >-
+  Release-facing defaults, installation examples and image-build tests are
+  aligned for the v0.2.0 release process.
+components:
+  - release
+  - docs
+  - image-build
+audience:
+  - developer
+  - operator
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

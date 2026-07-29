@@ -13,23 +13,23 @@ You do not need to build the template yourself for a normal installation.
 The primary distribution channel for the LXC template is GHCR:
 
 ```text
-ghcr.io/scaci/dnlab-lxc-proxmox:0.1.2
+ghcr.io/scaci/dnlab-lxc-proxmox:0.2.0
 ```
 
 Install `oras` on your workstation or Proxmox host then pull the artifact:
 
 ```bash
-mkdir -p dnlab-lxc-0.1.2
-cd dnlab-lxc-0.1.2
-oras pull ghcr.io/scaci/dnlab-lxc-proxmox:0.1.2
+mkdir -p dnlab-lxc-0.2.0
+cd dnlab-lxc-0.2.0
+oras pull ghcr.io/scaci/dnlab-lxc-proxmox:0.2.0
 sha256sum -c SHA256SUMS
 ```
 
 The artifact contains:
 
 ```text
-dnlab-lxc-proxmox-0.1.2-amd64.tar.zst
-LXC-RELEASE-NOTES-0.1.2.md
+dnlab-lxc-proxmox-0.2.0-amd64.tar.zst
+LXC-RELEASE-NOTES-0.2.0.md
 proxmox-dnlab-ct.conf
 apply-proxmox-ct-tuning.sh
 prepare-proxmox-ct.sh
@@ -78,11 +78,11 @@ dNLab needs Docker, Containerlab, nested containers and host-like networking.
 Bare metal remains the reference deployment model; Proxmox LXC is usable only
 when the CT exposes the required privileges and kernel features.
 
-Copy `dnlab-lxc-proxmox-0.1.2-amd64.tar.zst` to a Proxmox storage that accepts
+Copy `dnlab-lxc-proxmox-0.2.0-amd64.tar.zst` to a Proxmox storage that accepts
 CT templates, normally:
 
 ```bash
-cp dnlab-lxc-proxmox-0.1.2-amd64.tar.zst /var/lib/vz/template/cache/
+cp dnlab-lxc-proxmox-0.2.0-amd64.tar.zst /var/lib/vz/template/cache/
 ```
 
 Then create a CT from it.
@@ -257,7 +257,7 @@ docker compose -f compose.yml --profile release-images pull
 
 No extra LXC installation step is required for the dNLab `dnlab-vrf`
 management network driver. When the template already includes a release at or
-after `tag_release`, the normal dNLab control plane installs or refreshes
+after `v0.2.0`, the normal dNLab control plane installs or refreshes
 `dnlab-vrf-plugin.service` automatically on the CT during the first lab
 management-network deployment or reconciliation. The driver is not a patched
 Docker Engine and does not require a separate package, Compose service or

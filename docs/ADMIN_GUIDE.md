@@ -181,7 +181,7 @@ Create `.env` from `.env.example` and set a strong database password before
 starting the stack. At minimum, set:
 
 ```text
-DNLAB_VERSION=0.1.2
+DNLAB_VERSION=0.2.0
 POSTGRES_PASSWORD=<long random value>
 DNLAB_PROXY_SERVER_NAME=<gui-hostname>
 DNLAB_PROXY_HTTPS_PORT=<https-port>
@@ -202,8 +202,8 @@ DNLABGUI_ALLOWED_ORIGINS=https://localhost:8443
 Important settings:
 
 - `DNLAB_VERSION`: image tag. For the current published release, use
-  `DNLAB_VERSION=0.1.2`; replace it with `tag_release` when installing the
-  release that introduces overlapping management subnets.
+  `DNLAB_VERSION=0.2.0`; this is the release that introduces overlapping
+  management subnets.
 - `DNLAB_IMAGE_PREFIX`: image registry prefix, normally `ghcr.io/scaci/`.
 - `DNLAB_RUNTIME_IMAGE_PREFIX`: runtime image prefix, normally
   `ghcr.io/scaci/dnlab-`.
@@ -289,7 +289,7 @@ containerlab version
 dNLab management networks can reuse the same IPv4 or IPv6 CIDR in separate
 per-lab VRFs while retaining Docker-native `eth0` for Containerlab nodes,
 vrnetlab images, consoles and WebUI tunnels. Starting with release
-`tag_release`, management subnets only need to be valid inside the individual
+`v0.2.0`, management subnets only need to be valid inside the individual
 lab; different labs may intentionally declare the same management subnet. This
 uses the stock Docker Engine remote-plugin API: no patched `dockerd` binary or
 Docker Engine pin is needed.
@@ -316,7 +316,7 @@ docker network inspect <lab-management-network>
 ```
 
 All labs from the former management implementation must be destroyed and
-redeployed with the `tag_release` release. There is no in-place migration for
+redeployed with the `v0.2.0` release. There is no in-place migration for
 deployed management networks. Do not remove the service, its socket spec or its
 state while their Docker networks still exist.
 
@@ -482,7 +482,7 @@ an idempotent first-boot configurator.
    as described in the LXC template guide.
 
 No additional Proxmox LXC step is required for the `dnlab-vrf` management
-network driver when the CT template already includes `tag_release` or later.
+network driver when the CT template already includes `v0.2.0` or later.
 dNLab installs or refreshes `dnlab-vrf-plugin.service` automatically through
 the normal control plane during the first lab management-network deployment or
 reconciliation.
@@ -613,7 +613,7 @@ the route-reflector image and the shared `RR BGP password`. Keep these ranges
 large enough for the expected number of RealNet-connected labs and avoid
 overlap with physical networks and the data-plane prefixes used inside labs.
 Management subnets are isolated per lab and may overlap across different labs
-starting with `tag_release`; avoid overlap only when the same lab explicitly
+starting with `v0.2.0`; avoid overlap only when the same lab explicitly
 connects management and RealNet routing domains.
 
 Use the Admin page to update global RealNet BGP settings, regenerate the route
@@ -779,7 +779,7 @@ Pull the full release image set selected by `.env`, then recreate the internal
 services and proxy:
 
 ```bash
-grep '^DNLAB_VERSION=0.1.2$' .env
+grep '^DNLAB_VERSION=0.2.0$' .env
 docker compose -f compose.yml --profile release-images pull
 docker compose -f compose.yml up -d --force-recreate multinode image-sync lab-cleanup image-build gui proxy auth-db
 ```

@@ -62,6 +62,7 @@ def test_kinds_include_patchable_and_vrnetlab_builders(monkeypatch, tmp_path):
 
 
 def test_frr_is_source_free_but_other_kinds_require_upload(monkeypatch, tmp_path):
+    _set_store(monkeypatch, tmp_path)
     patches = tmp_path / "patches"
     patches.mkdir()
     (patches / "dnlab_frr.py").write_text("# patch\n", encoding="utf-8")
