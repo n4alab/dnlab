@@ -481,6 +481,12 @@ an idempotent first-boot configurator.
 7. Seed the first administrator and run `./smoke.sh` against the CT HTTPS URL
    as described in the LXC template guide.
 
+No additional Proxmox LXC step is required for the `dnlab-vrf` management
+network driver when the CT template already includes `tag_release` or later.
+dNLab installs or refreshes `dnlab-vrf-plugin.service` automatically through
+the normal control plane during the first lab management-network deployment or
+reconciliation.
+
 ## TLS And Wildcard Web UI
 
 TLS is built into `compose.yml`; `compose.tls.yml` remains only as a no-op

@@ -255,6 +255,14 @@ cd /opt/dnlab
 docker compose -f compose.yml --profile release-images pull
 ```
 
+No extra LXC installation step is required for the dNLab `dnlab-vrf`
+management network driver. When the template already includes a release at or
+after `tag_release`, the normal dNLab control plane installs or refreshes
+`dnlab-vrf-plugin.service` automatically on the CT during the first lab
+management-network deployment or reconciliation. The driver is not a patched
+Docker Engine and does not require a separate package, Compose service or
+Proxmox CT setting.
+
 The generated HTTPS URL defaults to port `8443`:
 
 ```text
