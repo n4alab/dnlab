@@ -15,6 +15,7 @@ from typing import Any
 from app.models.node import Node, NodePosition
 from app.models.link import Link
 from app.models.topology import Topology
+from app.services import device_catalog
 from app.services.drawio_icons import NODE_ICON_SIZE, node_icon_data_uri
 
 PARALLEL_EDGE_STEP_PX = 40.0
@@ -352,16 +353,76 @@ class DrawioService:
 
     @classmethod
     def _link_label(cls, link: Link, source_node: Node | None, target_node: Node | None) -> str:
+        source_label = cls._display_iface(source_node, link.source_iface)
+        target_label = cls._display_iface(target_node, link.target_iface)
         if source_node and source_node.kind == "_real_net":
-            return link.target_iface or ""
+            return target_label
         if target_node and target_node.kind == "_real_net":
-            return link.source_iface or ""
+            return source_label
         label_parts = []
-        if link.source_iface:
-            label_parts.append(link.source_iface)
-        if link.target_iface:
-            label_parts.append(link.target_iface)
+        if source_label:
+            label_parts.append(source_label)
+        if target_label:
+            label_parts.append(target_label)
         return " – ".join(label_parts)
+
+    @classmethod
+    def _display_iface(cls, node: Node | None, linux_name: str | None) -> str:
+        """Return the same vendor-facing interface label shown on the canvas."""
+        if not linux_name:
+            return ""
+        if not node or node.kind == "_real_net":
+            return linux_name
+        info = cls._interface_info_for_kind(node.kind)
+        if not info:
+            return linux_name
+        try:
+            count = int(info.get("count") or 8)
+        except (TypeError, ValueError):
+            count = 8
+        linux_fmt = str(info.get("linux_fmt") or "eth{n}")
+        vendor_fmt = str(info.get("vendor_fmt") or linux_fmt)
+        for n in range(1, max(0, count) + 1):
+            i = n - 1
+            if cls._fmt_iface(linux_fmt, n, i) == linux_name:
+                return cls._fmt_iface(vendor_fmt, n, i)
+        return linux_name
+
+    @staticmethod
+    def _interface_info_for_kind(kind: str | None) -> dict[str, Any] | None:
+        interface_map = device_catalog.interface_map()
+        raw = (kind or "").strip()
+        normalized = raw.lower()
+        aliases = {
+            "mikrotik": "mikrotik_ros",
+            "routeros": "mikrotik_ros",
+        }
+        alias = aliases.get(raw) or aliases.get(normalized)
+        info = interface_map.get(raw) or interface_map.get(normalized) or (interface_map.get(alias) if alias else None)
+        if isinstance(info, dict):
+            return info
+        fallback = interface_map.get("linux")
+        return fallback if isinstance(fallback, dict) else None
+
+    @staticmethod
+    def _fmt_iface(fmt: str, n: int, i: int) -> str:
+        import re
+
+        module = n // 4
+        port = n % 4
+
+        def repl(match: re.Match[str]) -> str:
+            key = match.group(1)
+            offset = int(match.group(2) or 0)
+            values = {
+                "module": module,
+                "port": port,
+                "n": n,
+                "i": i,
+            }
+            return str(values[key] + offset)
+
+        return re.sub(r"\{(module|port|n|i)([+-]\d+)?\}", repl, str(fmt or ""))
 
     @classmethod
     def _parallel_link_groups(cls, links: list[Link]) -> dict[tuple[str, str], list[Link]]:

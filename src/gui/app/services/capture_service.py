@@ -67,6 +67,7 @@ class CaptureTarget:
     peer: str
     side: str
     iface: str
+    display_iface: str
     container: str
     host: str
     runtime_state: str
@@ -83,6 +84,7 @@ class CaptureTarget:
             "peer": self.peer,
             "side": self.side,
             "iface": self.iface,
+            "display_iface": self.display_iface,
             "container": self.container,
             "host": self.host,
             "runtime_state": self.runtime_state,
@@ -194,7 +196,7 @@ class CaptureService:
         handler_url = "dnlab-capture://open?" + urlencode({
             "status_url": status_url,
             "stream_url": stream_url,
-            "title": f"Capture from VD {target.node} - interface {target.iface}",
+            "title": f"Capture from VD {target.node} - interface {target.display_iface or target.iface}",
         })
 
         return {
@@ -346,17 +348,18 @@ class CaptureService:
                     kind="realnet", lab=lab, node=node, peer=peer, side="vd",
                     iface=iface, runtime=nodes_runtime.get(node) or {},
                     host_names=host_names, link=link_dict,
+                    node_kind=tgt_node.kind if src_node.kind in _REAL_NET_KINDS else src_node.kind,
                 ))
                 continue
             targets.append(self._target_for_node(
                 kind="link", lab=lab, node=link.source, peer=link.target, side="source",
                 iface=link.source_iface, runtime=nodes_runtime.get(link.source) or {},
-                host_names=host_names, link=link_dict,
+                host_names=host_names, link=link_dict, node_kind=src_node.kind,
             ))
             targets.append(self._target_for_node(
                 kind="link", lab=lab, node=link.target, peer=link.source, side="target",
                 iface=link.target_iface, runtime=nodes_runtime.get(link.target) or {},
-                host_names=host_names, link=link_dict,
+                host_names=host_names, link=link_dict, node_kind=tgt_node.kind,
             ))
 
         for node in topo.nodes:
@@ -368,13 +371,14 @@ class CaptureService:
                 targets.append(self._target_for_node(
                     kind="mgmt", lab=lab, node=node.name, peer="mgmt", side="mgmt",
                     iface="", runtime=runtime, host_names=host_names, link=None,
+                    node_kind=node.kind,
                     forced_reason="management interface cannot be resolved",
                 ))
                 continue
             targets.append(self._target_for_node(
                 kind="mgmt", lab=lab, node=node.name, peer="mgmt", side="mgmt",
                 iface=iface, runtime=nodes_runtime.get(node.name) or {},
-                host_names=host_names, link=None,
+                host_names=host_names, link=None, node_kind=node.kind,
             ))
         return targets
 
@@ -390,6 +394,7 @@ class CaptureService:
         runtime: dict[str, Any],
         host_names: set[str],
         link: dict[str, str] | None,
+        node_kind: str = "",
         forced_reason: str = "",
     ) -> CaptureTarget:
         state = str(runtime.get("state") or "")
@@ -408,16 +413,18 @@ class CaptureService:
         if not reason and not self._host_known(host, host_names):
             reason = "Host cannot be resolved."
         target_id = _target_id(kind, node, iface, peer, side, link)
+        display_iface = _display_iface(node_kind, iface)
         return CaptureTarget(
             id=target_id,
             kind=kind,
             enabled=not reason,
             disabled_reason=reason,
-            label=self._target_label(kind, node, iface, peer, side),
+            label=self._target_label(kind, node, display_iface or iface, peer, side),
             node=node,
             peer=peer,
             side=side,
             iface=iface,
+            display_iface=display_iface,
             container=container,
             host=host or "master",
             runtime_state=state,
@@ -724,6 +731,43 @@ def _mgmt_linux_iface_for_kind(kind: str) -> str:
     return str(mgmt)
 
 
+def _display_iface(kind: str, linux_name: str) -> str:
+    if not linux_name:
+        return ""
+    if kind in _REAL_NET_KINDS:
+        return linux_name
+    info = _interface_info_for_kind(kind)
+    if not info:
+        return linux_name
+    try:
+        count = int(info.get("count") or 8)
+    except (TypeError, ValueError):
+        count = 8
+    linux_fmt = str(info.get("linux_fmt") or "eth{n}")
+    vendor_fmt = str(info.get("vendor_fmt") or linux_fmt)
+    for n in range(1, max(0, count) + 1):
+        i = n - 1
+        if _fmt_iface(linux_fmt, n, i) == linux_name:
+            return _fmt_iface(vendor_fmt, n, i)
+    return linux_name
+
+
+def _interface_info_for_kind(kind: str | None) -> dict[str, Any] | None:
+    interface_map = device_catalog.interface_map()
+    raw = (kind or "").strip()
+    normalized = raw.lower()
+    aliases = {
+        "mikrotik": "mikrotik_ros",
+        "routeros": "mikrotik_ros",
+    }
+    alias = aliases.get(raw) or aliases.get(normalized)
+    info = interface_map.get(raw) or interface_map.get(normalized) or (interface_map.get(alias) if alias else None)
+    if isinstance(info, dict):
+        return info
+    fallback = interface_map.get("linux")
+    return fallback if isinstance(fallback, dict) else None
+
+
 def _raw_catalog() -> dict[str, Any]:
     path = settings.STATIC_DIR / "config" / "devices.json"
     try:
@@ -736,7 +780,21 @@ def _raw_catalog() -> dict[str, Any]:
 
 
 def _fmt_iface(fmt: str, n: int, i: int) -> str:
-    return fmt.replace("{n}", str(n)).replace("{i}", str(i))
+    module = n // 4
+    port = n % 4
+
+    def repl(match: re.Match[str]) -> str:
+        key = match.group(1)
+        offset = int(match.group(2) or 0)
+        values = {
+            "module": module,
+            "port": port,
+            "n": n,
+            "i": i,
+        }
+        return str(values[key] + offset)
+
+    return re.sub(r"\{(module|port|n|i)([+-]\d+)?\}", repl, str(fmt or ""))
 
 
 def _norm_iface(value: str) -> str:

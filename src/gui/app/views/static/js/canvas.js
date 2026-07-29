@@ -1681,8 +1681,15 @@ const Canvas = (() => {
 
   function _captureBadge(target) {
     const node = target.node || 'VD';
-    const iface = target.iface || '-';
+    const kind = cy && target.node ? (cy.getElementById(target.node).data('kind') || '') : '';
+    const iface = formatInterfaceLabel(kind, target.iface || '') || '-';
     return `sniffing ${node} ${iface}`;
+  }
+
+  function formatInterfaceLabel(kind, iface) {
+    if (!iface) return '';
+    if (kind === '_real_net') return iface;
+    return _ifaceResolver(kind || '', iface) || iface;
   }
 
   function _edgeLabel(source, target, sIf, tIf) {
@@ -2293,7 +2300,7 @@ const Canvas = (() => {
     addEdge, removeEdge, removeEdgeById, getSelected,
     setLinkStyle, addAnnotation, updateAnnotation, moveAnnotationLayer, deleteAnnotation, setAnnotations, getAnnotations,
     setActiveCaptures, setFollowRabbitSessions,
-    setMode, setTheme, setInterfaceResolver,
+    setMode, setTheme, setInterfaceResolver, formatInterfaceLabel,
     fit, clear, on, projectPosition,
     setMgmt, clearMgmt, hasMgmt, getMgmtPosition, setMgmtVisible, isMgmtId,
     setRealNetInfoVisible, toggleRealNetInfoVisible, setRealNetRemoteAs,

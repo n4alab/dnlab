@@ -123,8 +123,8 @@ def test_export_data_link_label_and_endpoint_metadata():
     topo = Topology(
         name="lab",
         nodes=[
-            Node(name="r1", kind="linux", image="alpine:latest"),
-            Node(name="r2", kind="linux", image="alpine:latest"),
+            Node(name="r1", kind="cisco_xrv9k", image="vrnetlab/cisco_xrv9k:latest"),
+            Node(name="r2", kind="cisco_n9kv", image="vrnetlab/cisco_n9kv:latest"),
         ],
         links=[Link(source="r1", source_iface="eth1", target="r2", target_iface="eth2")],
     )
@@ -132,13 +132,35 @@ def test_export_data_link_label_and_endpoint_metadata():
     xml = DrawioService().to_xml(topo)
     edge = next(cell for cell in _edges(xml))
 
-    assert edge.get("value") == "eth1 – eth2"
+    assert edge.get("value") == "GigabitEthernet0/0/0/0 – Ethernet1/2"
     assert edge.get("dnlab_source_iface") == "eth1"
     assert edge.get("dnlab_target_iface") == "eth2"
     assert edge.get("dnlab_link_type") == "data"
     assert _edge_point(edge) is None
     _assert_network_edge_style(edge)
     assert "strokeColor=" not in (edge.get("style") or "")
+
+
+def test_export_drawio_link_value_uses_canvas_label_without_changing_import_mapping():
+    original = Topology(
+        name="lab",
+        nodes=[
+            Node(name="r1", kind="cisco_xrv9k", image="vrnetlab/cisco_xrv9k:latest"),
+            Node(name="wan", kind="_real_net", image=""),
+        ],
+        links=[Link(source="r1", source_iface="eth2", target="wan", target_iface="real")],
+    )
+
+    xml = DrawioService().to_xml(original)
+    edge = next(cell for cell in _edges(xml))
+    imported = DrawioService().from_xml(xml, "imported")
+
+    assert edge.get("value") == "GigabitEthernet0/0/0/1"
+    assert edge.get("dnlab_source_iface") == "eth2"
+    assert edge.get("dnlab_target_iface") == "real"
+    assert [link.model_dump() for link in imported.links] == [
+        {"source": "r1", "source_iface": "eth2", "target": "wan", "target_iface": "real"}
+    ]
 
 
 def test_export_link_style_and_canvas_annotations():

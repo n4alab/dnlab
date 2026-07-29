@@ -1,5 +1,6 @@
 import asyncio
 import time
+from urllib.parse import parse_qs, urlparse
 from uuid import uuid4
 
 from starlette.requests import Request
@@ -131,6 +132,53 @@ def test_capture_targets_include_link_realnet_and_mgmt(tmp_path, monkeypatch):
     assert by_id["link:r1:eth1:r2:eth1:target"]["host"] == "worker1"
     assert by_id["realnet:r1:eth2:real_net:vd"]["enabled"] is True
     assert by_id["mgmt:r1:eth0:mgmt"]["enabled"] is True
+
+
+def test_capture_targets_keep_linux_iface_and_expose_vendor_display_label(tmp_path, monkeypatch):
+    topo = Topology(
+        name="dnlab-demo",
+        nodes=[
+            Node(name="r1", kind="cisco_xrv9k", image="vrnetlab/cisco_xrv9k:latest"),
+            Node(name="r2", kind="cisco_n9kv", image="vrnetlab/cisco_n9kv:latest"),
+        ],
+        links=[Link(source="r1", source_iface="eth2", target="r2", target_iface="eth2")],
+    )
+    lab = _lab(tmp_path, topo)
+
+    async def fake_status(_lab, emit_events=False):
+        return _runtime()
+
+    async def fake_validate_filter(_filter):
+        return None
+
+    svc = capture_mod.CaptureService()
+    monkeypatch.setattr(capture_mod.multinode, "status", fake_status)
+    monkeypatch.setattr(svc, "_known_host_names", lambda: {"master", "worker1"})
+    monkeypatch.setattr(svc, "_validate_bpf_if_possible", fake_validate_filter)
+    monkeypatch.setattr(capture_mod.settings, "TOPOLOGIES_DIR", tmp_path)
+
+    targets = asyncio.run(svc.targets(lab))
+    source = next(t for t in targets if t["id"] == "link:r1:eth2:r2:eth2:source")
+
+    assert source["iface"] == "eth2"
+    assert source["display_iface"] == "GigabitEthernet0/0/0/1"
+    assert source["label"] == "r1 GigabitEthernet0/0/0/1 -> r2"
+
+    launch = asyncio.run(svc.launch(
+        lab=lab,
+        user_id=1,
+        target_id="link:r1:eth2:r2:eth2:source",
+        side="source",
+        bpf_filter="",
+        snaplen=0,
+        promisc=False,
+        base_url="https://dnlab.example.com/",
+    ))
+    query = parse_qs(urlparse(launch["handler_url"]).query)
+
+    assert launch["target"]["iface"] == "eth2"
+    assert launch["target"]["display_iface"] == "GigabitEthernet0/0/0/1"
+    assert query["title"] == ["Capture from VD r1 - interface GigabitEthernet0/0/0/1"]
 
 
 def test_capture_target_disabled_when_duplicate_hosts(tmp_path, monkeypatch):

@@ -60,10 +60,29 @@ resources during deployment.
 
 ![Link editor](images/user-link-editor.png)
 
+Use canvas annotations and link colors when the diagram needs additional
+visual structure. These objects are saved with the lab as dNLab GUI metadata;
+they do not create Containerlab nodes, links or deploy-time configuration.
+
+![Canvas annotations](images/user-canvas-annotations.png)
+
+Right-click a link and choose **Color Link** to set a custom color. The color
+picker accepts any valid hex color and can be reset later from the same action.
+Runtime overlays such as active captures and Follow the Rabbit remain
+temporary visual states above the saved link color.
+
+Use the annotation tools to add text, rectangles and circles. Annotations can
+be selected, moved, resized and edited without changing the topology. The
+context menu lets you update text and styling, move an annotation forward or
+backward in the canvas layer order, bring it to the front or send it to the
+back, and delete it when it is no longer needed.
+
+![Annotation context menu](images/user-annotation-context-menu.png)
+
 Use the properties panel to set the Docker image, management addresses, resource
 overrides, advanced node options and device-specific features. Management IPv4
 and IPv6 settings can be configured globally for the lab and, when needed, per
-device. Starting with release `tag_release`, two different labs may use the
+device. Starting with release `v0.2.0`, two different labs may use the
 same management IPv4 or IPv6 subnet because dNLab isolates each lab management
 network in its own VRF. Addresses still must be unique and valid within the
 single lab that declares them.
@@ -73,6 +92,13 @@ single lab that declares them.
 dNLab can export a lab to a `.drawio` file and import it later. Files exported
 by recent dNLab versions preserve dNLab metadata such as GUI kind, image, link
 interfaces, RealNet objects, Web UI settings and canvas positions.
+
+Canvas annotations and link colors are included in dNLab-generated draw.io
+files. In draw.io they appear as normal cells and shapes, with dNLab metadata
+attached so that importing the file back into dNLab can restore the visual
+state and the original Containerlab interface mapping.
+
+![draw.io round-trip](images/user-drawio-roundtrip.png)
 
 External or older draw.io files are imported best effort. After import, review
 the device kind, Docker image and interface choices before starting the lab.

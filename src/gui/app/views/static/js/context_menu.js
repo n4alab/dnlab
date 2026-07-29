@@ -126,7 +126,7 @@ const ContextMenu = (() => {
     return `
       <div class="cm-sep"></div>
       <div class="cm-item ${cls}" data-action="capture-mgmt" title="${title}">
-        🔎 Capture ${_esc(_captureSideLabel(nodeData.id || nodeData.name || nodeData.label, mgmt))}
+        🔎 Capture ${_esc(_captureSideLabel(nodeData.id || nodeData.name || nodeData.label, mgmt, nodeData.kind || ''))}
       </div>`;
   }
 
@@ -188,8 +188,15 @@ const ContextMenu = (() => {
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
-  function _captureSideLabel(node, iface) {
-    return `from VD ${node || ''} - interface ${iface || '-'}`;
+  function _captureSideLabel(node, iface, kind = '') {
+    return `from VD ${node || ''} - interface ${_ifaceLabel(kind, iface) || '-'}`;
+  }
+
+  function _ifaceLabel(kind, iface) {
+    if (typeof Canvas !== 'undefined' && typeof Canvas.formatInterfaceLabel === 'function') {
+      return Canvas.formatInterfaceLabel(kind || '', iface || '');
+    }
+    return iface || '';
   }
 
   function _isPerVdRuntime(nodeData) {
@@ -205,11 +212,11 @@ const ContextMenu = (() => {
     _currentEdge = edgeData;
     _currentNode = null;
 
-    const srcLabel = edgeData.source_iface || edgeData.source;
-    const tgtLabel = edgeData.target_iface || edgeData.target;
+    const srcLabel = _ifaceLabel(edgeData.source_kind || '', edgeData.source_iface) || edgeData.source;
+    const tgtLabel = _ifaceLabel(edgeData.target_kind || '', edgeData.target_iface) || edgeData.target;
     const isRealNet = edgeData.source_kind === '_real_net' || edgeData.target_kind === '_real_net';
-    const sourceCapture = _captureSideLabel(edgeData.source, edgeData.source_iface);
-    const targetCapture = _captureSideLabel(edgeData.target, edgeData.target_iface);
+    const sourceCapture = _captureSideLabel(edgeData.source, edgeData.source_iface, edgeData.source_kind || '');
+    const targetCapture = _captureSideLabel(edgeData.target, edgeData.target_iface, edgeData.target_kind || '');
     const activeSessions = Array.isArray(edgeData.capture_sessions) ? edgeData.capture_sessions : [];
     const stopCaptureItem = activeSessions.length
       ? `<div class="cm-item cm-danger" data-action="stop-capture">⏹ Stop Capture</div>
@@ -279,9 +286,9 @@ const ContextMenu = (() => {
 
   function _realNetCaptureLabel(edgeData) {
     if (edgeData.source_kind === '_real_net') {
-      return _captureSideLabel(edgeData.target, edgeData.target_iface);
+      return _captureSideLabel(edgeData.target, edgeData.target_iface, edgeData.target_kind || '');
     }
-    return _captureSideLabel(edgeData.source, edgeData.source_iface);
+    return _captureSideLabel(edgeData.source, edgeData.source_iface, edgeData.source_kind || '');
   }
 
   function hide() {

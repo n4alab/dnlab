@@ -3,8 +3,13 @@ const CaptureModal = (() => {
     _open(labId, targets => _matchEdgeTarget(targets, edge, preferredSide));
   }
 
-  function openMgmt(labId, nodeName) {
-    _open(labId, targets => targets.find(t => t.kind === 'mgmt' && t.node === nodeName));
+  function openMgmt(labId, nodeData) {
+    const nodeName = typeof nodeData === 'string' ? nodeData : (nodeData?.id || nodeData?.name || '');
+    const kind = typeof nodeData === 'object' && nodeData ? (nodeData.kind || '') : '';
+    _open(labId, targets => {
+      const target = targets.find(t => t.kind === 'mgmt' && t.node === nodeName);
+      return _withDisplayIface(target, kind);
+    });
   }
 
   async function _open(labId, selector) {
@@ -43,7 +48,7 @@ const CaptureModal = (() => {
         ${_summaryRow('Capture', _capturePoint(target))}
         ${_summaryRow('Host', target.host || '')}
         ${_summaryRow('Container', target.container || '')}
-        ${_summaryRow('Interface', target.iface || '')}
+        ${_summaryRow('Interface', _displayIface(target))}
       </div>
       ${target.enabled ? '' : `<div class="capture-error">${_esc(target.disabled_reason || 'Capture unavailable')}</div>`}
       <label class="capture-label">BPF filter
@@ -185,9 +190,11 @@ const CaptureModal = (() => {
       && (t.link.source_iface || '') === (edge.source_iface || '')
       && (t.link.target_iface || '') === (edge.target_iface || '');
     if (preferredSide === 'vd') {
-      return targets.find(t => t.kind === 'realnet' && exact(t));
+      const target = targets.find(t => t.kind === 'realnet' && exact(t));
+      return _withDisplayIface(target, _kindForTarget(edge, target));
     }
-    return targets.find(t => t.kind === 'link' && t.side === preferredSide && exact(t));
+    const target = targets.find(t => t.kind === 'link' && t.side === preferredSide && exact(t));
+    return _withDisplayIface(target, _kindForTarget(edge, target));
   }
 
   function _summaryRow(k, v) {
@@ -196,7 +203,33 @@ const CaptureModal = (() => {
 
   function _capturePoint(target) {
     if (!target) return '';
-    return `from VD ${target.node || ''} - interface ${target.iface || '-'}`;
+    return `from VD ${target.node || ''} - interface ${_displayIface(target) || '-'}`;
+  }
+
+  function _withDisplayIface(target, kind) {
+    if (!target) return target;
+    return {
+      ...target,
+      display_iface: _formatIface(kind || '', target.iface || '') || target.iface || '',
+    };
+  }
+
+  function _kindForTarget(edge, target) {
+    if (!edge || !target) return '';
+    if (target.node === edge.source) return edge.source_kind || '';
+    if (target.node === edge.target) return edge.target_kind || '';
+    return '';
+  }
+
+  function _displayIface(target) {
+    return target?.display_iface || target?.iface || '';
+  }
+
+  function _formatIface(kind, iface) {
+    if (typeof Canvas !== 'undefined' && typeof Canvas.formatInterfaceLabel === 'function') {
+      return Canvas.formatInterfaceLabel(kind || '', iface || '');
+    }
+    return iface || '';
   }
 
   function _setFooter(buttons) {

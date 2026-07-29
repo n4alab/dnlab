@@ -269,7 +269,7 @@
 
   ContextMenu.on('capture-mgmt', (nodeData) => {
     if (!currentLabId) { showToast('Open a lab first', 'warn'); return; }
-    CaptureModal.openMgmt(currentLabId, nodeData.id);
+    CaptureModal.openMgmt(currentLabId, nodeData);
   });
 
   ContextMenu.on('capture-link', ({ edge, side }) => {
