@@ -140,9 +140,12 @@ def test_deploy_jumphost_with_runtime_relay_attaches_mgmt_network(topo_factory):
 
     commands = "\n".join(call.args[0] for call in client.run.call_args_list if call.args)
     assert f"--network {topo.jumphost_net.network}" in commands
-    assert "ip link add jh-lab type veth peer name jhc-lab" in commands
-    assert "nsenter -t \"$pid\" -n ip addr add 172.20.0.254/24 dev mgmt0" in commands
-    assert "docker network connect --ip 172.20.0.254" not in commands
+    assert (
+        f"docker network connect --ip 172.20.0.254 {topo.mgmt.network} "
+        "dnlab-lab-jumphost"
+    ) in commands
+    assert "ip link add jh-lab type veth" not in commands
+    assert "nsenter -t \"$pid\"" not in commands
 
 
 def test_vd_log_requires_runtime_relay_for_logical_name():

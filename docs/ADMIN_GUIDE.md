@@ -201,7 +201,9 @@ DNLABGUI_ALLOWED_ORIGINS=https://localhost:8443
 
 Important settings:
 
-- `DNLAB_VERSION`: image tag. For this release, use `DNLAB_VERSION=0.1.2`.
+- `DNLAB_VERSION`: image tag. For the current published release, use
+  `DNLAB_VERSION=0.1.2`; replace it with `tag_release` when installing the
+  release that introduces overlapping management subnets.
 - `DNLAB_IMAGE_PREFIX`: image registry prefix, normally `ghcr.io/scaci/`.
 - `DNLAB_RUNTIME_IMAGE_PREFIX`: runtime image prefix, normally
   `ghcr.io/scaci/dnlab-`.
@@ -281,6 +283,42 @@ docker version
 docker compose version
 containerlab version
 ```
+
+### Remote Docker Driver For VRF Management CIDR Overlap
+
+dNLab management networks can reuse the same IPv4 or IPv6 CIDR in separate
+per-lab VRFs while retaining Docker-native `eth0` for Containerlab nodes,
+vrnetlab images, consoles and WebUI tunnels. Starting with release
+`tag_release`, management subnets only need to be valid inside the individual
+lab; different labs may intentionally declare the same management subnet. This
+uses the stock Docker Engine remote-plugin API: no patched `dockerd` binary or
+Docker Engine pin is needed.
+
+At the first deployment or management-infrastructure reconciliation on each
+master and worker, dNLab automatically installs or refreshes the single
+external `dnlab-vrf` network/IPAM driver as:
+
+- `/opt/dnlab-vrf-plugin/dnlab_vrf_plugin.py`
+- `dnlab-vrf-plugin.service`
+- `/etc/docker/plugins/dnlab-vrf.spec`
+- `/var/lib/dnlab-vrf-plugin/state.json`
+
+The systemd service must stay running while a dNLab management network exists.
+It validates and attaches Docker endpoint veths to the bridge already created
+by dNLab inside the matching VRF; it never creates, patches or restarts the
+Docker daemon. The installer is idempotent and runs through the normal dNLab
+control plane, so bare-metal and multinode operators do not distribute a
+separate Docker Engine build. Check one host with:
+
+```bash
+systemctl status dnlab-vrf-plugin.service
+docker network inspect <lab-management-network>
+```
+
+All labs from the former management implementation must be destroyed and
+redeployed with the `tag_release` release. There is no in-place migration for
+deployed management networks. Do not remove the service, its socket spec or its
+state while their Docker networks still exist.
 
 ### Bare Metal Install
 
@@ -567,7 +605,10 @@ network used for RealNet infrastructure (`Host network`), the pools assigned to
 lab routers (`Router AS pool`, `Router IP pool`), the RealNet node network pool,
 the route-reflector image and the shared `RR BGP password`. Keep these ranges
 large enough for the expected number of RealNet-connected labs and avoid
-overlap with lab, management and physical network prefixes.
+overlap with physical networks and the data-plane prefixes used inside labs.
+Management subnets are isolated per lab and may overlap across different labs
+starting with `tag_release`; avoid overlap only when the same lab explicitly
+connects management and RealNet routing domains.
 
 Use the Admin page to update global RealNet BGP settings, regenerate the route
 reflector password when needed and reconcile the route reflector service.
@@ -662,6 +703,13 @@ docker compose -f compose.yml exec lab-cleanup \
 docker compose -f compose.yml exec lab-cleanup \
   dnlab-lab-cleanup sync --execute --json
 ```
+
+Se un `destroy` trova un host indisponibile, dNLab conserva lo state del lab
+con `teardown_requested: true`. Dopo il ritorno dell'host, eseguire il comando
+`sync --execute` (possono servire due passaggi: endpoint/container, poi rete e
+infrastruttura) invece di cancellare lo state a mano. Un deploy dello stesso
+lab resta intenzionalmente bloccato finche il cleanup non ha verificato che gli
+artefatti posseduti sono assenti.
 
 ## Production Hardening
 

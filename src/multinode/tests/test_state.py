@@ -22,6 +22,7 @@ def _sample_state() -> DeploymentState:
             subnet="172.20.0.0/24", gateway="172.20.0.1",
             bridge="br-triangle", vrf="vrf-triangle",
             vxlan_id=2001, vxlan_iface="vx-triangle-m",
+            network="triangle", network_driver="dnlab-vrf", ipam_driver="dnlab-vrf",
         ),
         jumphost=JumphostState(
             node="master", container="dnlab-triangle-jumphost",
@@ -56,6 +57,7 @@ def _sample_state() -> DeploymentState:
 
 def test_save_and_load_roundtrip(tmp_path: Path):
     state = _sample_state()
+    state.teardown_requested = True
     save_state(state, tmp_path)
 
     loaded = load_state("triangle", tmp_path)
@@ -63,6 +65,9 @@ def test_save_and_load_roundtrip(tmp_path: Path):
     assert loaded.lab_name == state.lab_name
     assert loaded.vrf_table_id == state.vrf_table_id
     assert loaded.mgmt.subnet == state.mgmt.subnet
+    assert loaded.mgmt.network == "triangle"
+    assert loaded.mgmt.network_driver == "dnlab-vrf"
+    assert loaded.mgmt.ipam_driver == "dnlab-vrf"
     assert loaded.jumphost.password == "abcd1234EFGH"
     assert loaded.jumphost.resolver == "172.20.0.253"
     assert loaded.dns is not None
@@ -74,6 +79,7 @@ def test_save_and_load_roundtrip(tmp_path: Path):
     assert len(loaded.vxlan_dataplane) == 1
     assert loaded.vxlan_dataplane[0].id == 3001
     assert loaded.dnlab_deployed is True
+    assert loaded.teardown_requested is True
     assert loaded.node_runtime["R1"].container == "clab-triangle-R1"
     assert loaded.node_runtime["R1"].state == "running"
     assert loaded.phases_completed == ["mgmt", "dnlab", "vxlan", "dns", "jumphost"]
@@ -220,3 +226,4 @@ def test_runtime_mode_is_conservative_for_legacy_state():
     })
 
     assert state.runtime_mode == "legacy"
+    assert state.teardown_requested is False

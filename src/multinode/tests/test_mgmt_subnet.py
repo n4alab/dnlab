@@ -1,6 +1,3 @@
-import dataclasses
-import json
-
 import pytest
 import yaml
 
@@ -62,59 +59,29 @@ def _topology_file_with_node_mgmt(tmp_path, mgmt_ipv4):
     return topo
 
 
-def test_default_mgmt_subnet_moves_when_active_subnet_is_busy(tmp_path, monkeypatch):
-    from dnlab_multinode.services import config
-
-    monkeypatch.setattr(
-        config,
-        "_active_mgmt_networks",
-        lambda current_lab: [config.ipaddress.ip_network("172.20.20.0/24")],
-    )
-
+def test_default_mgmt_subnet_does_not_move_for_cross_lab_overlap(tmp_path):
     topo = parse_topology(_topology_file(tmp_path), hosts_file=_hosts_file(tmp_path))
 
-    assert topo.mgmt.ipv4_subnet == "172.20.21.0/24"
-    assert topo.mgmt.docker_ipv4_gw == "172.20.21.1"
-    assert topo.mgmt.ipv4_gw == "172.20.21.254"
-    assert topo.mgmt.ipv6_subnet == "3fff:172:20:21::/64"
-    assert topo.mgmt.ipv6_gw == "3fff:172:20:21:ffff:ffff:ffff:ffff"
+    assert topo.mgmt.ipv4_subnet == "172.20.20.0/24"
+    assert topo.mgmt.docker_ipv4_gw == "172.20.20.1"
+    assert topo.mgmt.ipv4_gw == "172.20.20.254"
+    assert topo.mgmt.ipv6_subnet == "3fff:172:20:20::/64"
+    assert topo.mgmt.ipv6_gw == "3fff:172:20:20:ffff:ffff:ffff:ffff"
 
 
-def test_custom_mgmt_subnet_overlap_raises(tmp_path, monkeypatch):
-    from dnlab_multinode.services import config
-
-    monkeypatch.setattr(
-        config,
-        "_active_mgmt_networks",
-        lambda current_lab: [config.ipaddress.ip_network("172.20.20.0/24")],
+def test_custom_mgmt_subnet_overlap_is_allowed(tmp_path):
+    topo = parse_topology(
+        _topology_file(tmp_path, mgmt={
+            "ipv4-subnet": "172.20.20.0/24",
+            "ipv4-gw": "172.20.20.1",
+        }),
+        hosts_file=_hosts_file(tmp_path),
     )
 
-    with pytest.raises(ConfigError, match="overlaps with active lab"):
-        parse_topology(
-            _topology_file(tmp_path, mgmt={
-                "ipv4-subnet": "172.20.20.0/24",
-                "ipv4-gw": "172.20.20.1",
-            }),
-            hosts_file=_hosts_file(tmp_path),
-        )
+    assert topo.mgmt.ipv4_subnet == "172.20.20.0/24"
 
 
-def test_current_lab_active_state_is_ignored(tmp_path, monkeypatch):
-    from dnlab_multinode.services import config
-
-    states = tmp_path / "states"
-    states.mkdir()
-    (states / ".lab.multinode.json").write_text(json.dumps({
-        "lab_name": "lab",
-        "topology_file": "lab.yml",
-        "mgmt": {"subnet": "172.20.20.0/24"},
-    }))
-
-    monkeypatch.setattr(config, "PATHS", dataclasses.replace(
-        config.PATHS,
-        topologies_dir=str(states),
-    ))
-
+def test_custom_mgmt_subnet_uses_requested_subnet(tmp_path):
     topo = parse_topology(
         _topology_file(tmp_path, mgmt={
             "ipv4-subnet": "172.20.20.0/24",
@@ -127,11 +94,7 @@ def test_current_lab_active_state_is_ignored(tmp_path, monkeypatch):
     assert topo.mgmt.ipv4_gw == "172.20.20.254"
 
 
-def test_sticky_mgmt_reservations_survive_node_set_changes(tmp_path, monkeypatch):
-    from dnlab_multinode.services import config
-
-    monkeypatch.setattr(config, "_active_mgmt_networks", lambda current_lab: [])
-
+def test_sticky_mgmt_reservations_survive_node_set_changes(tmp_path):
     data = {
         "name": "lab",
         "mgmt": {"ipv4-subnet": "172.20.20.0/24"},
@@ -215,11 +178,7 @@ def test_invalid_ipv6_subnet_raises(tmp_path):
     "172.20.20.253",
     "172.20.20.254",
 ])
-def test_explicit_node_mgmt_ip_cannot_use_reserved_addresses(tmp_path, monkeypatch, ip):
-    from dnlab_multinode.services import config
-
-    monkeypatch.setattr(config, "_active_mgmt_networks", lambda current_lab: [])
-
+def test_explicit_node_mgmt_ip_cannot_use_reserved_addresses(tmp_path, ip):
     with pytest.raises(ConfigError, match="reserved"):
         parse_topology(
             _topology_file_with_node_mgmt(tmp_path, ip),

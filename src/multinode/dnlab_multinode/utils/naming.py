@@ -63,9 +63,8 @@ def mgmt_vxlan_iface(lab_name: str) -> str:
 
     Format: vx-<lab>-mgmt
     """
-    # "vx-" (3) + "-mgmt" (5) = 8 fixed chars → 7 for lab name
-    trunc = lab_name[:7]
-    return f"vx-{trunc}-mgmt"
+    # "vx-" (3) + "-mgmt" (5) leaves 7 chars for the lab token.
+    return f"vx-{_bounded_lab_token(lab_name, 7)}-mgmt"
 
 
 def sanitize_lab_name(lab_name: str) -> str:
@@ -80,14 +79,26 @@ def sanitize_lab_name(lab_name: str) -> str:
     return s or "lab"
 
 
+def _bounded_lab_token(lab_name: str, max_length: int) -> str:
+    """Return a short deterministic token without truncation collisions."""
+    name = sanitize_lab_name(lab_name)
+    if len(name) <= max_length:
+        return name
+    hash_length = min(6, max_length)
+    prefix_length = max_length - hash_length - 1
+    if prefix_length <= 0:
+        return _short_hash(name, hash_length)
+    return f"{name[:prefix_length]}-{_short_hash(name, hash_length)}"
+
+
 def mgmt_network_name(lab_name: str) -> str:
     """Docker network name for the management plane (≤12 chars).
 
-    Deterministic: depends only on the lab name. Sanitized to
-    ``[a-z0-9-]`` and truncated so ``"br-" + result`` fits the Linux
-    15-char interface-name limit.
+    Short lab names stay readable; longer names receive a deterministic hash
+    suffix so ``"br-" + result`` fits the Linux interface-name limit without
+    direct prefix-truncation collisions.
     """
-    return sanitize_lab_name(lab_name)[:_MAX_MGMT_NET_LEN]
+    return _bounded_lab_token(lab_name, _MAX_MGMT_NET_LEN)
 
 
 def mgmt_bridge_name(lab_name: str) -> str:
@@ -96,8 +107,8 @@ def mgmt_bridge_name(lab_name: str) -> str:
 
 
 def vrf_name(lab_name: str) -> str:
-    """VRF device name."""
-    return f"vrf-{lab_name[:11]}"[:_MAX_IFACE_LEN]
+    """VRF device name, collision-resistant within the Linux limit."""
+    return f"vrf-{_bounded_lab_token(lab_name, _MAX_IFACE_LEN - 4)}"
 
 
 def jumphost_container_name(lab_name: str) -> str:

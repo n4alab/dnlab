@@ -14,6 +14,9 @@ class MgmtState:
     vrf: str
     vxlan_id: int
     vxlan_iface: str
+    network: str = ""
+    network_driver: str = ""
+    ipam_driver: str = ""
 
 
 @dataclass
@@ -155,6 +158,10 @@ class DeploymentState:
     topology_file: str
     deployed_at: str = ""
     dnlab_deployed: bool = True
+    # A destroy request is durable until every state-owned artifact has been
+    # observed absent. This lets lab-cleanup finish a teardown after a host
+    # was unavailable during the original destroy operation.
+    teardown_requested: bool = False
     # ``per-vd`` deployments use one Containerlab micro-topology per node and
     # can therefore grow while the shared lab infrastructure stays online.
     # An empty/legacy value is deliberately conservative for old state files.
@@ -200,6 +207,7 @@ class DeploymentState:
             topology_file=d["topology_file"],
             deployed_at=d.get("deployed_at", ""),
             dnlab_deployed=d.get("dnlab_deployed", True),
+            teardown_requested=d.get("teardown_requested", False),
             runtime_mode=d.get("runtime_mode", ""),
             vrf_table_id=d.get("vrf_table_id", 0),
             phases_completed=d.get("phases_completed", []),

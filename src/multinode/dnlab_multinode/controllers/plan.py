@@ -50,6 +50,11 @@ class PlanController:
         # Phase 0: Parse
         self.topo = parse_topology(self.topology_file, hosts_file=self.hosts_file)
         previous_state = state_svc.load_state(self.topo.name, Path(self.topology_file).parent)
+        if previous_state is not None and previous_state.teardown_requested:
+            raise PlanError(
+                f"Lab '{self.topo.name}' has a pending teardown. Restore all hosts and "
+                "wait for lab-cleanup to finish, or run destroy again before deploying it."
+            )
         previous_reservations = (
             previous_state.mgmt_ip_reservations if previous_state is not None else {}
         )

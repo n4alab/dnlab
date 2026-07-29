@@ -1,0 +1,28 @@
+id: 20260729-mgmt-vrf-overlap-driver
+type: feature
+title: Allow overlapping management subnets across labs
+description: >-
+  dNLab now provisions lab management networks through the custom dnlab-vrf
+  Docker NetworkDriver and IpamDriver, preserving Docker-native eth0 for
+  Containerlab, vrnetlab consoles and Web UIs while allowing different labs to
+  reuse the same IPv4 or IPv6 management subnet in separate VRFs.
+components:
+  - multinode
+  - cleanup
+  - docs
+audience:
+  - admin
+  - operator
+  - user
+visibility: public
+breaking: true
+upgrade_notes:
+  - >-
+    Starting with tag_release, destroy and redeploy labs created with the former
+    management-network implementation; deployed management networks are not
+    migrated in place.
+  - >-
+    Ensure each master and worker can run the automatically installed
+    dnlab-vrf-plugin.service; no patched Docker Engine is required.
+references:
+  - plan:achieved-2026-07-29-mgmt-remote-network-driver.md

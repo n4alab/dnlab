@@ -33,7 +33,6 @@ from dnlab_multinode.services.mgmt_ips import (
     MgmtAddressError, derive_ipv6_subnet_from_ipv4, ipv4_reservations,
     ipv6_gateway,
 )
-from dnlab_multinode.services.paths import PATHS
 from dnlab_multinode.utils.naming import mgmt_bridge_name, mgmt_network_name
 
 log = logging.getLogger(__name__)
@@ -43,38 +42,6 @@ class ConfigError(Exception):
     pass
 
 
-def _active_mgmt_networks(current_lab: str) -> list[ipaddress.IPv4Network | ipaddress.IPv6Network]:
-    """Return mgmt networks from deployed labs, excluding ``current_lab``."""
-    root = Path(PATHS.topologies_dir)
-    networks: list[ipaddress.IPv4Network | ipaddress.IPv6Network] = []
-    if not root.exists():
-        return networks
-    for state_path in root.glob(".*.multinode.json"):
-        try:
-            data = json.loads(state_path.read_text())
-        except Exception:
-            continue
-        if data.get("lab_name") == current_lab:
-            continue
-        mgmt = data.get("mgmt") or {}
-        subnet = mgmt.get("subnet")
-        if not subnet:
-            continue
-        try:
-            networks.append(ipaddress.ip_network(subnet, strict=False))
-        except ValueError:
-            log.warning("Ignoring invalid mgmt subnet %r in %s", subnet, state_path)
-    return networks
-
-
-def _next_mgmt_subnet(
-    subnet: ipaddress.IPv4Network | ipaddress.IPv6Network,
-) -> ipaddress.IPv4Network | ipaddress.IPv6Network:
-    step = subnet.num_addresses
-    next_addr = subnet.network_address + step
-    return ipaddress.ip_network(f"{next_addr}/{subnet.prefixlen}", strict=False)
-
-
 def _resolve_mgmt_config(
     lab_name: str,
     mgmt_cfg: dict,
@@ -82,19 +49,12 @@ def _resolve_mgmt_config(
 ) -> tuple[str, str, str, str, str]:
     default_subnet = hosts.mgmt_defaults.ipv4_subnet
     requested_subnet = mgmt_cfg.get("ipv4-subnet")
-    active = _active_mgmt_networks(lab_name)
 
     if requested_subnet:
         try:
             subnet = ipaddress.IPv4Network(requested_subnet, strict=False)
         except ValueError as exc:
             raise ConfigError(f"Invalid mgmt.ipv4-subnet {requested_subnet!r}: {exc}") from exc
-        for used in active:
-            if subnet.overlaps(used):
-                raise ConfigError(
-                    f"mgmt.ipv4-subnet {subnet} overlaps with active lab mgmt subnet {used}. "
-                    "Choose a unique mgmt subnet or clear the custom mgmt subnet to use auto-assignment."
-                )
         try:
             reserved = ipv4_reservations(str(subnet))
         except MgmtAddressError as exc:
@@ -106,8 +66,6 @@ def _resolve_mgmt_config(
         subnet = ipaddress.IPv4Network(default_subnet, strict=False)
     except ValueError as exc:
         raise ConfigError(f"Invalid default mgmt subnet {default_subnet!r}: {exc}") from exc
-    while any(subnet.overlaps(used) for used in active):
-        subnet = _next_mgmt_subnet(subnet)
     try:
         reserved = ipv4_reservations(str(subnet))
     except MgmtAddressError as exc:
@@ -430,11 +388,15 @@ def parse_topology(
         b_node, b_iface = (endpoints[1].split(":", 1) + [""])[:2]
         if a_node in real_nets or b_node in real_nets:
             if a_node in real_nets and b_node in nodes:
+                if b_iface == "eth0":
+                    raise ConfigError("Interface eth0 is reserved for dNLab management")
                 real_net_links.append(RealNetLink(
                     real_net=a_node, node=b_node, iface=b_iface,
                 ))
                 continue
             if b_node in real_nets and a_node in nodes:
+                if a_iface == "eth0":
+                    raise ConfigError("Interface eth0 is reserved for dNLab management")
                 real_net_links.append(RealNetLink(
                     real_net=b_node, node=a_node, iface=a_iface,
                 ))
@@ -445,6 +407,8 @@ def parse_topology(
                 f"Link references unknown node: {endpoints[0]} or {endpoints[1]}. "
                 f"Known nodes: {list(nodes.keys())}"
             )
+        if a_iface == "eth0" or b_iface == "eth0":
+            raise ConfigError("Interface eth0 is reserved for dNLab management")
         links.append(Link(
             source=a_node, source_iface=a_iface,
             target=b_node, target_iface=b_iface,

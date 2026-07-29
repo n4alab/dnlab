@@ -19,6 +19,7 @@ from dnlab_multinode.services import (
     webui_ports as webui_ports_svc, realnet as realnet_svc,
     persistence as persistence_svc, runtime_links as runtime_links_svc,
     runtime_relay as runtime_relay_svc, warm_links as warm_links_svc,
+    mgmt_network as mgmt_network_svc,
 )
 from dnlab_multinode.services.hostsfile import HostEntry
 from dnlab_multinode.services.progress import (
@@ -96,6 +97,8 @@ class DeployController:
                         self._resolve_underlay_ips, topo)
             self._phase("mgmt-setup", "Setting up mgmt infrastructure",
                         self._deploy_mgmt, topo, plan)
+            self._phase("mgmt-network", "Creating Docker mgmt networks",
+                        self._deploy_mgmt_network, topo)
             self._phase("webui-ports", "Allocating Web UI host ports",
                         self._allocate_webui_ports, topo)
             self._phase("realnet-setup", "Setting up real_net infrastructure",
@@ -243,8 +246,32 @@ class DeployController:
             vrf=naming.vrf_name(topo.name),
             vxlan_id=plan.mgmt_vxlan_id,
             vxlan_iface=naming.mgmt_vxlan_iface(topo.name),
+            network=topo.mgmt.network,
+            network_driver=mgmt_network_svc.NETWORK_DRIVER,
+            ipam_driver=mgmt_network_svc.IPAM_DRIVER,
         )
         self._state.phases_completed.append("mgmt")
+
+    def _deploy_mgmt_network(self, topo):
+        """Create the managed Docker network after its bridge/VRF exists."""
+        if "mgmt_network" not in self._state.phases_completed:
+            # Track the phase before fan-out so rollback also removes a network
+            # that was created successfully on only a subset of hosts.
+            self._state.phases_completed.append("mgmt_network")
+
+        def _ensure_host(host_name: str) -> str:
+            mgmt_network_svc.ensure_mgmt_network(topo, self._clients[host_name])
+            return host_name
+
+        with ThreadPoolExecutor(max_workers=len(self._clients)) as pool:
+            futures = {pool.submit(_ensure_host, host): host for host in self._clients}
+            for future in as_completed(futures):
+                host = futures[future]
+                try:
+                    future.result()
+                    log.info("[%s] Docker management network ready", host)
+                except Exception as exc:
+                    raise DeployError(f"[{host}] Docker mgmt network setup failed: {exc}") from exc
 
     # ── Phase 2.5: Allocate Web UI host ports ─────────────────────────
     def _allocate_webui_ports(self, topo):
@@ -882,25 +909,20 @@ class DeployController:
                     for runtime in self._state.node_runtime.values():
                         if runtime.host in self._clients and runtime.topology_file:
                             self._clients[runtime.host].run(
-                                f"containerlab destroy -t {runtime.topology_file} --cleanup",
+                                f"containerlab destroy -t {runtime.topology_file} --cleanup --keep-mgmt-net",
                                 check=False,
                             )
                 elif phase == "mgmt_anchor":
                     for anchor in self._state.mgmt_anchors.values():
                         if anchor.host in self._clients and anchor.topology_file:
                             self._clients[anchor.host].run(
-                                f"containerlab destroy -t {anchor.topology_file} --cleanup",
+                                f"containerlab destroy -t {anchor.topology_file} --cleanup --keep-mgmt-net",
                                 check=False,
                             )
-                elif phase == "mgmt":
-                    # Drop the docker mgmt network on every host first:
-                    # otherwise docker still owns the bridge and `ip link
-                    # delete <bridge>` would leak it silently.
+                elif phase == "mgmt_network":
                     for client in self._clients.values():
-                        client.run(
-                            f"docker network rm {topo.mgmt.network} 2>/dev/null",
-                            check=False,
-                        )
+                        mgmt_network_svc.destroy_mgmt_network(topo, client)
+                elif phase == "mgmt":
                     for host_name in self._clients:
                         netsetup.teardown_mgmt_infra(
                             topo.name, topo.mgmt.bridge,

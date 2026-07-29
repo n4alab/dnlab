@@ -20,6 +20,7 @@ from dnlab_multinode.services import (
     jumphost as jumphost_svc,
     runtime_relay as runtime_relay_svc, warm_links as warm_links_svc,
     webui_ports as webui_ports_svc,
+    mgmt_network as mgmt_network_svc,
 )
 from dnlab_multinode.services.hostsfile import HostEntry
 from dnlab_multinode.services.config import assign_sticky_mgmt_ipv4, parse_topology
@@ -166,6 +167,9 @@ class NodeLifecycleController:
             self._connect(clients)
             self._check_cancelled()
             self._set_phase(runtime, "starting")
+            mgmt_network_svc.ensure_mgmt_network(
+                self.topo, clients[runtime.host],
+            )
 
             clients[runtime.host].deploy_clab(
                 runtime.topology_file, cancel_event=getattr(self, "cancel_event", None),
@@ -249,6 +253,7 @@ class NodeLifecycleController:
             vd = self.topo.nodes[node]
             warm_links_svc.inspect_image_on_host(vd, clients[host])
             plan = self._plan_with_added_node(node, host, requirement)
+            mgmt_network_svc.ensure_mgmt_network(self.topo, clients[host])
             created_mgmt_anchor = self._ensure_mgmt_anchor(host, plan, clients)
             self._allocate_node_webui(node, clients)
             webui_allocations = {
@@ -371,13 +376,13 @@ class NodeLifecycleController:
             self.state.webui_allocations = previous_webui
             if remote_path and host:
                 clients[host].run_no_check(
-                    f"containerlab destroy -t '{remote_path}' --cleanup", timeout=120,
+                    f"containerlab destroy -t '{remote_path}' --cleanup --keep-mgmt-net", timeout=120,
                 )
             if created_mgmt_anchor and host:
                 anchor = self.state.mgmt_anchors.pop(host, None)
                 if anchor:
                     clients[host].run_no_check(
-                        f"containerlab destroy -t {shlex.quote(anchor.topology_file)} --cleanup",
+                        f"containerlab destroy -t {shlex.quote(anchor.topology_file)} --cleanup --keep-mgmt-net",
                         timeout=120,
                     )
             try:
@@ -450,7 +455,7 @@ class NodeLifecycleController:
                 anchor = self.state.mgmt_anchors.pop(runtime.host, None)
                 if anchor:
                     clients[runtime.host].run_no_check(
-                        f"containerlab destroy -t {shlex.quote(anchor.topology_file)} --cleanup",
+                        f"containerlab destroy -t {shlex.quote(anchor.topology_file)} --cleanup --keep-mgmt-net",
                         timeout=120,
                     )
 

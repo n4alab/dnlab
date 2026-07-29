@@ -156,6 +156,34 @@ def test_mgmt_anchors_deploy_before_vd_microtopologies(topo_factory):
     assert ctrl._state.phases_completed[:2] == ["mgmt_anchor", "dnlab"]
 
 
+def test_mgmt_network_phase_runs_before_containerlab_and_is_rollback_tracked(monkeypatch, topo_factory):
+    topo = topo_factory(name="lab", num_workers=1)
+    ctrl = _controller_for(topo)
+    ctrl._clients = {
+        "master": FakeClient("master"),
+        "worker1": FakeClient("worker1"),
+    }
+    ensured = []
+    destroyed = []
+
+    monkeypatch.setattr(
+        "dnlab_multinode.controllers.deploy.mgmt_network_svc.ensure_mgmt_network",
+        lambda _topo, client: ensured.append(client.name),
+    )
+    monkeypatch.setattr(
+        "dnlab_multinode.controllers.deploy.mgmt_network_svc.destroy_mgmt_network",
+        lambda _topo, client: destroyed.append(client.name),
+    )
+
+    ctrl._deploy_mgmt_network(topo)
+
+    assert sorted(ensured) == ["master", "worker1"]
+    assert ctrl._state.phases_completed == ["mgmt_network"]
+
+    ctrl._rollback(topo)
+    assert sorted(destroyed) == ["master", "worker1"]
+
+
 def test_mgmt_anchor_partial_failure_is_tracked_for_rollback(topo_factory):
     topo = topo_factory(
         nodes={
@@ -196,7 +224,7 @@ def test_mgmt_anchor_partial_failure_is_tracked_for_rollback(topo_factory):
 
     assert ctrl._clients["master"].runs == [
         (
-            "containerlab destroy -t /tmp/dnlab-lab-mgmt-master.clab.yml --cleanup",
+            "containerlab destroy -t /tmp/dnlab-lab-mgmt-master.clab.yml --cleanup --keep-mgmt-net",
             {"check": False},
         )
     ]

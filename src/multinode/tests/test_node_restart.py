@@ -170,16 +170,24 @@ def _starting_controller(tmp_path, monkeypatch, *, on_deploy=None):
     monkeypatch.setattr(
         node_module.runtime_links_svc, "delete_node_links", lambda *_args: None,
     )
+    mgmt_network_calls = []
+    monkeypatch.setattr(
+        node_module.mgmt_network_svc,
+        "ensure_mgmt_network",
+        lambda topo, candidate: mgmt_network_calls.append((topo.name, candidate)),
+    )
+    controller._mgmt_network_calls = mgmt_network_calls
     return controller, client, phases
 
 
 def test_start_persists_starting_reconciling_running(tmp_path, monkeypatch):
-    controller, _client, phases = _starting_controller(tmp_path, monkeypatch)
+    controller, client, phases = _starting_controller(tmp_path, monkeypatch)
 
     state = controller.start("R1")
 
     assert phases == ["starting", "reconciling", "running"]
     assert state.node_runtime["R1"].state == "running"
+    assert controller._mgmt_network_calls == [("demo", client)]
 
 
 def test_cancel_during_deploy_cleans_up_and_never_marks_running(tmp_path, monkeypatch):

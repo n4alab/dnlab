@@ -279,20 +279,11 @@ def _build_clab_dict(
     # Build final dict
     clab = {
         "name": topo.name,
-        "mgmt": {
-            "network": topo.mgmt.network,
-            "bridge": topo.mgmt.bridge,
-            "ipv4-subnet": topo.mgmt.ipv4_subnet,
-            "ipv4-gw": topo.mgmt.docker_ipv4_gw or topo.mgmt.ipv4_gw,
-        },
+        "mgmt": _mgmt_clab_config(topo),
         "topology": {
             "nodes": nodes,
         },
     }
-    if topo.mgmt.ipv6_subnet:
-        clab["mgmt"]["ipv6-subnet"] = topo.mgmt.ipv6_subnet
-    if topo.mgmt.ipv6_gw:
-        clab["mgmt"]["ipv6-gw"] = topo.mgmt.ipv6_gw
     if links:
         clab["topology"]["links"] = links
 
@@ -432,9 +423,7 @@ def _build_micro_clab_dict(
 
     clab = {
         "name": naming.micro_topology_name(topo.name, vd_name),
-        "mgmt": {
-            "network": topo.mgmt.network,
-        },
+        "mgmt": _mgmt_clab_config(topo),
         "topology": {
             "nodes": nodes,
         },
@@ -448,12 +437,7 @@ def _build_micro_clab_dict(
 def _build_mgmt_anchor_clab_dict(topo: DistributedTopology, host_name: str) -> dict:
     clab = {
         "name": naming.mgmt_anchor_topology_name(topo.name, host_name),
-        "mgmt": {
-            "network": topo.mgmt.network,
-            "bridge": topo.mgmt.bridge,
-            "ipv4-subnet": topo.mgmt.ipv4_subnet,
-            "ipv4-gw": topo.mgmt.docker_ipv4_gw or topo.mgmt.ipv4_gw,
-        },
+        "mgmt": _mgmt_clab_config(topo),
         "topology": {
             "nodes": {
                 MGMT_ANCHOR_NODE: {
@@ -467,11 +451,26 @@ def _build_mgmt_anchor_clab_dict(topo: DistributedTopology, host_name: str) -> d
             },
         },
     }
-    if topo.mgmt.ipv6_subnet:
-        clab["mgmt"]["ipv6-subnet"] = topo.mgmt.ipv6_subnet
-    if topo.mgmt.ipv6_gw:
-        clab["mgmt"]["ipv6-gw"] = topo.mgmt.ipv6_gw
     return clab
+
+
+def _mgmt_clab_config(topo: DistributedTopology) -> dict:
+    """Reference the pre-created dNLab remote-driver management network."""
+    mgmt = {
+        "network": topo.mgmt.network,
+        # The network already exists, but retaining this metadata keeps
+        # Containerlab's normal management-network view and bridge-aware
+        # operations intact for per-VD and anchor topologies.
+        "bridge": topo.mgmt.bridge,
+        "ipv4-subnet": topo.mgmt.ipv4_subnet,
+        "ipv4-gw": topo.mgmt.docker_ipv4_gw or topo.mgmt.ipv4_gw,
+        "external-access": False,
+    }
+    if topo.mgmt.ipv6_subnet:
+        mgmt["ipv6-subnet"] = topo.mgmt.ipv6_subnet
+    if topo.mgmt.ipv6_gw:
+        mgmt["ipv6-gw"] = topo.mgmt.ipv6_gw
+    return mgmt
 
 
 def _micro_host_endpoints(topo: DistributedTopology, plan: SchedulePlan) -> dict[tuple[str, str, str], str]:

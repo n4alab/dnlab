@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from dnlab_multinode.models.state import DeploymentState
-from dnlab_multinode.services import state as state_svc
+from dnlab_multinode.services import mgmt_network as mgmt_network_svc, state as state_svc
 from dnlab_multinode.services.hosts_config import HostsConfig
 from dnlab_multinode.services.paths import PATHS
 from dnlab_multinode.services.ssh import SSHClient, create_clients
@@ -243,12 +243,32 @@ def expected_artifacts_from_state(state: DeploymentState) -> list[CleanupArtifac
         if rn.router_container:
             out.append(CleanupArtifact("container", rn.router_container, "master", lab, source="state"))
     if state.mgmt:
+        network = state.mgmt.network or naming.mgmt_network_name(lab)
         for host in state.scheduling or {}:
             out.extend([
-                CleanupArtifact("interface", state.mgmt.vxlan_iface, host, lab, source="state"),
-                CleanupArtifact("interface", state.mgmt.bridge, host, lab, source="state"),
-                CleanupArtifact("interface", state.mgmt.vrf, host, lab, source="state"),
-                CleanupArtifact("dnsmasq", f"/var/run/dnsmasq-{lab}.pid", host, lab, source="state"),
+                # Live inventory supplies the container count. A state-only
+                # network stays a warning/no-op, preserving the conservative
+                # cleanup policy when a host cannot confirm its current state.
+                CleanupArtifact(
+                    "network", network, host, lab, source="state",
+                    metadata={"role": "mgmt-network"},
+                ),
+                CleanupArtifact(
+                    "interface", state.mgmt.vxlan_iface, host, lab, source="state",
+                    metadata={"role": "mgmt-infra"},
+                ),
+                CleanupArtifact(
+                    "interface", state.mgmt.bridge, host, lab, source="state",
+                    metadata={"role": "mgmt-infra"},
+                ),
+                CleanupArtifact(
+                    "interface", state.mgmt.vrf, host, lab, source="state",
+                    metadata={"role": "mgmt-infra"},
+                ),
+                CleanupArtifact(
+                    "dnsmasq", f"/var/run/dnsmasq-{lab}.pid", host, lab, source="state",
+                    metadata={"role": "mgmt-infra"},
+                ),
             ])
     for link in state.vxlan_dataplane:
         for side_name in ("side_a", "side_b"):
@@ -279,7 +299,7 @@ def collect_inventory(
                 client.connect()
             inv.reachable = True
             inv.artifacts.extend(_list_containers(client, name, known_labs))
-            inv.artifacts.extend(_list_networks(client, name, known_labs))
+            inv.artifacts.extend(_list_networks(client, name, states))
             inv.artifacts.extend(_list_interfaces(client, name, known_labs))
         except Exception as exc:
             inv.reachable = False
@@ -321,7 +341,8 @@ def build_cleanup_plan(
         if state:
             expected_hosts.update(a.host for a in expected_artifacts_from_state(state) if a.host)
 
-        if _lab_has_running_vd(lab, artifacts, state):
+        teardown_requested = bool(state and state.teardown_requested)
+        if not teardown_requested and _lab_has_running_vd(lab, artifacts, state):
             plan.protected = True
             plan.reasons.append("lab-runtime-running")
         for host in sorted(expected_hosts):
@@ -329,7 +350,10 @@ def build_cleanup_plan(
             if inv is None or not inv.reachable:
                 plan.protected = True
                 plan.reasons.append(f"host-unreachable:{host}")
-        if any(a.age_seconds is not None and a.age_seconds < grace_seconds for a in artifacts):
+        if not teardown_requested and any(
+            a.age_seconds is not None and a.age_seconds < grace_seconds
+            for a in artifacts
+        ):
             plan.protected = True
             plan.reasons.append("artifact-inside-grace")
 
@@ -348,6 +372,7 @@ def build_cleanup_plan(
                     plan.warnings.append(f"interface skipped without state: {artifact.name}")
                 continue
             plan.actions.append(action)
+        _guard_mgmt_infrastructure(plan, artifacts, state)
         plans[lab] = plan
     return plans
 
@@ -376,6 +401,15 @@ def reconcile_once(
     )
     if not effective_dry_run:
         _execute_plans(plans, clients or create_clients(hosts.all_hosts), own_clients=clients is None)
+        teardown_status = _finalize_requested_teardowns(
+            states,
+            Path(topologies_dir),
+            hosts,
+            clients=clients,
+        )
+        for lab, status in teardown_status.items():
+            if lab in plans:
+                plans[lab].warnings.append(status)
     report.duration_ms = int((time.monotonic() - started) * 1000)
     write_state_file(state_file, report)
     return report
@@ -467,7 +501,12 @@ def _list_containers(client: SSHClient, host: str, known_labs: set[str]) -> list
     return artifacts
 
 
-def _list_networks(client: SSHClient, host: str, known_labs: set[str]) -> list[CleanupArtifact]:
+def _list_networks(
+    client: SSHClient,
+    host: str,
+    states: dict[str, DeploymentState],
+) -> list[CleanupArtifact]:
+    known_labs = set(states)
     rc, out, _ = client.run_no_check("docker network ls --format '{{.Name}}'", timeout=20)
     if rc != 0:
         return []
@@ -480,14 +519,15 @@ def _list_networks(client: SSHClient, host: str, known_labs: set[str]) -> list[C
         lab = parse_artifact_lab("network", name, known_labs)
         if not lab and not shared:
             continue
-        containers = _network_container_count(client, name)
+        state = states.get(lab)
+        metadata = _network_inventory_metadata(client, name, lab, state)
         artifacts.append(CleanupArtifact(
             kind="network",
             name=name,
             host=host,
             lab=lab,
             shared=shared,
-            metadata={"containers": containers},
+            metadata=metadata,
         ))
     return artifacts
 
@@ -505,17 +545,63 @@ def _list_interfaces(client: SSHClient, host: str, known_labs: set[str]) -> list
     return artifacts
 
 
-def _network_container_count(client: SSHClient, name: str) -> int | None:
+def _network_inventory_metadata(
+    client: SSHClient,
+    name: str,
+    lab: str,
+    state: DeploymentState | None,
+) -> dict:
+    metadata: dict = {"live_observed": True, "containers": None}
     rc, out, _ = client.run_no_check(
-        f"docker network inspect -f '{{{{len .Containers}}}}' {name}",
+        f"docker network inspect {shlex.quote(name)}",
         timeout=10,
     )
     if rc != 0:
-        return None
+        return metadata
     try:
-        return int(out.strip())
-    except ValueError:
-        return None
+        payload = json.loads(out)
+    except json.JSONDecodeError:
+        return metadata
+    if not isinstance(payload, list) or len(payload) != 1 or not isinstance(payload[0], dict):
+        return metadata
+    network = payload[0]
+    containers = network.get("Containers") or {}
+    if not isinstance(containers, dict):
+        return metadata
+    metadata["containers"] = len(containers)
+    if state and state.mgmt and name == (state.mgmt.network or naming.mgmt_network_name(lab)):
+        metadata["role"] = "mgmt-network"
+        metadata["mgmt_vrf_owned"] = _is_vrf_mgmt_network(network, lab, state)
+    return metadata
+
+
+def _is_vrf_mgmt_network(network: dict, lab: str, state: DeploymentState) -> bool:
+    """Return true only for the Docker network owned by the current driver."""
+    mgmt = state.mgmt
+    if mgmt is None:
+        return False
+    if network.get("Driver") != mgmt_network_svc.NETWORK_DRIVER:
+        return False
+    ipam = network.get("IPAM") or {}
+    if ipam.get("Driver") != mgmt_network_svc.IPAM_DRIVER:
+        return False
+    labels = network.get("Labels") or {}
+    if (
+        labels.get(mgmt_network_svc.MANAGED_LABEL) != "mgmt-vrf"
+        or labels.get(mgmt_network_svc.LAB_LABEL) != lab
+    ):
+        return False
+    options = network.get("Options") or {}
+    if not isinstance(options, dict):
+        return False
+    generic = options.get(mgmt_network_svc.GENERIC_OPTIONS_KEY)
+    if isinstance(generic, dict):
+        options = generic
+    return (
+        options.get(mgmt_network_svc.BRIDGE_OPTION) == mgmt.bridge
+        and options.get(mgmt_network_svc.VRF_OPTION) == mgmt.vrf
+        and options.get(mgmt_network_svc.LAB_OPTION) == lab
+    )
 
 
 def _action_for_artifact(
@@ -539,7 +625,15 @@ def _action_for_artifact(
         )
     if artifact.kind == "network":
         containers = artifact.metadata.get("containers")
+        # A state-derived network must also be observed live and empty before
+        # removal. Never infer that a network is empty from stale state.
         if containers != 0:
+            return None
+        if (
+            artifact.metadata.get("role") == "mgmt-network"
+            and artifact.metadata.get("live_observed") is True
+            and artifact.metadata.get("mgmt_vrf_owned") is not True
+        ):
             return None
         return CleanupAction(
             action="remove-network",
@@ -564,6 +658,42 @@ def _action_for_artifact(
             reason="stale lab dnsmasq pid",
         )
     return None
+
+
+def _guard_mgmt_infrastructure(
+    plan: LabCleanupPlan,
+    artifacts: list[CleanupArtifact],
+    state: DeploymentState | None,
+) -> None:
+    """Keep bridge/VRF intact while an observed Docker mgmt network remains."""
+    if state is None or state.mgmt is None:
+        return
+    blocked_hosts: set[str] = set()
+    for artifact in artifacts:
+        if artifact.metadata.get("role") != "mgmt-network":
+            continue
+        if artifact.metadata.get("live_observed") is not True:
+            continue
+        if artifact.metadata.get("containers") != 0:
+            blocked_hosts.add(artifact.host)
+            plan.warnings.append(
+                f"mgmt infrastructure skipped on {artifact.host}: network {artifact.name} is attached"
+            )
+        elif artifact.metadata.get("mgmt_vrf_owned") is not True:
+            blocked_hosts.add(artifact.host)
+            plan.warnings.append(
+                f"mgmt infrastructure skipped on {artifact.host}: network {artifact.name} failed ownership check"
+            )
+    if not blocked_hosts:
+        return
+    plan.actions = [
+        action
+        for action in plan.actions
+        if not (
+            action.artifact.host in blocked_hosts
+            and action.artifact.metadata.get("role") == "mgmt-infra"
+        )
+    ]
 
 
 def _is_mgmt_anchor_container(artifact: CleanupArtifact) -> bool:
@@ -658,8 +788,15 @@ def _execute_plans(
         for plan in plans.values():
             if plan.protected:
                 continue
-            for action in plan.actions:
+            blocked_mgmt_hosts: set[str] = set()
+            for action in sorted(plan.actions, key=_cleanup_action_priority):
                 client = clients.get(action.artifact.host)
+                if (
+                    action.artifact.host in blocked_mgmt_hosts
+                    and action.artifact.metadata.get("role") == "mgmt-infra"
+                ):
+                    action.error = "skipped: managed Docker network removal failed"
+                    continue
                 if client is None or action.artifact.host not in connected:
                     action.executed = True
                     action.ok = False
@@ -669,10 +806,149 @@ def _execute_plans(
                 rc, _, err = client.run_no_check(action.command, timeout=30)
                 action.ok = rc == 0
                 action.error = "" if rc == 0 else err.strip()
+                if (
+                    not action.ok
+                    and action.action == "remove-network"
+                    and action.artifact.metadata.get("role") == "mgmt-network"
+                ):
+                    blocked_mgmt_hosts.add(action.artifact.host)
     finally:
         if own_clients:
             for name in connected:
                 clients[name].close()
+
+
+def _finalize_requested_teardowns(
+    states: dict[str, DeploymentState],
+    topologies_dir: Path,
+    hosts: HostsConfig,
+    *,
+    clients: dict[str, SSHClient] | None = None,
+) -> dict[str, str]:
+    """Delete teardown-marked state only after exact artifact verification.
+
+    Cleanup plans are based on a snapshot taken before actions run. Re-query
+    the state-owned names here, so a successful finalization never depends on
+    stale inventory or on a best-effort delete command returning success.
+    """
+    pending = {
+        lab: state for lab, state in states.items()
+        if state.teardown_requested
+    }
+    if not pending:
+        return {}
+
+    own_clients = clients is None
+    active_clients = clients or create_clients(hosts.all_hosts)
+    connected: set[str] = set()
+    status: dict[str, str] = {}
+    try:
+        if own_clients:
+            for name, client in active_clients.items():
+                try:
+                    client.connect()
+                    connected.add(name)
+                except Exception as exc:
+                    log.warning("[%s] cannot verify pending teardown: %s", name, exc)
+        else:
+            connected = set(active_clients)
+
+        for lab, state in pending.items():
+            remaining, reason = _teardown_remaining_artifacts(
+                state, active_clients, connected,
+            )
+            if remaining:
+                status[lab] = f"pending teardown state retained: {reason}"
+                continue
+            state_svc.delete_state(lab, topologies_dir)
+            status[lab] = "pending teardown state finalized"
+    finally:
+        if own_clients:
+            for name in connected:
+                active_clients[name].close()
+    return status
+
+
+def _teardown_remaining_artifacts(
+    state: DeploymentState,
+    clients: dict[str, SSHClient],
+    connected: set[str],
+) -> tuple[bool, str]:
+    """Return whether state-owned teardown artifacts still exist or cannot be checked."""
+    artifacts_by_host: dict[str, list[CleanupArtifact]] = {}
+    for artifact in _dedupe_artifacts(expected_artifacts_from_state(state)):
+        if artifact.host:
+            artifacts_by_host.setdefault(artifact.host, []).append(artifact)
+    for host in state.scheduling:
+        artifacts_by_host.setdefault(host, [])
+
+    for host, artifacts in sorted(artifacts_by_host.items()):
+        client = clients.get(host)
+        if client is None or host not in connected:
+            return True, f"host unavailable: {host}"
+        remaining, reason = _host_teardown_artifacts_remaining(client, artifacts)
+        if remaining:
+            return True, f"{host}: {reason}"
+    return False, ""
+
+
+def _host_teardown_artifacts_remaining(
+    client: SSHClient,
+    artifacts: list[CleanupArtifact],
+) -> tuple[bool, str]:
+    containers = {a.name for a in artifacts if a.kind == "container"}
+    networks = {a.name for a in artifacts if a.kind == "network"}
+    interfaces = {a.name for a in artifacts if a.kind == "interface"}
+    dnsmasq_pids = {a.name for a in artifacts if a.kind == "dnsmasq"}
+
+    if containers:
+        rc, out, err = client.run_no_check(
+            "docker ps -a --format '{{.Names}}'", timeout=20,
+        )
+        if rc != 0:
+            return True, f"cannot verify containers: {(err or '').strip()}"
+        present = containers.intersection(line.strip() for line in out.splitlines())
+        if present:
+            return True, f"containers still present: {', '.join(sorted(present))}"
+
+    if networks:
+        rc, out, err = client.run_no_check(
+            "docker network ls --format '{{.Name}}'", timeout=20,
+        )
+        if rc != 0:
+            return True, f"cannot verify networks: {(err or '').strip()}"
+        present = networks.intersection(line.strip() for line in out.splitlines())
+        if present:
+            return True, f"networks still present: {', '.join(sorted(present))}"
+
+    if interfaces:
+        rc, out, err = client.run_no_check(
+            "ip -o link show | awk -F': ' '{print $2}'", timeout=20,
+        )
+        if rc != 0:
+            return True, f"cannot verify interfaces: {(err or '').strip()}"
+        observed = {line.split("@", 1)[0].strip() for line in out.splitlines()}
+        present = interfaces.intersection(observed)
+        if present:
+            return True, f"interfaces still present: {', '.join(sorted(present))}"
+
+    for pid_file in sorted(dnsmasq_pids):
+        rc, _, err = client.run_no_check(
+            f"test ! -e {shlex.quote(pid_file)}", timeout=10,
+        )
+        if rc != 0:
+            return True, f"dnsmasq pid still present or unverifiable: {(err or '').strip()}"
+    return False, ""
+
+
+def _cleanup_action_priority(action: CleanupAction) -> int:
+    """Keep Docker endpoint teardown ahead of dependent mgmt infrastructure."""
+    return {
+        "remove-container": 10,
+        "remove-network": 20,
+        "stop-dnsmasq": 30,
+        "delete-interface": 40,
+    }.get(action.action, 50)
 
 
 def _dedupe_artifacts(artifacts: list[CleanupArtifact]) -> list[CleanupArtifact]:

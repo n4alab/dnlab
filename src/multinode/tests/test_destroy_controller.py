@@ -1,7 +1,10 @@
 """Tests for destroy-controller compatibility cleanup."""
 
+from pathlib import Path
+
 from dnlab_multinode.controllers.destroy import DestroyController
 from dnlab_multinode.models.state import DeploymentState
+from dnlab_multinode.services import state as state_svc
 
 
 class FakeClient:
@@ -43,3 +46,46 @@ def test_destroy_legacy_logging_ignores_cleanup_errors():
     ctrl._destroy_legacy_logging()
 
     assert ctrl._errors == []
+
+
+def test_destroy_mgmt_network_uses_guarded_service(monkeypatch, topo_factory):
+    topo = topo_factory(name="demo", num_workers=1)
+    master = FakeClient("master")
+    worker = FakeClient("worker1")
+    ctrl = DestroyController("/tmp/demo.yml")
+    ctrl._state = DeploymentState(lab_name="demo", topology_file="/tmp/demo.yml")
+    ctrl._clients = {"master": master, "worker1": worker}
+    removed = []
+
+    monkeypatch.setattr(
+        "dnlab_multinode.controllers.destroy.mgmt_network_svc.destroy_mgmt_network",
+        lambda given_topo, client: removed.append((given_topo.name, client.name)),
+    )
+
+    ctrl._destroy_mgmt_network(topo)
+
+    assert sorted(removed) == [("demo", "master"), ("demo", "worker1")]
+    assert ctrl._errors == []
+
+
+def test_destroy_retains_teardown_state_after_partial_failure(tmp_path):
+    ctrl = DestroyController(str(tmp_path / "demo.yml"))
+    ctrl._state = DeploymentState(lab_name="demo", topology_file=str(tmp_path / "demo.yml"))
+
+    ctrl._mark_teardown_requested(tmp_path)
+    ctrl._errors.append("SSH connect failed: worker1")
+    ctrl._finalize_state("demo", tmp_path)
+
+    retained = state_svc.load_state("demo", tmp_path)
+    assert retained is not None
+    assert retained.teardown_requested is True
+
+
+def test_destroy_deletes_state_after_clean_teardown(tmp_path):
+    ctrl = DestroyController(str(tmp_path / "demo.yml"))
+    ctrl._state = DeploymentState(lab_name="demo", topology_file=str(tmp_path / "demo.yml"))
+
+    ctrl._mark_teardown_requested(tmp_path)
+    ctrl._finalize_state("demo", tmp_path)
+
+    assert state_svc.load_state("demo", tmp_path) is None

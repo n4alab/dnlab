@@ -198,9 +198,9 @@ class SSHClient:
         return out
 
     def destroy_clab(self, topology_file: str) -> str:
-        """Run containerlab destroy and return output."""
+        """Destroy one dNLab topology while retaining its shared mgmt network."""
         return self.run(
-            f"containerlab destroy -t {shlex.quote(topology_file)} --cleanup",
+            f"containerlab destroy -t {shlex.quote(topology_file)} --cleanup --keep-mgmt-net",
             timeout=_DEPLOY_TIMEOUT,
             check=False,
         )

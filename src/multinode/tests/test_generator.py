@@ -112,9 +112,14 @@ def test_mgmt_section_injected(topo_factory):
     parsed = yaml.safe_load(files["master"])
 
     assert "mgmt" in parsed
-    assert parsed["mgmt"]["network"] == topo.mgmt.network
-    assert parsed["mgmt"]["ipv4-subnet"] == topo.mgmt.ipv4_subnet
-    assert parsed["mgmt"]["ipv4-gw"] == (topo.mgmt.docker_ipv4_gw or topo.mgmt.ipv4_gw)
+    assert parsed["mgmt"] == {
+        "network": topo.mgmt.network,
+        "bridge": topo.mgmt.bridge,
+        "ipv4-subnet": topo.mgmt.ipv4_subnet,
+        "ipv4-gw": topo.mgmt.docker_ipv4_gw or topo.mgmt.ipv4_gw,
+        "external-access": False,
+    }
+    assert "driver-opts" not in parsed["mgmt"]
 
 
 def test_persist_bind_requires_dnlab_suffix(topo_factory):
@@ -269,11 +274,18 @@ def test_micro_topologies_split_local_link_to_host_endpoints(topo_factory):
     assert any(ep.startswith("host:") for ep in r2_eps)
     assert "R2:eth1" not in r1_eps
     assert "R1:eth1" not in r2_eps
-    assert r1["mgmt"] == {"network": topo.mgmt.network}
-    assert r2["mgmt"] == {"network": topo.mgmt.network}
+    expected_mgmt = {
+        "network": topo.mgmt.network,
+        "bridge": topo.mgmt.bridge,
+        "ipv4-subnet": topo.mgmt.ipv4_subnet,
+        "ipv4-gw": topo.mgmt.docker_ipv4_gw or topo.mgmt.ipv4_gw,
+        "external-access": False,
+    }
+    assert r1["mgmt"] == expected_mgmt
+    assert r2["mgmt"] == expected_mgmt
 
 
-def test_mgmt_anchor_topology_owns_full_mgmt_section(topo_factory):
+def test_mgmt_anchor_topology_uses_precreated_mgmt_network(topo_factory):
     nodes = {
         "R1": VDNode(name="R1", kind="linux", image="alpine:3"),
         "R2": VDNode(name="R2", kind="linux", image="alpine:3"),
@@ -292,10 +304,13 @@ def test_mgmt_anchor_topology_owns_full_mgmt_section(topo_factory):
     assert set(anchors) == {"master", "worker1"}
     parsed = yaml.safe_load(anchors["master"])
     assert parsed["name"] == "dnlab-lab-mgmt-master"
-    assert parsed["mgmt"]["network"] == topo.mgmt.network
-    assert parsed["mgmt"]["bridge"] == topo.mgmt.bridge
-    assert parsed["mgmt"]["ipv4-subnet"] == topo.mgmt.ipv4_subnet
-    assert parsed["mgmt"]["ipv4-gw"] == (topo.mgmt.docker_ipv4_gw or topo.mgmt.ipv4_gw)
+    assert parsed["mgmt"] == {
+        "network": topo.mgmt.network,
+        "bridge": topo.mgmt.bridge,
+        "ipv4-subnet": topo.mgmt.ipv4_subnet,
+        "ipv4-gw": topo.mgmt.docker_ipv4_gw or topo.mgmt.ipv4_gw,
+        "external-access": False,
+    }
     node = parsed["topology"]["nodes"]["mgmt-anchor"]
     assert node["kind"] == "linux"
     assert node["image"] == "dnlab-mgmt-anchor:latest"

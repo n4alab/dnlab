@@ -10,7 +10,7 @@ from dnlab_multinode.models.state import DeploymentState
 from dnlab_multinode.services import (
     jumphost, dns as dns_svc, netsetup, state as state_svc, vxlan,
     realnet as realnet_svc, runtime_links as runtime_links_svc,
-    runtime_relay as runtime_relay_svc,
+    runtime_relay as runtime_relay_svc, mgmt_network as mgmt_network_svc,
 )
 from dnlab_multinode.services.progress import ProgressCallback, make_timer
 from dnlab_multinode.services.ssh import SSHClient
@@ -66,6 +66,14 @@ class DestroyController:
             )
             return
 
+        # Persist the caller's intent before making any remote change. If a
+        # host is down, lab-cleanup can safely finish this exact teardown once
+        # the host returns instead of losing ownership information.
+        self._phase(
+            "destroy-intent", "Persisting teardown intent",
+            self._mark_teardown_requested, state_dir,
+        )
+
         from dnlab_multinode.services.ssh import create_clients
         self._clients = create_clients(topo.all_hosts)
         try:
@@ -89,26 +97,27 @@ class DestroyController:
             self._phase("destroy-mgmt-anchor", "Destroying management anchors", self._destroy_mgmt_anchors)
             self._phase("destroy-realnet", "Removing real_net infrastructure", self._destroy_realnets)
             self._phase("destroy-vxlan", "Removing dataplane VxLAN", self._destroy_vxlan_dataplane)
-            # docker network removal must precede mgmt teardown: the mgmt
-            # docker network is pinned to the bridge via
-            # com.docker.network.bridge.name, so ip link delete silently
-            # fails while docker still holds it.
-            self._phase("destroy-docker-network", "Removing mgmt docker network", self._destroy_docker_network, topo)
+            # Docker owns the bridge while the management network exists, so
+            # remove the managed network before deleting the bridge/VRF.
+            self._phase("destroy-mgmt-network", "Removing mgmt Docker network", self._destroy_mgmt_network, topo)
             self._phase("destroy-mgmt", "Removing mgmt infrastructure", self._destroy_mgmt, topo)
             self._phase("cleanup-hosts", "Cleaning master /etc/hosts", self._destroy_master_hosts_entry, topo)
 
-            state_svc.delete_state(topo.name, state_dir)
-
             if self._errors:
+                self._finalize_state(topo.name, state_dir)
                 log.warning("Destroy completed with %d errors:", len(self._errors))
                 for err in self._errors:
                     log.warning("  %s", err)
                 self._progress.emit(
                     "destroy", "ok",
-                    detail=f"Destroyed with {len(self._errors)} non-fatal errors",
+                    detail=(
+                        f"Destroyed with {len(self._errors)} non-fatal errors; "
+                        "lab-cleanup will reconcile the pending teardown"
+                    ),
                     data={"errors": list(self._errors)},
                 )
             else:
+                self._finalize_state(topo.name, state_dir)
                 log.info("Lab '%s' destroyed cleanly", topo.name)
                 self._progress.emit("destroy", "ok", detail=f"Lab '{topo.name}' destroyed cleanly")
 
@@ -118,6 +127,18 @@ class DestroyController:
         finally:
             for client in self._clients.values():
                 client.close()
+
+    def _mark_teardown_requested(self, state_dir: Path) -> None:
+        assert self._state is not None
+        self._state.teardown_requested = True
+        state_svc.save_state(self._state, state_dir)
+
+    def _finalize_state(self, lab_name: str, state_dir: Path) -> None:
+        assert self._state is not None
+        if self._errors:
+            state_svc.save_state(self._state, state_dir)
+            return
+        state_svc.delete_state(lab_name, state_dir)
 
     # ── Phase 1: Jump host ───────────────────────────────────────────
 
@@ -324,13 +345,12 @@ class DestroyController:
 
     # ── Phase 5: Docker network ──────────────────────────────────────
 
-    def _destroy_docker_network(self, topo):
-        network = topo.mgmt.network
+    def _destroy_mgmt_network(self, topo):
         for client in self._clients.values():
             try:
-                client.run(f"docker network rm {network} 2>/dev/null", check=False)
-            except Exception:
-                pass
+                mgmt_network_svc.destroy_mgmt_network(topo, client)
+            except Exception as exc:
+                self._errors.append(f"Docker mgmt network cleanup {client.name}: {exc}")
 
     # ── Phase 6: Master /etc/hosts cleanup ──────────────────────────
 

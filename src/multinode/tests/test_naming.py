@@ -44,6 +44,16 @@ def test_mgmt_vxlan_iface_max_15():
         assert len(naming.mgmt_vxlan_iface(lab)) <= 15
 
 
+def test_mgmt_resource_names_distinguish_long_lab_names():
+    first = "abcdefghijkl-first"
+    second = "abcdefghijkl-second"
+
+    assert naming.mgmt_network_name(first) != naming.mgmt_network_name(second)
+    assert naming.mgmt_bridge_name(first) != naming.mgmt_bridge_name(second)
+    assert naming.mgmt_vxlan_iface(first) != naming.mgmt_vxlan_iface(second)
+    assert naming.vrf_name(first) != naming.vrf_name(second)
+
+
 def test_ensure_unique_no_collision():
     names = ["a", "b", "c"]
     assert naming.ensure_unique(names) == ["a", "b", "c"]
@@ -129,5 +139,7 @@ def test_mgmt_names_truncate_at_boundary():
     # exactly 12 chars
     assert naming.mgmt_network_name("abcdefghijkl") == "abcdefghijkl"
     assert naming.mgmt_bridge_name("abcdefghijkl") == "br-abcdefghijkl"
-    # 13 chars → truncated to 12
-    assert naming.mgmt_network_name("abcdefghijklm") == "abcdefghijkl"
+    # Longer names retain a stable suffix instead of colliding by truncation.
+    long_name = naming.mgmt_network_name("abcdefghijklm")
+    assert len(long_name) == 12
+    assert long_name.startswith("abcde-")

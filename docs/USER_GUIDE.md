@@ -63,7 +63,10 @@ resources during deployment.
 Use the properties panel to set the Docker image, management addresses, resource
 overrides, advanced node options and device-specific features. Management IPv4
 and IPv6 settings can be configured globally for the lab and, when needed, per
-device.
+device. Starting with release `tag_release`, two different labs may use the
+same management IPv4 or IPv6 subnet because dNLab isolates each lab management
+network in its own VRF. Addresses still must be unique and valid within the
+single lab that declares them.
 
 ## Import And Export draw.io
 

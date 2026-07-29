@@ -389,17 +389,15 @@ def deploy_jumphost(
     log.info("Jump host container started: %s", container)
 
     try:
-        attach_jumphost_to_mgmt_bridge(
+        attach_jumphost_to_mgmt_network(
             client,
             container=container,
-            lab_name=topo.name,
-            bridge=topo.mgmt.bridge,
+            network=topo.mgmt.network,
             mgmt_ip=mgmt_ip,
-            mgmt_subnet=topo.mgmt.ipv4_subnet,
         )
         log.info(
-            "Jumphost %s attached to mgmt bridge '%s' with IP %s",
-            container, topo.mgmt.bridge, mgmt_ip,
+            "Jumphost %s attached to mgmt Docker network '%s' with IP %s",
+            container, topo.mgmt.network, mgmt_ip,
         )
     except Exception:
         client.run(f"docker rm -f {container} 2>/dev/null", check=False)
@@ -412,42 +410,22 @@ def deploy_jumphost(
     return container, password, jh_net.network, jh_ip_cidr, ssh_port
 
 
-def attach_jumphost_to_mgmt_bridge(
+def attach_jumphost_to_mgmt_network(
     client: SSHClient,
     *,
     container: str,
-    lab_name: str,
-    bridge: str,
+    network: str,
     mgmt_ip: str,
-    mgmt_subnet: str,
 ) -> None:
-    """Attach jumphost to the lab mgmt bridge without a Docker network.
+    """Attach the jumphost through Docker's native second-network path.
 
-    The master can already have Docker networks that overlap the lab mgmt
-    subnet, for example the Compose internal network. Creating another Docker
-    bridge for the lab mgmt subnet may therefore fail. The mgmt infra phase
-    creates the Linux bridge/VRF directly, so we connect the jumphost with a
-    veth pair and configure the container-side address in its netns.
+    The jumphost starts on the shared transport network as ``eth0``. Docker
+    adds the lab management network as ``eth1``, preserving the interface
+    contract expected by the dNLab jumphost image and the WebUI SSH tunnel.
     """
-    prefix = ipaddress.ip_network(mgmt_subnet, strict=False).prefixlen
-    suffix = "".join(ch for ch in lab_name if ch.isalnum())[:8] or "lab"
-    host_if = f"jh-{suffix}"
-    peer_if = f"jhc-{suffix}"
-
     client.run(
-        "set -e; "
-        f"pid=$(docker inspect -f '{{{{.State.Pid}}}}' {shlex.quote(container)}); "
-        f"test -n \"$pid\"; "
-        f"ip link show {shlex.quote(bridge)} >/dev/null; "
-        f"ip link del {shlex.quote(host_if)} 2>/dev/null || true; "
-        f"nsenter -t \"$pid\" -n ip link del mgmt0 2>/dev/null || true; "
-        f"ip link add {shlex.quote(host_if)} type veth peer name {shlex.quote(peer_if)}; "
-        f"ip link set {shlex.quote(host_if)} master {shlex.quote(bridge)}; "
-        f"ip link set {shlex.quote(host_if)} up; "
-        f"ip link set {shlex.quote(peer_if)} netns \"$pid\"; "
-        f"nsenter -t \"$pid\" -n ip link set {shlex.quote(peer_if)} name mgmt0; "
-        f"nsenter -t \"$pid\" -n ip addr add {shlex.quote(f'{mgmt_ip}/{prefix}')} dev mgmt0; "
-        f"nsenter -t \"$pid\" -n ip link set mgmt0 up",
+        f"docker network connect --ip {shlex.quote(mgmt_ip)} "
+        f"{shlex.quote(network)} {shlex.quote(container)}",
         timeout=30,
     )
 

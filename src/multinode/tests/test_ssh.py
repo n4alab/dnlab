@@ -22,7 +22,7 @@ def test_existing_containerlab_commands_quote_topology_paths():
     quoted_topology = "'/tmp/lab with spaces/demo.clab.yml'"
     assert commands == [
         f"containerlab deploy -t {quoted_topology} --reconfigure",
-        f"containerlab destroy -t {quoted_topology} --cleanup",
+        f"containerlab destroy -t {quoted_topology} --cleanup --keep-mgmt-net",
     ]
 
 

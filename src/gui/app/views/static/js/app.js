@@ -1621,10 +1621,6 @@
     return _intToIp((subnet.network + subnet.size - 2) >>> 0);
   }
 
-  function _cidrOverlaps(a, b) {
-    return a.network < (b.network + b.size) && b.network < (a.network + a.size);
-  }
-
   function _gatewayForSubnet(subnet, defaultSubnet = DEFAULT_MGMT_SUBNET, defaultGw = DEFAULT_MGMT_GW) {
     return _lastHostForSubnet(subnet) || defaultGw;
   }
@@ -1681,31 +1677,9 @@
     return groups.join(':');
   }
 
-  async function _suggestMgmtDefaults(ignoreLabId = currentLabId) {
-    const used = [];
-    try {
-      const labs = await API.Labs.list();
-      await Promise.all((labs || []).map(async (lab) => {
-        if (!lab || lab.id === ignoreLabId) return;
-        try {
-          const topo = await API.Labs.getTopology(lab.id);
-          const mgmt = (topo.extra && topo.extra.mgmt) || {};
-          const subnet = _parseCidr(mgmt['ipv4-subnet']);
-          if (subnet) used.push(subnet);
-        } catch (_) { /* best effort */ }
-      }));
-    } catch (_) { /* fallback to static default */ }
-
-    let subnet = _parseCidr(DEFAULT_MGMT_SUBNET);
+  async function _suggestMgmtDefaults() {
+    const subnet = _parseCidr(DEFAULT_MGMT_SUBNET);
     if (!subnet) return { subnet: DEFAULT_MGMT_SUBNET, gw: DEFAULT_MGMT_GW };
-    while (used.some(u => _cidrOverlaps(subnet, u))) {
-      subnet = {
-        network: (subnet.network + subnet.size) >>> 0,
-        prefix: subnet.prefix,
-        size: subnet.size,
-      };
-      subnet.cidr = `${_intToIp(subnet.network)}/${subnet.prefix}`;
-    }
     return { subnet: subnet.cidr, gw: _gatewayForSubnet(subnet) };
   }
 
