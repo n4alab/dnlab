@@ -18,7 +18,7 @@ visibility: public
 breaking: true
 upgrade_notes:
   - >-
-    Starting with tag_release, destroy and redeploy labs created with the former
+    Starting with v0.2.0, destroy and redeploy labs created with the former
     management-network implementation; deployed management networks are not
     migrated in place.
   - >-

@@ -1,0 +1,226 @@
+version: 0.2.0
+date: '2026-07-29'
+tag: v0.2.0
+summary: Feature release for live topology changes, overlapping management subnets,
+  canvas annotations and shared VD consoles.
+entries:
+- category: Added
+  title: Add warm links and live topology changes
+  body: Compatible per-VD images can add or remove dataplane links and nodes while
+    a lab is running, with capability validation, deterministic host networking, persisted
+    runtime state and rollback on partial failure.
+  change_id: 20260715-warm-links-live-topology
+  components:
+  - gui
+  - image-build
+  - multinode
+  audience:
+  - admin
+  - operator
+  - user
+  references:
+  - commit:c87cd6495c768906a6b191d86586670898c4bf19
+- category: Added
+  title: Allow overlapping management subnets across labs
+  body: dNLab now provisions lab management networks through the custom dnlab-vrf
+    Docker NetworkDriver and IpamDriver, preserving Docker-native eth0 for Containerlab,
+    vrnetlab consoles and Web UIs while allowing different labs to reuse the same
+    IPv4 or IPv6 management subnet in separate VRFs.
+  change_id: 20260729-mgmt-vrf-overlap-driver
+  components:
+  - multinode
+  - cleanup
+  - docs
+  audience:
+  - admin
+  - operator
+  - user
+  references:
+  - plan:achieved-2026-07-29-mgmt-remote-network-driver.md
+- category: Added
+  title: Annotate canvas topology diagrams
+  body: The GUI can color individual links, add editable text, rectangle and circle
+    annotations with ordered layers around VD icons, and preserve those visual aids
+    through draw.io export and import.
+  change_id: 20260728-090137-annotate-canvas-topology-diagrams
+  components:
+  - drawio
+  - gui
+  audience:
+  - operator
+  - user
+  references:
+  - plan:canvas-annotations-link-colors-drawio-roundtrip
+- category: Added
+  title: Build managed images without an uploaded source
+  body: Image-build metadata and the administration UI can start managed source-free
+    builds while retaining upload validation for device images that require a vendor
+    artifact.
+  change_id: 20260715-managed-source-free-image-builds
+  components:
+  - gui
+  - image-build
+  audience:
+  - admin
+  references:
+  - commit:d292ba98629eee89eb3e0849d6d77227a48b9184
+- category: Added
+  title: Restart individual per-VD nodes
+  body: The GUI and multinode API can restart an individual node in a per-VD lab by
+    performing a controlled stop and start without redeploying the entire lab.
+  change_id: 20260713-5234c0b-per-vd-restart
+  components:
+  - gui
+  - multinode
+  audience:
+  - operator
+  - user
+  references:
+  - commit:5234c0b9d77f0b12434d6b52ed9f58e5bb548931
+- category: Added
+  title: Share VD consoles across concurrent sessions
+  body: VD consoles can be shared concurrently by GUI and SSH sessions through one
+    runtime connection, and the GUI can open every live VD console in one tabbed window.
+  change_id: 20260721-130647-share-vd-consoles-across-concurrent-sess
+  components:
+  - gui
+  - multinode
+  audience:
+  - operator
+  - user
+- category: Changed
+  title: Document GUI API operations for agents
+  body: The GUI OpenAPI schema now explains each HTTP operation's purpose, relevant
+    constraints, side effects, and result so API agents can select calls safely.
+  change_id: 20260716-agent-oriented-openapi-docs
+  components:
+  - gui
+  audience:
+  - operator
+  - developer
+- category: Changed
+  title: Expose live runtime operation state
+  body: The topology UI now reports actionable start and stop capabilities, displays
+    active node operations and partial link failures, and safely removes live runtime
+    nodes before deleting their topology definitions.
+  change_id: 20260715-runtime-operation-state
+  components:
+  - gui
+  - multinode
+  audience:
+  - operator
+  - user
+  references:
+  - commit:d292ba98629eee89eb3e0849d6d77227a48b9184
+- category: Fixed
+  title: Persist custom dNLab images
+  body: Per-lab topology generation now preserves configured custom dNLab image references
+    instead of replacing them during multinode generation.
+  change_id: 20260713-1c58fed-custom-image-persistence
+  components:
+  - multinode
+  audience:
+  - admin
+  - user
+  references:
+  - commit:1c58fed5a58beee3380598b0e6f6f4fc5a37ce78
+- category: Fixed
+  title: Preserve RouterOS overlays across rebuilds
+  body: RouterOS image rebuilds now retain their writable overlay state instead of
+    losing persisted device data during the rebuild workflow.
+  change_id: 20260713-d5e9bce-routeros-overlay-rebuild
+  components:
+  - image-build
+  audience:
+  - admin
+  - user
+  references:
+  - commit:d5e9bcec589c60b7a50fb5a979dfe3bc0b74850e
+- category: Fixed
+  title: Quote per-VD topology paths over SSH
+  body: Remote per-VD operations now safely quote topology paths, including paths
+    containing characters that the remote shell would otherwise interpret.
+  change_id: 20260713-240047a-per-vd-path-quoting
+  components:
+  - multinode
+  audience:
+  - admin
+  - operator
+  references:
+  - commit:240047a256fb6836ad3385c40eb3139473ac4ff1
+- category: Fixed
+  title: Reclaim running lab containers without deployment state
+  body: The lab cleanup reconciler now reclaims running VD and per-lab infrastructure
+    containers when no valid multinode deployment state exists and the grace window
+    has expired, preventing incomplete destroy operations from leaving permanently
+    protected artifacts.
+  change_id: 20260720-162328-reclaim-running-lab-containers-without-d
+  components:
+  - multinode
+  audience:
+  - admin
+  - operator
+  references:
+  - commit:eb7974a2c4e71ec528166e40e6ff9c356efc20e3
+- category: Fixed
+  title: Refresh host and device image metadata
+  body: Image synchronization now refreshes host inventory and device catalog metadata
+    so newly available or updated images are shown consistently.
+  change_id: 20260713-c8c55e7-image-metadata-refresh
+  components:
+  - gui
+  - multinode
+  audience:
+  - admin
+  - user
+  references:
+  - commit:c8c55e73588236b45a1e369b4ccb61ee01b57d79
+- category: Fixed
+  title: Select the declared XRv9k console port
+  body: Console discovery now prefers the launcher-declared interactive serial port
+    and limits fallback selection to the supported console range, avoiding attachment
+    to an unrelated XRv9k serial socket.
+  change_id: 20260715-xrv9k-console-selection
+  components:
+  - gui
+  - image-build
+  audience:
+  - user
+  references:
+  - commit:d292ba98629eee89eb3e0849d6d77227a48b9184
+breaking_changes:
+- title: Allow overlapping management subnets across labs
+  body: dNLab now provisions lab management networks through the custom dnlab-vrf
+    Docker NetworkDriver and IpamDriver, preserving Docker-native eth0 for Containerlab,
+    vrnetlab consoles and Web UIs while allowing different labs to reuse the same
+    IPv4 or IPv6 management subnet in separate VRFs.
+upgrade_notes:
+- Starting with v0.2.0, destroy and redeploy labs created with the former management-network
+  implementation; deployed management networks are not migrated in place.
+- Ensure each master and worker can run the automatically installed dnlab-vrf-plugin.service;
+  no patched Docker Engine is required.
+artifacts:
+- name: Source archives
+  type: github-release
+  path: '*-0.2.0-source.tar.gz'
+  channel: GitHub Release
+  notes: Corresponding source archives for the published GHCR images.
+- name: Source checksums
+  type: github-release
+  path: SHA256SUMS
+  channel: GitHub Release
+  notes: Checksums for downloadable release assets.
+- name: Proxmox LXC template
+  type: lxc-proxmox
+  path: dnlab-lxc-proxmox-0.2.0-amd64.tar.zst
+  channel: GHCR and GitHub Release mirror
+  notes: Canonical OCI artifact ghcr.io/scaci/dnlab-lxc-proxmox:0.2.0.
+- name: Proxmox LXC release notes
+  type: lxc-proxmox
+  path: LXC-RELEASE-NOTES-0.2.0.md
+  channel: GHCR and GitHub Release mirror
+  notes: Browser-friendly release note mirror for the LXC artifact.
+source_notes:
+- CHANGELOG.md
+- changes/archive/0.2.0/
+internal_refs: []
