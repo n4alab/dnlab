@@ -20,6 +20,10 @@ log = logging.getLogger(__name__)
 
 _LINKCTL_READY_TIMEOUT = float(os.getenv("DNLAB_LINKCTL_READY_TIMEOUT", "900"))
 _LINKCTL_RETRY_INTERVAL = 0.25
+_LINK_LOCAL_PROTOCOLS = (
+    ("0x88cc", "49140"),  # LLDP
+    ("0x8809", "49141"),  # LACP / Slow Protocols
+)
 
 
 def build_runtime_links(topo: DistributedTopology, plan: SchedulePlan) -> list[RuntimeLinkState]:
@@ -290,11 +294,17 @@ def _create_same_host(
         for iface in [link.host_endpoint_a, link.host_endpoint_b]:
             client.run(f"ip link set {iface} up")
             client.run(f"ip link set {iface} master {bridge}")
+        _ensure_link_local_forwarding(
+            client, link.host_endpoint_a, link.host_endpoint_b,
+        )
         _set_link_carriers(
             link, clients, "up", check=True, defer=defer_warm_carriers,
         )
     except Exception:
         _set_link_carriers(link, clients, "down", check=False)
+        _remove_link_local_forwarding(
+            client, link.host_endpoint_a, link.host_endpoint_b,
+        )
         _remove_bridge_forwarding(client, bridge)
         client.run(f"ip link delete {bridge} 2>/dev/null", check=False)
         raise
@@ -305,6 +315,9 @@ def _delete_same_host(link: RuntimeLinkState, clients: dict[str, SSHClient]) -> 
     client = clients.get(link.host_a)
     if client:
         bridge = _runtime_bridge_name(link)
+        _remove_link_local_forwarding(
+            client, link.host_endpoint_a, link.host_endpoint_b,
+        )
         _remove_bridge_forwarding(client, bridge)
         client.run(f"ip link delete {bridge} 2>/dev/null", check=False)
 
@@ -485,6 +498,36 @@ def _ensure_bridge_forwarding(client: SSHClient, bridge: str) -> None:
         f"-m comment --comment '{comment}' -j ACCEPT",
         check=False,
     )
+
+
+def _ensure_link_local_forwarding(client: SSHClient, iface_a: str, iface_b: str) -> None:
+    """Pass link-local L2 control protocols across same-host runtime links.
+
+    Linux bridges intentionally consume reserved 01:80:c2 link-local groups by
+    default. Runtime links should behave like a direct cable for LLDP and LACP,
+    so mirror those ethertypes directly between the two host-side veths.
+    """
+    for iface in (iface_a, iface_b):
+        client.run(f"tc qdisc add dev {iface} clsact 2>/dev/null", check=False)
+    for src, dst in ((iface_a, iface_b), (iface_b, iface_a)):
+        for protocol, pref in _LINK_LOCAL_PROTOCOLS:
+            client.run(
+                f"tc filter replace dev {src} ingress pref {pref} "
+                f"protocol {protocol} flower "
+                f"action mirred egress redirect dev {dst}"
+            )
+
+
+def _remove_link_local_forwarding(client: SSHClient, iface_a: str, iface_b: str) -> None:
+    """Remove LLDP/LACP forwarding hooks installed for a runtime link."""
+    for iface in (iface_a, iface_b):
+        for protocol, pref in _LINK_LOCAL_PROTOCOLS:
+            client.run(
+                f"tc filter del dev {iface} ingress pref {pref} "
+                f"protocol {protocol} 2>/dev/null",
+                check=False,
+            )
+        client.run(f"tc qdisc del dev {iface} clsact 2>/dev/null", check=False)
 
 
 def _remove_bridge_forwarding(client: SSHClient, bridge: str) -> None:

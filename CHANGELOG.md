@@ -47,6 +47,10 @@ canvas annotations and shared VD consoles.
 
 ### Fixed
 
+- Forward LLDP and LACP across same-host runtime links: Same-host runtime links
+  now mirror LLDP and LACP frames directly between the two host-side veth
+  endpoints so Linux bridge link-local filtering does not prevent neighbors,
+  LAGs, and EVPN multihoming control protocols from forming.
 - Persist custom dNLab images: Per-lab topology generation now preserves
   configured custom dNLab image references instead of replacing them during
   multinode generation.

@@ -1,0 +1,17 @@
+id: 20260801-runtime-link-lldp-lacp-forwarding
+type: bugfix
+title: Forward LLDP and LACP across same-host runtime links
+description: >-
+  Same-host runtime links now mirror LLDP and LACP frames directly between the
+  two host-side veth endpoints so Linux bridge link-local filtering does not
+  prevent neighbors, LAGs, and EVPN multihoming control protocols from forming.
+components:
+  - multinode
+audience:
+  - admin
+  - operator
+  - user
+visibility: public
+breaking: false
+upgrade_notes: []
+references: []

@@ -113,6 +113,18 @@ entries:
   references:
   - commit:d292ba98629eee89eb3e0849d6d77227a48b9184
 - category: Fixed
+  title: Forward LLDP and LACP across same-host runtime links
+  body: Same-host runtime links now mirror LLDP and LACP frames directly between the
+    two host-side veth endpoints so Linux bridge link-local filtering does not prevent
+    neighbors, LAGs, and EVPN multihoming control protocols from forming.
+  change_id: 20260801-runtime-link-lldp-lacp-forwarding
+  components:
+  - multinode
+  audience:
+  - admin
+  - operator
+  - user
+- category: Fixed
   title: Persist custom dNLab images
   body: Per-lab topology generation now preserves configured custom dNLab image references
     instead of replacing them during multinode generation.

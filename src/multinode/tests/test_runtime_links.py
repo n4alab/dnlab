@@ -80,6 +80,34 @@ def test_create_and_delete_same_host_link():
     assert any("iptables -C FORWARD -i br-rt-" in cmd for cmd in commands)
     assert any("iptables -C FORWARD -o br-rt-" in cmd for cmd in commands)
     assert any("master br-rt-" in cmd for cmd in commands)
+    assert "tc qdisc add dev rt-R1-e1-0 clsact 2>/dev/null" in commands
+    assert "tc qdisc add dev rt-R2-e1-0 clsact 2>/dev/null" in commands
+    assert (
+        "tc filter replace dev rt-R1-e1-0 ingress pref 49140 "
+        "protocol 0x88cc flower action mirred egress redirect dev rt-R2-e1-0"
+    ) in commands
+    assert (
+        "tc filter replace dev rt-R2-e1-0 ingress pref 49140 "
+        "protocol 0x88cc flower action mirred egress redirect dev rt-R1-e1-0"
+    ) in commands
+    assert (
+        "tc filter replace dev rt-R1-e1-0 ingress pref 49141 "
+        "protocol 0x8809 flower action mirred egress redirect dev rt-R2-e1-0"
+    ) in commands
+    assert (
+        "tc filter replace dev rt-R2-e1-0 ingress pref 49141 "
+        "protocol 0x8809 flower action mirred egress redirect dev rt-R1-e1-0"
+    ) in commands
+    assert (
+        "tc filter del dev rt-R1-e1-0 ingress pref 49140 "
+        "protocol 0x88cc 2>/dev/null"
+    ) in commands
+    assert (
+        "tc filter del dev rt-R2-e1-0 ingress pref 49141 "
+        "protocol 0x8809 2>/dev/null"
+    ) in commands
+    assert "tc qdisc del dev rt-R1-e1-0 clsact 2>/dev/null" in commands
+    assert "tc qdisc del dev rt-R2-e1-0 clsact 2>/dev/null" in commands
     assert any("iptables -D FORWARD -i br-rt-" in cmd for cmd in commands)
     assert any("iptables -D FORWARD -o br-rt-" in cmd for cmd in commands)
     assert any("ip link delete br-rt-" in cmd for cmd in commands)
