@@ -389,15 +389,23 @@ def deploy_jumphost(
     log.info("Jump host container started: %s", container)
 
     try:
-        attach_jumphost_to_mgmt_network(
+        attach_jumphost_to_mgmt_bridge(
             client,
             container=container,
-            network=topo.mgmt.network,
+            lab_name=topo.name,
+            bridge=topo.mgmt.bridge,
             mgmt_ip=mgmt_ip,
+            mgmt_subnet=topo.mgmt.ipv4_subnet,
         )
         log.info(
-            "Jumphost %s attached to mgmt Docker network '%s' with IP %s",
-            container, topo.mgmt.network, mgmt_ip,
+            "Jumphost %s attached to mgmt bridge '%s' with IP %s",
+            container, topo.mgmt.bridge, mgmt_ip,
+        )
+        _verify_jumphost_ssh_publish(
+            client,
+            container=container,
+            ssh_bind_ip=ssh_bind_ip,
+            ssh_port=ssh_port,
         )
     except Exception:
         client.run(f"docker rm -f {container} 2>/dev/null", check=False)
@@ -410,22 +418,66 @@ def deploy_jumphost(
     return container, password, jh_net.network, jh_ip_cidr, ssh_port
 
 
-def attach_jumphost_to_mgmt_network(
+def _verify_jumphost_ssh_publish(
     client: SSHClient,
     *,
     container: str,
-    network: str,
-    mgmt_ip: str,
+    ssh_bind_ip: str,
+    ssh_port: int,
 ) -> None:
-    """Attach the jumphost through Docker's native second-network path.
+    """Ensure Docker kept the jumphost's published SSH port after mgmt attach."""
+    rc, out, err = client.run_no_check(
+        f"docker port {shlex.quote(container)} 22",
+        timeout=15,
+    )
+    expected = f"{ssh_bind_ip}:{ssh_port}"
+    published = {line.strip() for line in (out or "").splitlines() if line.strip()}
+    if rc == 0 and expected in published:
+        return
+    detail = (err or out or "no docker port output").strip()
+    raise RuntimeError(
+        f"Jumphost container '{container}' lost SSH port publishing after "
+        f"management network attach: expected {expected}->22/tcp "
+        f"but docker reported {detail!r}. The lab was not left with an "
+        "unreachable jumphost."
+    )
 
-    The jumphost starts on the shared transport network as ``eth0``. Docker
-    adds the lab management network as ``eth1``, preserving the interface
-    contract expected by the dNLab jumphost image and the WebUI SSH tunnel.
+
+def attach_jumphost_to_mgmt_bridge(
+    client: SSHClient,
+    *,
+    container: str,
+    lab_name: str,
+    bridge: str,
+    mgmt_ip: str,
+    mgmt_subnet: str,
+) -> None:
+    """Attach jumphost to the lab mgmt bridge without a Docker endpoint.
+
+    Docker remote-driver endpoints can take over external connectivity and
+    revoke the bridge-published SSH port, so the jumphost gets only a manual
+    veth on the lab bridge. Inside the container this is ``eth1``, matching
+    the jumphost image's forwarding rules.
     """
+    prefix = ipaddress.ip_network(mgmt_subnet, strict=False).prefixlen
+    suffix = "".join(ch for ch in lab_name if ch.isalnum())[:8] or "lab"
+    host_if = f"jh-{suffix}"
+    peer_if = f"jhc-{suffix}"
+
     client.run(
-        f"docker network connect --ip {shlex.quote(mgmt_ip)} "
-        f"{shlex.quote(network)} {shlex.quote(container)}",
+        "set -e; "
+        f"pid=$(docker inspect -f '{{{{.State.Pid}}}}' {shlex.quote(container)}); "
+        f"test -n \"$pid\"; "
+        f"ip link show {shlex.quote(bridge)} >/dev/null; "
+        f"ip link del {shlex.quote(host_if)} 2>/dev/null || true; "
+        f"nsenter -t \"$pid\" -n ip link del eth1 2>/dev/null || true; "
+        f"ip link add {shlex.quote(host_if)} type veth peer name {shlex.quote(peer_if)}; "
+        f"ip link set {shlex.quote(host_if)} master {shlex.quote(bridge)}; "
+        f"ip link set {shlex.quote(host_if)} up; "
+        f"ip link set {shlex.quote(peer_if)} netns \"$pid\"; "
+        f"nsenter -t \"$pid\" -n ip link set {shlex.quote(peer_if)} name eth1; "
+        f"nsenter -t \"$pid\" -n ip addr add {shlex.quote(f'{mgmt_ip}/{prefix}')} dev eth1; "
+        f"nsenter -t \"$pid\" -n ip link set eth1 up",
         timeout=30,
     )
 

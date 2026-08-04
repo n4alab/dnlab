@@ -228,6 +228,36 @@ def test_warm_carrier_is_enabled_after_host_attach_and_disabled_before_delete():
     assert any("ip link delete br-rt-" in cmd for cmd in delete_commands[1:])
 
 
+def test_full_teardown_removes_warm_link_without_waiting_for_carrier():
+    client = FakeClient()
+    link = RuntimeLinkState(
+        id="l0",
+        link_type="same_host",
+        endpoint_a={"node": "R1", "iface": "eth1"},
+        endpoint_b={"node": "R2", "iface": "eth1"},
+        host_a="master",
+        host_b="master",
+        host_endpoint_a="wp-e1-left",
+        host_endpoint_b="wp-e1-right",
+        container_a="clab-dnlab-lab-R1-R1",
+        warm_a=True,
+    )
+
+    runtime_links.delete_link(
+        link,
+        {"master": client},
+        set_carriers=False,
+    )
+
+    commands = [cmd for cmd, _ in client.commands]
+    assert not any("dnlab-linkctl" in cmd for cmd in commands)
+    assert "tc qdisc del dev wp-e1-left clsact 2>/dev/null" in commands
+    assert "tc qdisc del dev wp-e1-right clsact 2>/dev/null" in commands
+    assert any("iptables -D FORWARD -i br-rt-" in cmd for cmd in commands)
+    assert any("ip link delete br-rt-" in cmd for cmd in commands)
+    assert link.state == "down"
+
+
 def test_warm_attach_failure_rolls_carrier_down_and_removes_bridge():
     class FailingClient(FakeClient):
         def run(self, cmd, check=True):

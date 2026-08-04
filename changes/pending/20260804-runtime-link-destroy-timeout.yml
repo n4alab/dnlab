@@ -1,0 +1,17 @@
+id: 20260804-runtime-link-destroy-timeout
+type: bugfix
+title: Avoid warm-link controller waits during lab teardown
+description: Full lab teardown now removes host-side runtime dataplane artifacts
+  without requesting guest QEMU carrier changes. This prevents the
+  destroy-runtime-links phase from waiting up to five minutes when a warm VD's
+  link controller or QEMU monitor is not ready, while single-node lifecycle
+  operations retain carrier management.
+components:
+- multinode
+audience:
+- operator
+- user
+visibility: public
+breaking: false
+upgrade_notes: []
+references: []

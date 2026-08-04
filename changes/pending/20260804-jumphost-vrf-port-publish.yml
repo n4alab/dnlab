@@ -1,0 +1,20 @@
+id: 20260804-jumphost-vrf-port-publish
+type: bugfix
+title: Preserve jumphost SSH port publishing with VRF management networks
+description: Jumphost deployment no longer attaches the container to the lab
+  management network through Docker's dnlab-vrf endpoint, which could revoke the
+  bridge-published SSH port and leave users with connection refused on the
+  advertised port. The jumphost now uses a direct veth attachment to the lab
+  management bridge and verifies that Docker still publishes SSH before the lab
+  is considered reachable.
+components:
+- multinode
+audience:
+- operator
+- user
+visibility: public
+breaking: false
+upgrade_notes:
+- Recreate the affected lab jumphost or redeploy the lab after upgrading so the
+  corrected attachment path is applied.
+references: []

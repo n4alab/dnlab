@@ -214,14 +214,20 @@ def create_link(
     return link
 
 
-def delete_link(link: RuntimeLinkState, clients: dict[str, SSHClient]) -> RuntimeLinkState:
+def delete_link(
+    link: RuntimeLinkState,
+    clients: dict[str, SSHClient],
+    *,
+    set_carriers: bool = True,
+) -> RuntimeLinkState:
+    """Delete a runtime link, optionally skipping warm guest carrier updates."""
     try:
         if link.link_type == "same_host":
-            _delete_same_host(link, clients)
+            _delete_same_host(link, clients, set_carriers=set_carriers)
         elif link.link_type == "cross_host":
-            _delete_cross_host(link, clients)
+            _delete_cross_host(link, clients, set_carriers=set_carriers)
         elif link.link_type == "real_net":
-            _delete_realnet(link, clients)
+            _delete_realnet(link, clients, set_carriers=set_carriers)
         link.state = "down"
         link.last_error = ""
     except Exception as exc:
@@ -310,8 +316,14 @@ def _create_same_host(
         raise
 
 
-def _delete_same_host(link: RuntimeLinkState, clients: dict[str, SSHClient]) -> None:
-    _set_link_carriers(link, clients, "down", check=False)
+def _delete_same_host(
+    link: RuntimeLinkState,
+    clients: dict[str, SSHClient],
+    *,
+    set_carriers: bool,
+) -> None:
+    if set_carriers:
+        _set_link_carriers(link, clients, "down", check=False)
     client = clients.get(link.host_a)
     if client:
         bridge = _runtime_bridge_name(link)
@@ -350,8 +362,14 @@ def _create_cross_host(
         raise
 
 
-def _delete_cross_host(link: RuntimeLinkState, clients: dict[str, SSHClient]) -> None:
-    _set_link_carriers(link, clients, "down", check=False)
+def _delete_cross_host(
+    link: RuntimeLinkState,
+    clients: dict[str, SSHClient],
+    *,
+    set_carriers: bool,
+) -> None:
+    if set_carriers:
+        _set_link_carriers(link, clients, "down", check=False)
     _delete_cross_host_network(link, clients)
 
 
@@ -383,8 +401,14 @@ def _create_realnet(
         raise
 
 
-def _delete_realnet(link: RuntimeLinkState, clients: dict[str, SSHClient]) -> None:
-    _set_link_carriers(link, clients, "down", check=False)
+def _delete_realnet(
+    link: RuntimeLinkState,
+    clients: dict[str, SSHClient],
+    *,
+    set_carriers: bool,
+) -> None:
+    if set_carriers:
+        _set_link_carriers(link, clients, "down", check=False)
     client = clients.get(link.host_a)
     if client:
         client.run(f"ip link set {link.host_endpoint_a} nomaster 2>/dev/null", check=False)

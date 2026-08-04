@@ -291,7 +291,11 @@ class DestroyController:
         log.info("Teardown: removing runtime dataplane links")
         for link in self._state.runtime_links:
             try:
-                runtime_links_svc.delete_link(link, self._clients)
+                runtime_links_svc.delete_link(
+                    link,
+                    self._clients,
+                    set_carriers=False,
+                )
             except Exception as e:
                 self._errors.append(f"runtime link delete {link.id}: {e}")
 

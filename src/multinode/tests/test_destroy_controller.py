@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from dnlab_multinode.controllers.destroy import DestroyController
-from dnlab_multinode.models.state import DeploymentState
+from dnlab_multinode.models.state import DeploymentState, RuntimeLinkState
 from dnlab_multinode.services import state as state_svc
 
 
@@ -65,6 +65,36 @@ def test_destroy_mgmt_network_uses_guarded_service(monkeypatch, topo_factory):
     ctrl._destroy_mgmt_network(topo)
 
     assert sorted(removed) == [("demo", "master"), ("demo", "worker1")]
+    assert ctrl._errors == []
+
+
+def test_destroy_runtime_links_skips_warm_carrier_shutdown():
+    master = FakeClient("master")
+    ctrl = DestroyController("/tmp/demo.yml")
+    ctrl._state = DeploymentState(
+        lab_name="demo",
+        topology_file="/tmp/demo.yml",
+        runtime_links=[
+            RuntimeLinkState(
+                id="l0",
+                link_type="same_host",
+                endpoint_a={"node": "R1", "iface": "eth1"},
+                endpoint_b={"node": "R2", "iface": "eth1"},
+                host_a="master",
+                host_b="master",
+                host_endpoint_a="wp-e1-left",
+                host_endpoint_b="wp-e1-right",
+                container_a="clab-dnlab-demo-R1-R1",
+                warm_a=True,
+            )
+        ],
+    )
+    ctrl._clients = {"master": master}
+
+    ctrl._destroy_runtime_links()
+
+    assert not any("dnlab-linkctl" in cmd for cmd in master.commands)
+    assert any("ip link delete br-rt-" in cmd for cmd in master.commands)
     assert ctrl._errors == []
 
 
