@@ -144,6 +144,39 @@ class StatusReport:
         }
 
 
+def _runtime_aliases(value: str) -> set[str]:
+    value = str(value or "").strip()
+    aliases = {value} if value else set()
+    upper = value.upper()
+    if upper.startswith("NEW-") and len(value) > 4:
+        aliases.add(value[4:])
+    elif value:
+        aliases.add(f"NEW-{value}")
+    return {alias for alias in aliases if alias}
+
+
+def _resolve_runtime_node_key(state: DeploymentState, requested: str) -> str | None:
+    runtimes = state.node_runtime or {}
+    if requested in runtimes:
+        return requested
+
+    requested_aliases = {alias.lower() for alias in _runtime_aliases(requested)}
+    matches = []
+    for key, runtime in runtimes.items():
+        key_aliases = {alias.lower() for alias in _runtime_aliases(key)}
+        container = str(getattr(runtime, "container", "") or "")
+        container_aliases = {alias.lower() for alias in _runtime_aliases(container)}
+        if (
+            requested.lower() == str(getattr(runtime, "node", "") or "").lower()
+            or requested.lower() == container.lower()
+            or requested_aliases & key_aliases
+            or requested_aliases & container_aliases
+            or any(container.lower().endswith(f"-{alias}") for alias in requested_aliases)
+        ):
+            matches.append(key)
+    return matches[0] if len(matches) == 1 else None
+
+
 class StatusController:
     """Read-only controller producing a :class:`StatusReport`."""
 
@@ -307,7 +340,8 @@ class StatusController:
                     per_host[host_name] = parsed
 
         for name, vd in topo.nodes.items():
-            runtime = state.node_runtime.get(name)
+            runtime_key = _resolve_runtime_node_key(state, name) or name
+            runtime = state.node_runtime.get(runtime_key)
             container = runtime.container if runtime else f"clab-{topo.name}-{name}"
             scheduled_host = runtime.host if runtime else vd_host.get(name, "")
             live_hits = [
@@ -402,7 +436,11 @@ class StatusController:
                     "bind_ip":        a.bind_ip,
                     "proto":          a.proto,
                 }
-                for a in (state.webui_allocations or {}).get(name, [])
+                for a in (
+                    (state.webui_allocations or {}).get(name)
+                    or (state.webui_allocations or {}).get(runtime_key)
+                    or []
+                )
             ]
             report.nodes[name] = ns
 

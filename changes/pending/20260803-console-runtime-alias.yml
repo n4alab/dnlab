@@ -1,0 +1,16 @@
+id: 20260803-console-runtime-alias
+type: bugfix
+title: Resolve console runtime aliases for renamed GUI nodes
+description: Console and log relay lookup now resolves harmless runtime aliases,
+  including GUI nodes that were deployed as NEW-SERVER but later addressed as
+  SERVER, so opening all consoles no longer skips the affected VD.
+components:
+- gui
+- multinode
+audience:
+- operator
+- user
+visibility: public
+breaking: false
+upgrade_notes: []
+references: []

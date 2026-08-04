@@ -755,6 +755,46 @@ def _lab_state(req: LabRequest):
     return state
 
 
+def _runtime_aliases(value: str) -> set[str]:
+    value = str(value or "").strip()
+    aliases = {value} if value else set()
+    upper = value.upper()
+    if upper.startswith("NEW-") and len(value) > 4:
+        aliases.add(value[4:])
+    elif value:
+        aliases.add(f"NEW-{value}")
+    return {alias for alias in aliases if alias}
+
+
+def _resolve_runtime_node_key(state, requested: str) -> str:
+    runtimes = state.node_runtime or {}
+    if requested in runtimes:
+        return requested
+
+    requested_aliases = {alias.lower() for alias in _runtime_aliases(requested)}
+    matches = []
+    for key, runtime in runtimes.items():
+        key_aliases = {alias.lower() for alias in _runtime_aliases(key)}
+        container = str(getattr(runtime, "container", "") or "")
+        container_aliases = {alias.lower() for alias in _runtime_aliases(container)}
+        if (
+            requested.lower() == str(getattr(runtime, "node", "") or "").lower()
+            or requested.lower() == container.lower()
+            or requested_aliases & key_aliases
+            or requested_aliases & container_aliases
+            or any(container.lower().endswith(f"-{alias}") for alias in requested_aliases)
+        ):
+            matches.append(key)
+
+    if len(matches) == 1:
+        return matches[0]
+    if len(matches) > 1:
+        raise RuntimeError(
+            f"node alias {requested!r} matches multiple runtime nodes: {', '.join(matches)}"
+        )
+    raise RuntimeError(f"node {requested!r} not found in runtime state")
+
+
 def _jumphost_password(req: LabRequest) -> str:
     state = _lab_state(req)
     if not state.jumphost or not state.jumphost.password:
@@ -764,9 +804,8 @@ def _jumphost_password(req: LabRequest) -> str:
 
 def _runtime_relay(req: NodeRequest) -> dict[str, Any]:
     state = _lab_state(req)
-    runtime = (state.node_runtime or {}).get(req.node)
-    if runtime is None:
-        raise RuntimeError(f"node {req.node!r} not found in runtime state")
+    runtime_key = _resolve_runtime_node_key(state, req.node)
+    runtime = (state.node_runtime or {}).get(runtime_key)
     relay = (state.runtime_relays or {}).get(runtime.host)
     if relay is None:
         raise RuntimeError(f"runtime relay missing for host {runtime.host!r}")

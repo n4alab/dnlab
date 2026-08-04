@@ -24,6 +24,7 @@ class _FakeJumphost:
 
 
 class _FakeRuntime:
+    node = "r1"
     host = "worker1"
     container = "clab-demo-r1"
 
@@ -266,6 +267,61 @@ def test_runtime_relay_endpoint_reads_state(monkeypatch):
         "api_key": "key",
         "relay_host": "worker1",
     }
+
+
+def test_runtime_relay_endpoint_resolves_new_node_alias(monkeypatch):
+    @dataclasses.dataclass
+    class Runtime:
+        node: str
+        host: str
+        container: str
+
+    class State:
+        node_runtime = {
+            "NEW-SERVER": Runtime(
+                node="NEW-SERVER",
+                host="worker1",
+                container="clab-dnlab-demo-NEW-SERVER-NEW-SERVER",
+            )
+        }
+        runtime_relays = {"worker1": _FakeRelay()}
+
+    relay = _FakeRelay()
+    relay.allowed = ["clab-dnlab-demo-NEW-SERVER-NEW-SERVER"]
+    State.runtime_relays = {"worker1": relay}
+    monkeypatch.setattr(api, "_lab_state", lambda req: State())
+    monkeypatch.setattr(api.asyncio, "to_thread", _to_thread_sync)
+
+    res = asyncio.run(
+        api.lab_runtime_relay(api.NodeRequest(
+            topology_file="/tmp/demo.yml", lab_name="demo", node="SERVER",
+        ))
+    )
+
+    assert res["container"] == "clab-dnlab-demo-NEW-SERVER-NEW-SERVER"
+    assert res["relay_host"] == "worker1"
+
+
+def test_runtime_relay_endpoint_rejects_ambiguous_alias(monkeypatch):
+    @dataclasses.dataclass
+    class Runtime:
+        node: str
+        host: str
+        container: str
+
+    class State:
+        node_runtime = {
+            "NEW-SERVER": Runtime("NEW-SERVER", "worker1", "clab-demo-NEW-SERVER"),
+            "server": Runtime("server", "worker1", "clab-demo-server"),
+        }
+        runtime_relays = {"worker1": _FakeRelay()}
+
+    monkeypatch.setattr(api, "_lab_state", lambda req: State())
+
+    with pytest.raises(RuntimeError, match="matches multiple runtime nodes"):
+        api._runtime_relay(api.NodeRequest(
+            topology_file="/tmp/demo.yml", lab_name="demo", node="SERVER",
+        ))
 
 
 def test_jumphost_password_endpoint_reads_state(monkeypatch):

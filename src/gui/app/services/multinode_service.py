@@ -114,6 +114,53 @@ def _derive_mgmt_ipv6_defaults(v4_subnet: str, v4_gw: str) -> tuple[str, str]:
     return v6_subnet, v6_gw
 
 
+def _runtime_aliases(value: str) -> set[str]:
+    value = str(value or "").strip()
+    aliases = {value} if value else set()
+    upper = value.upper()
+    if upper.startswith("NEW-") and len(value) > 4:
+        aliases.add(value[4:])
+    elif value:
+        aliases.add(f"NEW-{value}")
+    return {alias for alias in aliases if alias}
+
+
+def _resolve_runtime_node_key(state: Any, requested: str) -> str:
+    """Resolve a UI/runtime alias to the persisted node_runtime key.
+
+    Some older GUI-created topologies used names such as ``NEW-SERVER`` while
+    the visual/runtime object may later be addressed as ``SERVER``. Relay state
+    remains keyed by the deployment-time node name, so console/log callers need
+    one canonical lookup point instead of failing on that harmless alias drift.
+    """
+    runtimes = state.node_runtime or {}
+    if requested in runtimes:
+        return requested
+
+    requested_aliases = {alias.lower() for alias in _runtime_aliases(requested)}
+    matches = []
+    for key, runtime in runtimes.items():
+        key_aliases = {alias.lower() for alias in _runtime_aliases(key)}
+        container = str(getattr(runtime, "container", "") or "")
+        container_aliases = {alias.lower() for alias in _runtime_aliases(container)}
+        if (
+            requested.lower() == str(getattr(runtime, "node", "") or "").lower()
+            or requested.lower() == container.lower()
+            or requested_aliases & key_aliases
+            or requested_aliases & container_aliases
+            or any(container.lower().endswith(f"-{alias}") for alias in requested_aliases)
+        ):
+            matches.append(key)
+
+    if len(matches) == 1:
+        return matches[0]
+    if len(matches) > 1:
+        raise MultinodeServiceError(
+            f"node alias {requested!r} matches multiple runtime nodes: {', '.join(matches)}"
+        )
+    raise MultinodeServiceError(f"node {requested!r} not found in runtime state")
+
+
 def _materialize_topology_metadata(topo_path: Path) -> None:
     """Refresh GUI-derived deployment metadata sidecars before planning.
 
@@ -470,9 +517,8 @@ class MultinodeService:
             state = state_svc.load_state(lab.netname, topo_path.parent)
             if state is None:
                 raise MultinodeServiceError(f"lab {lab.netname} not deployed")
-            runtime = (state.node_runtime or {}).get(node_name)
-            if runtime is None:
-                raise MultinodeServiceError(f"node {node_name!r} not found in runtime state")
+            runtime_key = _resolve_runtime_node_key(state, node_name)
+            runtime = (state.node_runtime or {}).get(runtime_key)
             relay = (state.runtime_relays or {}).get(runtime.host)
             if relay is None:
                 raise MultinodeServiceError(
