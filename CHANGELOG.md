@@ -47,6 +47,11 @@ canvas annotations and shared VD consoles.
 
 ### Fixed
 
+- Avoid warm-link controller waits during lab teardown: Full lab teardown now
+  removes host-side runtime dataplane artifacts without requesting guest QEMU
+  carrier changes. This prevents the destroy-runtime-links phase from waiting up
+  to five minutes when a warm VD's link controller or QEMU monitor is not ready,
+  while single-node lifecycle operations retain carrier management.
 - Forward LLDP and LACP across same-host runtime links: Same-host runtime links
   now mirror LLDP and LACP frames directly between the two host-side veth
   endpoints so Linux bridge link-local filtering does not prevent neighbors,
@@ -54,6 +59,13 @@ canvas annotations and shared VD consoles.
 - Persist custom dNLab images: Per-lab topology generation now preserves
   configured custom dNLab image references instead of replacing them during
   multinode generation.
+- Preserve jumphost SSH port publishing with VRF management networks: Jumphost
+  deployment no longer attaches the container to the lab management network
+  through Docker's dnlab-vrf endpoint, which could revoke the bridge-published
+  SSH port and leave users with connection refused on the advertised port. The
+  jumphost now uses a direct veth attachment to the lab management bridge and
+  verifies that Docker still publishes SSH before the lab is considered
+  reachable.
 - Preserve RouterOS overlays across rebuilds: RouterOS image rebuilds now retain
   their writable overlay state instead of losing persisted device data during
   the rebuild workflow.
@@ -68,6 +80,10 @@ canvas annotations and shared VD consoles.
 - Refresh host and device image metadata: Image synchronization now refreshes
   host inventory and device catalog metadata so newly available or updated
   images are shown consistently.
+- Resolve console runtime aliases for renamed GUI nodes: Console and log relay
+  lookup now resolves harmless runtime aliases, including GUI nodes that were
+  deployed as NEW-SERVER but later addressed as SERVER, so opening all consoles
+  no longer skips the affected VD.
 - Select the declared XRv9k console port: Console discovery now prefers the
   launcher-declared interactive serial port and limits fallback selection to the
   supported console range, avoiding attachment to an unrelated XRv9k serial
@@ -88,6 +104,8 @@ canvas annotations and shared VD consoles.
   migrated in place.
 - Ensure each master and worker can run the automatically installed
   dnlab-vrf-plugin.service; no patched Docker Engine is required.
+- Recreate the affected lab jumphost or redeploy the lab after upgrading so the
+  corrected attachment path is applied.
 
 ### Artifacts
 

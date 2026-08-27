@@ -113,6 +113,18 @@ entries:
   references:
   - commit:d292ba98629eee89eb3e0849d6d77227a48b9184
 - category: Fixed
+  title: Avoid warm-link controller waits during lab teardown
+  body: Full lab teardown now removes host-side runtime dataplane artifacts without
+    requesting guest QEMU carrier changes. This prevents the destroy-runtime-links
+    phase from waiting up to five minutes when a warm VD's link controller or QEMU
+    monitor is not ready, while single-node lifecycle operations retain carrier management.
+  change_id: 20260804-runtime-link-destroy-timeout
+  components:
+  - multinode
+  audience:
+  - operator
+  - user
+- category: Fixed
   title: Forward LLDP and LACP across same-host runtime links
   body: Same-host runtime links now mirror LLDP and LACP frames directly between the
     two host-side veth endpoints so Linux bridge link-local filtering does not prevent
@@ -136,6 +148,19 @@ entries:
   - user
   references:
   - commit:1c58fed5a58beee3380598b0e6f6f4fc5a37ce78
+- category: Fixed
+  title: Preserve jumphost SSH port publishing with VRF management networks
+  body: Jumphost deployment no longer attaches the container to the lab management
+    network through Docker's dnlab-vrf endpoint, which could revoke the bridge-published
+    SSH port and leave users with connection refused on the advertised port. The jumphost
+    now uses a direct veth attachment to the lab management bridge and verifies that
+    Docker still publishes SSH before the lab is considered reachable.
+  change_id: 20260804-jumphost-vrf-port-publish
+  components:
+  - multinode
+  audience:
+  - operator
+  - user
 - category: Fixed
   title: Preserve RouterOS overlays across rebuilds
   body: RouterOS image rebuilds now retain their writable overlay state instead of
@@ -188,6 +213,18 @@ entries:
   references:
   - commit:c8c55e73588236b45a1e369b4ccb61ee01b57d79
 - category: Fixed
+  title: Resolve console runtime aliases for renamed GUI nodes
+  body: Console and log relay lookup now resolves harmless runtime aliases, including
+    GUI nodes that were deployed as NEW-SERVER but later addressed as SERVER, so opening
+    all consoles no longer skips the affected VD.
+  change_id: 20260803-console-runtime-alias
+  components:
+  - gui
+  - multinode
+  audience:
+  - operator
+  - user
+- category: Fixed
   title: Select the declared XRv9k console port
   body: Console discovery now prefers the launcher-declared interactive serial port
     and limits fallback selection to the supported console range, avoiding attachment
@@ -211,6 +248,8 @@ upgrade_notes:
   implementation; deployed management networks are not migrated in place.
 - Ensure each master and worker can run the automatically installed dnlab-vrf-plugin.service;
   no patched Docker Engine is required.
+- Recreate the affected lab jumphost or redeploy the lab after upgrading so the corrected
+  attachment path is applied.
 artifacts:
 - name: Source archives
   type: github-release
