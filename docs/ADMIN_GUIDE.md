@@ -127,7 +127,7 @@ the `image-build` service. For a fresh host:
 
 ```bash
 if [ ! -d /opt/vrnetlab/.git ]; then
-  sudo git clone --branch dnlab https://github.com/scaci/vrnetlab.git /opt/vrnetlab
+  sudo git clone --branch dnlab https://github.com/n4alab/vrnetlab.git /opt/vrnetlab
 else
   git -C /opt/vrnetlab remote -v
   git -C /opt/vrnetlab branch --show-current
@@ -204,9 +204,9 @@ Important settings:
 - `DNLAB_VERSION`: image tag. For the current published release, use
   `DNLAB_VERSION=0.2.0`; this is the release that introduces overlapping
   management subnets.
-- `DNLAB_IMAGE_PREFIX`: image registry prefix, normally `ghcr.io/scaci/`.
+- `DNLAB_IMAGE_PREFIX`: image registry prefix, normally `ghcr.io/n4alab/`.
 - `DNLAB_RUNTIME_IMAGE_PREFIX`: runtime image prefix, normally
-  `ghcr.io/scaci/dnlab-`.
+  `ghcr.io/n4alab/dnlab-`.
 - `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`: auth DB settings.
 - `DNLAB_PROXY_HTTP_PORT`: public HTTP port used for ACME challenge and HTTP-to-HTTPS redirect.
 - `DNLAB_PROXY_SERVER_NAME`: public GUI hostname; also drives Apache wildcard aliases and the GUI Web UI suffix.
@@ -333,7 +333,7 @@ Linux hosts. Bare metal remains the reference deployment model.
    dedicated dataplane interface alias for the master and every worker.
 2. Install or verify the dNLab vrnetlab tree at `/opt/vrnetlab`; it is used by
    the `image-build` service and should be the `dnlab` branch of
-   `https://github.com/scaci/vrnetlab.git`.
+   `https://github.com/n4alab/vrnetlab.git`.
 3. Configure SSH key-based access from the master to every host in
    `hosts.yml`. Generate `/root/.ssh/id_ed25519_github_dnlab` if needed,
    install its public key in `/root/.ssh/authorized_keys` on the configured
@@ -649,7 +649,7 @@ dNLab application images from the monorepo sources under `/opt/dnlab/src`.
 Build metadata and logs are stored under
 `${DNLAB_IMAGE_BUILD_WORKSPACE:-/var/lib/dnlab-image-build}`.
 Build contexts are read from `${DNLAB_VRNETLAB_DIR:-/opt/vrnetlab}`, which
-must be the `dnlab` branch of `https://github.com/scaci/vrnetlab.git`.
+must be the `dnlab` branch of `https://github.com/n4alab/vrnetlab.git`.
 
 ![Image build admin](images/admin-image-build.png)
 

@@ -34,17 +34,23 @@ def test_runtime_images_can_use_release_version(monkeypatch):
 
 def test_ghcr_runtime_prefix_uses_distribution_image_names(monkeypatch):
     monkeypatch.setenv("DNLAB_VERSION", "0.1.0")
-    monkeypatch.setenv("DNLAB_RUNTIME_IMAGE_PREFIX", "ghcr.io/scaci/dnlab-")
+    monkeypatch.setenv("DNLAB_RUNTIME_IMAGE_PREFIX", "ghcr.io/n4alab/dnlab-")
 
-    assert images.image_for("realnet-rr") == "ghcr.io/scaci/dnlab-realnet-rr:0.1.0"
+    assert (
+        images.image_for("realnet-rr")
+        == "ghcr.io/n4alab/dnlab-realnet-rr:0.1.0"
+    )
 
 
 def test_runtime_prefix_can_be_derived_from_image_prefix(monkeypatch):
     monkeypatch.setenv("DNLAB_VERSION", "0.1.0")
-    monkeypatch.setenv("DNLAB_IMAGE_PREFIX", "ghcr.io/scaci/")
+    monkeypatch.setenv("DNLAB_IMAGE_PREFIX", "ghcr.io/n4alab/")
     monkeypatch.delenv("DNLAB_RUNTIME_IMAGE_PREFIX", raising=False)
 
-    assert images.image_for("realnet-rr") == "ghcr.io/scaci/dnlab-realnet-rr:0.1.0"
+    assert (
+        images.image_for("realnet-rr")
+        == "ghcr.io/n4alab/dnlab-realnet-rr:0.1.0"
+    )
 
 
 def test_unknown_component_is_rejected():
