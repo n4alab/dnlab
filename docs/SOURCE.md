@@ -1,8 +1,8 @@
 # Source Availability
 
 dNLab container images are distributed through GitHub Container Registry
-(`GHCR`) under the `ghcr.io/scaci/dnlab-*` image names. Public release packages
-are linked to the public `scaci/dnlab` repository, even when the operational
+(`GHCR`) under the `ghcr.io/n4alab/dnlab-*` image names. Public release packages
+are linked to the public `n4alab/dnlab` repository, even when the operational
 repositories used to build those images remain private.
 
 For each public dNLab image tag, the corresponding source code will be
@@ -12,7 +12,7 @@ same tag.
 
 For example:
 
-- Image: `ghcr.io/scaci/dnlab-gui:0.1.2`
+- Image: `ghcr.io/n4alab/dnlab-gui:0.1.2`
 - Source: release `v0.1.2`, artifact `dnlab-gui-0.1.2-source.tar.gz`
 
 The corresponding source archive must include the application source,
@@ -21,7 +21,7 @@ install, run and modify the distributed image.
 
 ## Release assets
 
-Source archives are published as assets on the matching `scaci/dnlab` GitHub
+Source archives are published as assets on the matching `n4alab/dnlab` GitHub
 Release. They are not committed as binary files in this repository.
 
 For a release `vX.Y.Z`, the expected source asset names are:
@@ -80,7 +80,7 @@ private operational repositories to be made public.
 
 Some releases also include a ready-made Proxmox LXC template published as an
 OCI artifact on GitHub Container Registry, for example
-`ghcr.io/scaci/dnlab-lxc-proxmox:0.1.2`. The template is a distribution binary;
+`ghcr.io/n4alab/dnlab-lxc-proxmox:0.1.2`. The template is a distribution binary;
 it is not committed to this repository.
 
 The LXC template build and first-boot helper code is internal release

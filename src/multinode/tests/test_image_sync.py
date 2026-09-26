@@ -129,15 +129,15 @@ def test_short_helper_names_match_prefixed_repositories():
     )
     images = {
         "dnlab-local/dnlab-runtime-relay:local": "sha:a",
-        "ghcr.io/scaci/dnlab-mgmt-anchor:0.1.2": "sha:b",
-        "ghcr.io/scaci/dnlab-jumphost:0.1.2": "sha:c",
+        "ghcr.io/n4alab/dnlab-mgmt-anchor:0.1.2": "sha:b",
+        "ghcr.io/n4alab/dnlab-jumphost:0.1.2": "sha:c",
     }
 
     out = isync.filter_images(images, cfg)
 
     assert set(out) == {
         "dnlab-local/dnlab-runtime-relay:local",
-        "ghcr.io/scaci/dnlab-mgmt-anchor:0.1.2",
+        "ghcr.io/n4alab/dnlab-mgmt-anchor:0.1.2",
     }
 
 

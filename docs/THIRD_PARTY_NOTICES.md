@@ -50,23 +50,23 @@ See the template section below.
 
 ## Distributed dNLab Images
 
-Public dNLab images are published as `ghcr.io/scaci/dnlab-*` images. Each image
+Public dNLab images are published as `ghcr.io/n4alab/dnlab-*` images. Each image
 must carry an embedded notice bundle under
 `/usr/share/doc/dnlab/third-party/`.
 
 Current release image families:
 
-- `ghcr.io/scaci/dnlab-gui`
-- `ghcr.io/scaci/dnlab-proxy`
-- `ghcr.io/scaci/dnlab-multinode`
-- `ghcr.io/scaci/dnlab-lab-cleanup`
-- `ghcr.io/scaci/dnlab-image-build`
-- `ghcr.io/scaci/dnlab-jumphost`
-- `ghcr.io/scaci/dnlab-dns`
-- `ghcr.io/scaci/dnlab-runtime-relay`
-- `ghcr.io/scaci/dnlab-realnet-router`
-- `ghcr.io/scaci/dnlab-realnet-rr`
-- `ghcr.io/scaci/dnlab-mgmt-anchor`
+- `ghcr.io/n4alab/dnlab-gui`
+- `ghcr.io/n4alab/dnlab-proxy`
+- `ghcr.io/n4alab/dnlab-multinode`
+- `ghcr.io/n4alab/dnlab-lab-cleanup`
+- `ghcr.io/n4alab/dnlab-image-build`
+- `ghcr.io/n4alab/dnlab-jumphost`
+- `ghcr.io/n4alab/dnlab-dns`
+- `ghcr.io/n4alab/dnlab-runtime-relay`
+- `ghcr.io/n4alab/dnlab-realnet-router`
+- `ghcr.io/n4alab/dnlab-realnet-rr`
+- `ghcr.io/n4alab/dnlab-mgmt-anchor`
 
 The images include combinations of Debian, Alpine Linux, Python packages, APT
 or APK packages and dNLab application code. Examples include Apache HTTP

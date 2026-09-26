@@ -1,0 +1,21 @@
+id: 20260901-n4alab-namespace
+type: change
+title: Migrate the public GitHub namespace
+description: >-
+  The canonical dNLab repositories and GHCR images now use the n4alab
+  namespace, and release workflows derive their publishing owner from the
+  GitHub repository context.
+components:
+  - distribution
+  - release
+audience:
+  - user
+  - admin
+  - developer
+visibility: public
+breaking: true
+upgrade_notes:
+  - >-
+    Replace ghcr.io/scaci image prefixes with ghcr.io/n4alab in deployment
+    environment files, registry mirrors and automation.
+references: []

@@ -13,7 +13,7 @@ You do not need to build the template yourself for a normal installation.
 The primary distribution channel for the LXC template is GHCR:
 
 ```text
-ghcr.io/scaci/dnlab-lxc-proxmox:0.2.0
+ghcr.io/n4alab/dnlab-lxc-proxmox:0.2.0
 ```
 
 Install `oras` on your workstation or Proxmox host then pull the artifact:
@@ -21,7 +21,7 @@ Install `oras` on your workstation or Proxmox host then pull the artifact:
 ```bash
 mkdir -p dnlab-lxc-0.2.0
 cd dnlab-lxc-0.2.0
-oras pull ghcr.io/scaci/dnlab-lxc-proxmox:0.2.0
+oras pull ghcr.io/n4alab/dnlab-lxc-proxmox:0.2.0
 sha256sum -c SHA256SUMS
 ```
 

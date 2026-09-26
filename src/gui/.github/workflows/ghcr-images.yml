@@ -24,7 +24,7 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  OWNER: scaci
+  OWNER: ${{ github.repository_owner }}
 
 jobs:
   build:
@@ -62,7 +62,7 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.OWNER }}/${{ matrix.image }}
           labels: |
             org.opencontainers.image.title=${{ matrix.name }}
-            org.opencontainers.image.source=https://github.com/scaci/dnlab
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository_owner }}/dnlab
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.version=${{ github.ref_name }}
           tags: |

@@ -149,7 +149,7 @@ def filter_images(
         # A pattern without ``:`` or a glob wildcard is treated as matching
         # any tag, with or without a registry/path prefix. For example,
         # ``dnlab-runtime-relay`` matches both ``dnlab-runtime-relay:latest``
-        # and ``ghcr.io/scaci/dnlab-runtime-relay:latest``.
+        # and ``ghcr.io/n4alab/dnlab-runtime-relay:latest``.
         for p in patterns:
             if fnmatch.fnmatchcase(name, p):
                 return True

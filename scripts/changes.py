@@ -307,7 +307,7 @@ def artifacts_for(version: str, with_lxc: bool) -> list[dict[str, str]]:
                     "type": "lxc-proxmox",
                     "path": f"dnlab-lxc-proxmox-{version}-amd64.tar.zst",
                     "channel": "GHCR and GitHub Release mirror",
-                    "notes": f"Canonical OCI artifact ghcr.io/scaci/dnlab-lxc-proxmox:{version}.",
+                    "notes": f"Canonical OCI artifact ghcr.io/n4alab/dnlab-lxc-proxmox:{version}.",
                 },
                 {
                     "name": "Proxmox LXC release notes",
