@@ -1,0 +1,14 @@
+id: 20260907-224219-keep-mikrotik-routeros-patch-compatible
+type: bugfix
+title: Keep MikroTik RouterOS patch compatible with CHR login prompts
+description: Updated the MikroTik RouterOS image patcher to support current vrnetlab
+  launchers that include the CHR Login prompt while preserving persistent overlay
+  reuse behavior.
+components:
+- image-build
+audience:
+- operator
+visibility: public
+breaking: false
+upgrade_notes: []
+references: []
