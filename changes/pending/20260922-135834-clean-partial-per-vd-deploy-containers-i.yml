@@ -1,0 +1,17 @@
+id: 20260922-135834-clean-partial-per-vd-deploy-containers-i
+type: bugfix
+title: Clean partial per-VD deploy containers immediately
+description: Register every per-VD Containerlab topology before deployment so rollback
+  removes containers created by a failed deploy without waiting for the lab-cleanup
+  grace window.
+components:
+- cleanup
+- multinode
+audience:
+- admin
+- operator
+- user
+visibility: public
+breaking: false
+upgrade_notes: []
+references: []

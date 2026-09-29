@@ -259,3 +259,65 @@ def test_pervd_deploy_error_includes_host_vd_and_topology_file(topo_factory):
         assert "clab exploded" in msg
     else:
         raise AssertionError("deploy failure should raise DeployError")
+
+    assert set(ctrl._state.node_runtime) == {"R1", "R2"}
+    assert ctrl._state.phases_completed == ["dnlab"]
+
+    ctrl._rollback(topo)
+
+    assert ctrl._clients["master"].runs == [
+        (
+            "containerlab destroy -t /tmp/dnlab-lab-R1-master.clab.yml --cleanup --keep-mgmt-net",
+            {"check": False},
+        ),
+        (
+            "containerlab destroy -t /tmp/dnlab-lab-R2-master.clab.yml --cleanup --keep-mgmt-net",
+            {"check": False},
+        ),
+    ]
+
+
+def test_pervd_parallel_deploy_failure_rolls_back_every_worker_target(topo_factory):
+    topo = topo_factory(
+        nodes={
+            "R1": VDNode(name="R1", kind="linux", image="alpine"),
+            "R2": VDNode(name="R2", kind="linux", image="alpine"),
+        },
+        links=[],
+        num_workers=1,
+    )
+    plan = SchedulePlan(
+        lab_name=topo.name,
+        assignments={
+            "master": HostAssignment("master", "10.0.0.10", vd_names=["R1"]),
+            "worker1": HostAssignment("worker1", "10.0.0.11", vd_names=["R2"]),
+        },
+    )
+    ctrl = _controller_for(topo)
+    failing_path = "/tmp/dnlab-lab-R2-worker1.clab.yml"
+    ctrl._clients = {
+        "master": FakeClient("master"),
+        "worker1": FakeClient("worker1", fail_on={failing_path}),
+    }
+
+    try:
+        ctrl._deploy_clab(topo, plan)
+    except DeployError:
+        pass
+    else:
+        raise AssertionError("deploy failure should raise DeployError")
+
+    ctrl._rollback(topo)
+
+    assert ctrl._clients["master"].runs == [
+        (
+            "containerlab destroy -t /tmp/dnlab-lab-R1-master.clab.yml --cleanup --keep-mgmt-net",
+            {"check": False},
+        ),
+    ]
+    assert ctrl._clients["worker1"].runs == [
+        (
+            "containerlab destroy -t /tmp/dnlab-lab-R2-worker1.clab.yml --cleanup --keep-mgmt-net",
+            {"check": False},
+        ),
+    ]

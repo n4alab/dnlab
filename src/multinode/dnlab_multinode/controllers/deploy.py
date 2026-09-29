@@ -485,11 +485,9 @@ class DeployController:
             for f in as_completed(futures):
                 host = futures[f]
                 try:
-                    _, deployed_nodes = f.result()
+                    f.result()
                 except Exception as e:
                     raise DeployError(f"[{host}] containerlab deploy failed: {e}")
-                for runtime in deployed_nodes:
-                    self._state.node_runtime[runtime.node] = runtime
 
         for host_name, assignment in plan.assignments.items():
             if not assignment.vd_names:
@@ -503,8 +501,6 @@ class DeployController:
                     "ram_mb": assignment.ram_mb_used,
                 },
             )
-
-        self._state.phases_completed.append("dnlab")
 
     def _deploy_mgmt_anchors(self, topo, plan):
         log.info("Phase 3a: Deploying management anchor topologies")
@@ -540,10 +536,7 @@ class DeployController:
         """Return remote path → content for runtime assets on this host."""
         out: dict[str, str] = {}
         for vd_name in vd_names:
-            state = (topo.node_overrides or {}).get(vd_name) or {}
-            content = generator.render_node_asset(state, "vswitch.xml")
-            if content is not None:
-                out[generator.node_asset_path(topo.name, vd_name, "vswitch.xml")] = content
+            out.update(generator.render_node_override_files(topo, vd_name))
             out.update(generator.render_node_feature_files(topo, vd_name))
         return out
 
@@ -759,6 +752,15 @@ class DeployController:
         )
         self._state.phases_completed.append("dns")
 
+    def _refresh_dns(self, topo) -> None:
+        if not self._state.dns:
+            return
+        entries = self._runtime_dns_entries()
+        count, _ = dns_svc.refresh_dns(
+            topo.name, self._clients["master"], self._clients, extra_entries=entries,
+        )
+        self._state.dns.entries = count
+
     def _runtime_dns_entries(self) -> list[HostEntry]:
         """DNS aliases for per-VD runtime containers and logical VD names."""
         entries: list[HostEntry] = []
@@ -813,6 +815,7 @@ class DeployController:
         container, password, ext_network, jh_ip_cidr, ssh_port = jumphost.deploy_jumphost(
             topo, self._clients["master"], mgmt_ip,
             resolver_ip=resolver_ip,
+            dhcp_config=jumphost.render_dhcp_config(topo, resolver_ip),
             vd_names=vd_names,
             vd_map=vd_map,
             authorized_keys=authorized_keys,
