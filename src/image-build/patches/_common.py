@@ -170,6 +170,24 @@ def patch_warm_links(text: str) -> tuple[str, bool]:
         return text, False
     text = text.replace(qemu_anchor, qemu_replacement, 1)
 
+    health_anchor = '''            if all_running:
+                self.update_health(0, "running")
+                started = True
+'''
+    health_replacement = '''            if all_running:
+                degraded = [
+                    str(vm.degraded_reason)
+                    for vm in self.vms
+                    if getattr(vm, "degraded_reason", None)
+                ]
+                message = "running-degraded: " + "; ".join(degraded) if degraded else "running"
+                self.update_health(0, message)
+                started = True
+'''
+    if health_anchor not in text:
+        return text, False
+    text = text.replace(health_anchor, health_replacement, 1)
+
     controller = r'''
 
 # dnlab-patched: warm-links-v1
@@ -208,35 +226,62 @@ def _dnlab_warm_link_controller(vr):
     server.listen(8)
 
     def monitor_ready():
-        if getattr(vm, "use_scrapli", False):
-            return vm.scrapli_qm.isalive()
-        return getattr(vm, "qm", None) is not None
+        # Modern vrnetlab always creates the Scrapli driver and the self.qm
+        # facade during VM construction, before Driver.open().  Object
+        # existence therefore does not mean that the QEMU monitor is usable.
+        driver = getattr(vm, "scrapli_qm", None)
+        if driver is not None:
+            try:
+                return bool(driver.isalive())
+            except Exception:
+                return False
+        monitor = getattr(vm, "qm", None)
+        if monitor is None:
+            return False
+        get_socket = getattr(monitor, "get_socket", None)
+        if callable(get_socket):
+            try:
+                return get_socket() is not None
+            except Exception:
+                return False
+        return getattr(monitor, "sock", None) is not None
 
-    # QEMU was launched with -S.  Initialise carrier before allowing the
-    # guest to execute, which avoids both model-specific NIC properties and
-    # a transient carrier-up window.
-    while not monitor_ready():
-        _time.sleep(0.05)
+    def wait_monitor(timeout=300.0, require_running=False):
+        deadline = _time.monotonic() + timeout
+        while _time.monotonic() < deadline:
+            if (not require_running or getattr(vm, "running", False)) and monitor_ready():
+                return
+            _time.sleep(0.05)
+        raise TimeoutError("QEMU monitor did not become ready")
+
+    def monitor_command(command, timeout=30.0):
+        deadline = _time.monotonic() + timeout
+        while True:
+            remaining = deadline - _time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError(f"QEMU monitor command timed out: {command}")
+            wait_monitor(timeout=remaining)
+            try:
+                return vm._qemu_monitor_cmd(command, wait=True)
+            except Exception:
+                if _time.monotonic() >= deadline:
+                    raise
+                _time.sleep(0.05)
+
+    # QEMU was launched with -S.  Initialise carrier only after the monitor
+    # transport is genuinely open, then always release the paused guest.
+    wait_monitor()
     try:
         with lock:
             for index in range(1, warm_ports + 1):
-                vm._qemu_monitor_cmd(f"set_link p{index:02d} off", wait=True)
+                monitor_command(f"set_link p{index:02d} off")
     except Exception:
         vr.logger.exception("failed to initialise one or more DNLAB warm ports")
     finally:
-        # Never strand QEMU in the paused state because of a bad override or
-        # a template-specific NIC mismatch.
+        # Retrying cont protects against a monitor reconnect race and prevents
+        # a blank serial console caused by QEMU remaining paused.
         with lock:
-            vm._qemu_monitor_cmd("cont", wait=True)
-
-    def wait_monitor(timeout=300.0):
-        deadline = _time.monotonic() + timeout
-        while _time.monotonic() < deadline:
-            if getattr(vm, "running", False):
-                if monitor_ready():
-                    return
-            _time.sleep(0.05)
-        raise TimeoutError("QEMU monitor did not become ready")
+            monitor_command("cont")
 
     def set_link(iface, state):
         match = _re.fullmatch(r"eth([1-9][0-9]*)", iface)
@@ -247,11 +292,10 @@ def _dnlab_warm_link_controller(vr):
             raise ValueError(f"{iface} exceeds configured warm-port count {warm_ports}")
         if state not in {"up", "down"}:
             raise ValueError("state must be up or down")
-        wait_monitor()
+        wait_monitor(require_running=True)
         with lock:
-            vm._qemu_monitor_cmd(
+            monitor_command(
                 f"set_link p{index:02d} {'on' if state == 'up' else 'off'}",
-                wait=True,
             )
 
     with server:

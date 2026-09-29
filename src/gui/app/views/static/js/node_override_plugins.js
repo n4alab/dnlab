@@ -37,6 +37,12 @@ const NodeOverridePlugins = (() => {
     plugin.wire({ panel, nodeData, override });
   }
 
-  return { register, get, render, read, wire };
+  function interfaces({ nodeData, override, baseInterfaces }) {
+    const plugin = get(override && override.key);
+    if (!plugin || typeof plugin.interfaces !== 'function') return baseInterfaces;
+    return plugin.interfaces({ nodeData, override, baseInterfaces });
+  }
+
+  return { register, get, render, read, wire, interfaces };
 })();
 

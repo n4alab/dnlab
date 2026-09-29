@@ -87,6 +87,25 @@ same management IPv4 or IPv6 subnet because dNLab isolates each lab management
 network in its own VRF. Addresses still must be unique and valid within the
 single lab that declares them.
 
+### Cumulus VX Breakout Ports
+
+The Cumulus VX properties panel keeps 32 flat switch ports available and lets
+you add 2x, 4x or 8x breakout groups to selected parent ports. Breakout lanes
+use extra physical slots after the flat range: for example, a 4x breakout on
+`swp10` is presented as `swp10s0` through `swp10s3` and maps to
+`eth33` through `eth36`. Multiple groups are allocated in ascending parent
+port order.
+
+dNLab generates and mounts `/config/ports.conf`, always preallocates 64 data
+NICs, and rejects breakout configurations that would exceed those 64 physical
+slots. Only the 32 flat ports and configured breakout lanes are exposed in the
+GUI. Changing breakout layout on a running device requires a stop and redeploy.
+
+The dNLab Cumulus image uses the lab-only `dnlab` / `Dnlab123!` control account
+to apply breakout naming and wait for `switchd` and `nvued`. The factory
+`cumulus` account remains untouched, including its mandatory first-login
+password change. The image uses the enhanced 4 GiB, 1-vCPU profile.
+
 ## Import And Export draw.io
 
 dNLab can export a lab to a `.drawio` file and import it later. Files exported

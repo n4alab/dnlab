@@ -7,6 +7,7 @@ import re
 import shlex
 
 from dnlab_multinode.models.topology import DistributedTopology, VDNode
+from dnlab_multinode.services import node_plugins
 
 
 IMAGE_STATUS_ENV = "DNLAB_WARM_LINKS_IMAGE_STATUS"
@@ -17,7 +18,7 @@ PROFILES: dict[str, dict[str, int]] = {
     "dnlab_frr": {"default_ports": 8, "max_ports": 8, "vm_index": 0},
     "openwrt": {"default_ports": 8, "max_ports": 64, "vm_index": 0},
     "dnlab_opnsense": {"default_ports": 8, "max_ports": 64, "vm_index": 0},
-    "nvidia_cumulusvx": {"default_ports": 16, "max_ports": 64, "vm_index": 0},
+    "nvidia_cumulusvx": {"default_ports": 64, "max_ports": 64, "vm_index": 0},
     "mikrotik_ros": {"default_ports": 16, "max_ports": 31, "vm_index": 0},
     "cisco_vios": {"default_ports": 15, "max_ports": 15, "vm_index": 0},
     "juniper_vjunosrouter": {"default_ports": 16, "max_ports": 97, "vm_index": 0},
@@ -164,7 +165,24 @@ def capacity_for_node(topo: DistributedTopology, node_name: str) -> int:
         requested = int(node.env.get("DNLAB_WARM_PORTS", 0) or 0)
     except (TypeError, ValueError) as exc:
         raise ValueError(f"{node_name}: DNLAB_WARM_PORTS must be an integer") from exc
-    capacity = max(profile["default_ports"], highest_used_port(topo, node_name), requested)
+    highest = highest_used_port(topo, node_name)
+    override = (topo.node_overrides or {}).get(node_name) or {}
+    plugin = node_plugins.for_state(override)
+    plugin_capacity = plugin.warm_capacity(override) if plugin else None
+    if plugin_capacity is not None:
+        if requested not in {0, plugin_capacity}:
+            raise ValueError(
+                f"{node_name}: DNLAB_WARM_PORTS cannot override plugin capacity "
+                f"{plugin_capacity}"
+            )
+        if highest > plugin_capacity:
+            raise ValueError(
+                f"{node_name}: interface eth{highest} exceeds plugin capacity "
+                f"{plugin_capacity}"
+            )
+        capacity = plugin_capacity
+    else:
+        capacity = max(profile["default_ports"], highest, requested)
     if capacity > profile["max_ports"]:
         raise ValueError(
             f"{node_name}: warm-port capacity {capacity} exceeds "

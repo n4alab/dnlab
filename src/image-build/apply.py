@@ -129,14 +129,19 @@ def _build_patched(
         "org.dnlab.patch.kind": kind,
         "org.dnlab.patch.notice": DERIVED_NOTICE_PATH,
     }
+    capabilities: list[str] = []
     if warm_profile:
+        capabilities.append("warm-links-v1")
         labels.update({
-            "org.dnlab.capabilities": "warm-links-v1",
             "org.dnlab.warm-links.status": warm_status,
             "org.dnlab.warm-links.default-ports": str(warm_profile["default_ports"]),
             "org.dnlab.warm-links.max-ports": str(warm_profile["max_ports"]),
             "org.dnlab.warm-links.vm-index": str(warm_profile["vm_index"]),
         })
+    patch_module = sys.modules.get(f"patches.{kind}")
+    capabilities.extend(getattr(patch_module, "EXTRA_CAPABILITIES", ()))
+    if capabilities:
+        labels["org.dnlab.capabilities"] = ",".join(dict.fromkeys(capabilities))
     lines = [f"FROM {upstream}", ""]
     for key, value in labels.items():
         lines.append(f"LABEL {key}={json.dumps(value)}")

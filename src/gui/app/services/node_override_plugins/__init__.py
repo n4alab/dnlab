@@ -29,10 +29,11 @@ class NodeOverridePlugin(Protocol):
 
 
 def _plugins() -> list[NodeOverridePlugin]:
-    from app.services.node_override_plugins import cat9kv_vswitch
+    from app.services.node_override_plugins import cat9kv_vswitch, cumulus_breakout
 
     return [
         cat9kv_vswitch.PLUGIN,
+        cumulus_breakout.PLUGIN,
     ]
 
 

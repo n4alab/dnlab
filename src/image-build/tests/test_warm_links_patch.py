@@ -11,7 +11,14 @@ import time
 
 class VR:
     def start(self):
-        return None
+        started = False
+        while True:
+            all_running = all(vm.running for vm in self.vms)
+            if all_running:
+                self.update_health(0, "running")
+                started = True
+            else:
+                self.update_health(1, "starting")
 
 class VM:
     def start(self):
@@ -47,10 +54,14 @@ def test_warm_link_patch_is_compilable_and_idempotent():
     assert "DNLAB_NIC_POLL_INTERVAL" in patched
     assert "set_link p{index:02d}" in patched
     assert 'cmd.append("-S")' in patched
-    assert '_qemu_monitor_cmd("cont", wait=True)' in patched
-    assert "getattr(vm, \"running\", False)" in patched
+    assert 'monitor_command("cont")' in patched
+    assert 'driver = getattr(vm, "scrapli_qm", None)' in patched
+    assert "return bool(driver.isalive())" in patched
+    assert "wait_monitor(require_running=True)" in patched
     assert "/run/dnlab-link-control.sock" in patched
-    assert patched.index("server.bind(path)") < patched.index("while not monitor_ready()")
+    assert '"running-degraded: " + "; ".join(degraded)' in patched
+    assert patched.index("server.bind(path)") < patched.index("wait_monitor()")
+    assert patched.index("wait_monitor()") < patched.index('monitor_command("cont")')
     compile(patched, "/vrnetlab.py", "exec")
 
     again, ok = _common.patch_warm_links(patched)

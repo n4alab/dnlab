@@ -1,0 +1,21 @@
+id: 20260925-150221-add-cumulus-vx-breakout-ports-and-platfo
+type: feature
+title: Add Cumulus VX breakout ports and platform readiness
+description: Preserve 32 flat Cumulus VX ports while allocating additive breakout
+  lanes, expose breakout configuration and lane selection in the GUI, prevent a
+  warm-link monitor race from leaving QEMU paused, wait for switchd and nvued
+  before readiness through a lab-only control account, leave the factory cumulus
+  account unchanged, reconcile lane names while switchd is stopped, gate the
+  interactive console until vrnetlab releases the serial line, preallocate 64
+  data NICs with a bounded virtio MSI-X vector profile, and align the image to
+  the enhanced CPU and 4 GiB RAM profile.
+components:
+- gui
+- image-build
+- multinode
+audience:
+- user
+visibility: public
+breaking: false
+upgrade_notes: []
+references: []

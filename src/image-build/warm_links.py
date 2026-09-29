@@ -10,7 +10,7 @@ PROFILES: dict[str, dict[str, int | bool]] = {
     "dnlab_frr": {"default_ports": 8, "max_ports": 8, "vm_index": 0},
     "openwrt": {"default_ports": 8, "max_ports": 64, "vm_index": 0},
     "dnlab_opnsense": {"default_ports": 8, "max_ports": 64, "vm_index": 0},
-    "nvidia_cumulusvx": {"default_ports": 16, "max_ports": 64, "vm_index": 0},
+    "nvidia_cumulusvx": {"default_ports": 64, "max_ports": 64, "vm_index": 0},
     "mikrotik_ros": {"default_ports": 16, "max_ports": 31, "vm_index": 0},
     "cisco_vios": {"default_ports": 15, "max_ports": 15, "vm_index": 0},
     "juniper_vjunosrouter": {"default_ports": 16, "max_ports": 97, "vm_index": 0},

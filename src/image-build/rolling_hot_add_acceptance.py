@@ -16,7 +16,7 @@ from pathlib import Path
 CANDIDATES = [
     ("openwrt", "openwrt", "vrnetlab/openwrt_openwrt_v2:25.12.2-dnlab", 8),
     ("opnsense", "freebsd", "vrnetlab/dnlab_opnsense:26.1.6-dnlab", 8),
-    ("cumulus", "generic_vm", "vrnetlab/nvidia_cumulusvx:5.16.1-vx-amd64-dnlab", 16),
+    ("cumulus", "generic_vm", "vrnetlab/nvidia_cumulusvx:5.16.1-vx-amd64-dnlab", 32),
     ("routeros", "mikrotik_ros", "vrnetlab/mikrotik_routeros:7.22.2-dnlab", 16),
     ("vios", "cisco_vios", "vrnetlab/cisco_vios_v2:adventerprisek9-m.spa.159-3.m10-dnlab", 15),
     ("viosl2", "cisco_vios", "vrnetlab/cisco_vios_l2_v2:L2-20200929-dnlab", 15),

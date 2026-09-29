@@ -3,6 +3,13 @@
   "_palette_notes": "Palette chosen to respect real brands where possible (Cisco cyan, Nokia navy, Juniper green, Huawei red, Arista red-orange, NVIDIA/Cumulus lime, Palo Alto orange, Extreme purple, HPE Aruba amber, Fortinet red, Checkpoint pink-magenta) and keep secondary vendors on hues that do not collide with primary vendors.",
   "_webui_notes": "The 'webui' field is a list of known ports exposed by the VD as web interfaces. The '🌐 Web UI' button in the context menu appears if (a) the kind has at least one entry here, or (b) the node has custom ports in extra.webui_ports. Each entry: {scheme: 'http'|'https', port: int, path: '/', label: 'J-Web'}.",
   "overrides": {
+    "cumulus_breakout": {
+      "label": "Cumulus VX breakout ports",
+      "description": "Add simulated breakout lanes without consuming the 32 flat switch ports.",
+      "default_flat_ports": 32,
+      "max_total_ports": 64,
+      "lane_options": [2, 4, 8]
+    },
     "cat9kv_vswitch": {
       "label": "Catalyst 9000V platform",
       "description": "Generate vswitch.xml and mount it as /vswitch.xml.",
@@ -1228,9 +1235,11 @@
       ]
     },
     "nvidia_cumulusvx": {
+      "override": "cumulus_breakout",
       "env": {
-        "VCPU": "2",
-        "RAM": "2048",
+        "VCPU": "1",
+        "RAM": "4096",
+        "DNLAB_WARM_PORTS": "64",
         "CLAB_MGMT_PASSTHROUGH": "true"
       },
       "interfaces": {
