@@ -1,0 +1,13 @@
+id: 20260925-094947-add-dual-stack-management-dhcp-reservati
+type: feature
+title: Add global dual-stack DHCP for management networks
+description: Add the optional mgmt.dhcp service, with jumphost-hosted DHCPv4, IPv6 router advertisements and DHCPv6 reservations. Stable reservations preserve management addresses across topology changes while guests may keep static addressing.
+components:
+- gui
+- multinode
+audience:
+- operator
+visibility: public
+breaking: false
+upgrade_notes: []
+references: []

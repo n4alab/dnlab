@@ -15,6 +15,7 @@ mgmt:
   bridge: br-demo-mgmt
   ipv4-subnet: 172.20.0.0/24
   ipv4-gw: 172.20.0.1
+  dhcp: true
 
 # ── Virtual Devices ─────────────────────────────────────────────────
 topology:

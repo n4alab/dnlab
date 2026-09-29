@@ -114,41 +114,6 @@ def setup_mgmt_infra(
     log.info("[%s] Mgmt infra setup complete", host_name)
 
 
-def setup_dhcp(
-    topo: DistributedTopology,
-    client: SSHClient,
-    host_name: str,
-) -> None:
-    """Start dnsmasq as DHCP server on the mgmt bridge (master only).
-
-    Only if there are nodes without static mgmt IPs.
-    """
-    bridge = topo.mgmt.bridge
-    subnet = topo.mgmt.ipv4_subnet
-    gw = topo.mgmt.ipv4_gw
-
-    # Calculate DHCP range from subnet
-    parts = subnet.split("/")
-    base = parts[0]
-    octets = base.split(".")
-    dhcp_start = f"{octets[0]}.{octets[1]}.{octets[2]}.100"
-    dhcp_end = f"{octets[0]}.{octets[1]}.{octets[2]}.199"
-
-    pid_file = f"/var/run/dnsmasq-{topo.name}.pid"
-
-    cmd = (
-        f"dnsmasq --interface={bridge} --bind-interfaces "
-        f"--dhcp-range={dhcp_start},{dhcp_end},12h "
-        f"--dhcp-option=3,{gw} "
-        f"--pid-file={pid_file} "
-        f"--no-daemon &"
-    )
-
-    # Start dnsmasq in background
-    log.info("[%s] Starting DHCP on %s (%s-%s)", host_name, bridge, dhcp_start, dhcp_end)
-    client.run(f"nohup {cmd} > /dev/null 2>&1 &", check=False)
-
-
 def teardown_mgmt_infra(
     lab_name: str,
     bridge: str,
@@ -161,9 +126,6 @@ def teardown_mgmt_infra(
 
     log.info("[%s] Tearing down mgmt infra", host_name)
 
-    # Stop dnsmasq if running
-    pid_file = f"/var/run/dnsmasq-{lab_name}.pid"
-    client.run(f"[ -f {pid_file} ] && kill $(cat {pid_file}) 2>/dev/null; rm -f {pid_file}", check=False)
 
     _remove_mgmt_bridge_firewall_rules(client, bridge, lab_name)
 

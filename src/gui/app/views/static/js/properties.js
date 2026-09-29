@@ -94,10 +94,6 @@ const Properties = (() => {
           <input type="text" name="mgmt_ipv6" value="${_esc(currentMgmt6)}"
                  placeholder="auto (dal pool)" class="props-input">
         </label>
-        <label class="props-check">
-          <input type="checkbox" name="mgmt_passthrough" ${mgmtPassthrough ? 'checked' : ''}>
-          <span>MGMT passthrough</span>
-        </label>
         ${_resourcesSection(effectiveEnv)}
         <div id="node-override-section">
           ${_nodeOverrideSection(currentKind, nodeData)}
@@ -145,7 +141,7 @@ const Properties = (() => {
       const extra = _nodeExtraWithMgmtPassthrough(
         nodeData,
         kind,
-        fd.get('mgmt_passthrough') === 'on',
+        false,
         fd.get('node_vcpu'),
         fd.get('node_ram'),
       );

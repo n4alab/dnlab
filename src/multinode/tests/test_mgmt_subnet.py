@@ -67,6 +67,7 @@ def test_default_mgmt_subnet_does_not_move_for_cross_lab_overlap(tmp_path):
     assert topo.mgmt.ipv4_gw == "172.20.20.254"
     assert topo.mgmt.ipv6_subnet == "3fff:172:20:20::/64"
     assert topo.mgmt.ipv6_gw == "3fff:172:20:20:ffff:ffff:ffff:ffff"
+    assert topo.mgmt.dhcp is False
 
 
 def test_custom_mgmt_subnet_overlap_is_allowed(tmp_path):
@@ -151,6 +152,22 @@ def test_legacy_ipv4_mapped_ipv6_subnet_is_normalized(tmp_path):
 
     assert topo.mgmt.ipv6_subnet == "3fff:172:20:21::/64"
     assert topo.mgmt.ipv6_gw == "3fff:172:20:21:ffff:ffff:ffff:ffff"
+
+
+def test_legacy_node_mgmt_addressing_is_ignored_with_migration_warning(tmp_path, caplog):
+    data = {
+        "name": "lab",
+        "topology": {"nodes": {"r1": {
+            "kind": "linux", "image": "alpine", "mgmt-addressing": "dhcp",
+        }}},
+    }
+    topology = tmp_path / "legacy.yml"
+    topology.write_text(yaml.safe_dump(data))
+
+    topo = parse_topology(topology, hosts_file=_hosts_file(tmp_path))
+
+    assert "mgmt-addressing" not in topo.nodes["r1"].extra
+    assert "mgmt-addressing is ignored" in caplog.text
 
 
 def test_too_small_mgmt_subnet_raises(tmp_path):

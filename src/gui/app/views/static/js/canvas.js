@@ -680,6 +680,7 @@ const Canvas = (() => {
         image:    n.data('image'),
         position: { x: Math.round(n.position().x), y: Math.round(n.position().y) },
         extra:    n.data('extra') || {},
+        node_overrides_state: n.data('node_overrides_state') || null,
       }));
     const links = cy.edges()
       .filter(e => !_isMgmtEdgeLike(e))
@@ -766,6 +767,9 @@ const Canvas = (() => {
       _hydrateNodeIcon(node);
     }
     _refreshNodeLabel(node);
+    if (updates.kind !== undefined || updates.node_overrides_state !== undefined) {
+      _refreshEdgeLabels(node.connectedEdges());
+    }
   }
 
   // Set webui_runtime on all nodes at once (chiamato
@@ -1680,48 +1684,53 @@ const Canvas = (() => {
   }
 
   function _captureBadge(target) {
-    const node = target.node || 'VD';
-    const kind = cy && target.node ? (cy.getElementById(target.node).data('kind') || '') : '';
-    const iface = formatInterfaceLabel(kind, target.iface || '') || '-';
-    return `sniffing ${node} ${iface}`;
+    const nodeName = target.node || '';
+    const node = cy && nodeName ? cy.getElementById(nodeName) : null;
+    const kind = node && node.length ? (node.data('kind') || '') : '';
+    const iface = formatInterfaceLabel(
+      kind,
+      target.iface || '',
+      node && node.length ? node.data() : null,
+    ) || '-';
+    return `sniffing ${nodeName || 'VD'} ${iface}`;
   }
 
-  function formatInterfaceLabel(kind, iface) {
+  function formatInterfaceLabel(kind, iface, nodeData = null) {
     if (!iface) return '';
     if (kind === '_real_net') return iface;
-    return _ifaceResolver(kind || '', iface) || iface;
+    return _ifaceResolver(kind || '', iface, nodeData) || iface;
+  }
+
+  function _resolveNodeInterface(nodeName, iface) {
+    if (!iface) return '';
+    const node = cy ? cy.getElementById(nodeName) : null;
+    if (!node || !node.length) return iface;
+    return formatInterfaceLabel(node.data('kind') || '', iface, node.data());
   }
 
   function _edgeLabel(source, target, sIf, tIf) {
     const srcKind = cy ? (cy.getElementById(source).data('kind') || '') : '';
     const tgtKind = cy ? (cy.getElementById(target).data('kind') || '') : '';
-    if (srcKind === '_real_net') return _ifaceResolver(tgtKind, tIf);
-    if (tgtKind === '_real_net') return _ifaceResolver(srcKind, sIf);
-    return [_ifaceResolver(srcKind, sIf), _ifaceResolver(tgtKind, tIf)]
+    if (srcKind === '_real_net') return _resolveNodeInterface(target, tIf);
+    if (tgtKind === '_real_net') return _resolveNodeInterface(source, sIf);
+    return [_resolveNodeInterface(source, sIf), _resolveNodeInterface(target, tIf)]
       .filter(Boolean).join(' – ');
   }
 
   function _edgeSourceLabel(source, target, sIf, tIf) {
     const srcKind = cy ? (cy.getElementById(source).data('kind') || '') : '';
-    const tgtKind = cy ? (cy.getElementById(target).data('kind') || '') : '';
     if (srcKind === '_real_net') return '';
-    if (tgtKind === '_real_net') return _ifaceResolver(srcKind, sIf);
-    return _ifaceResolver(srcKind, sIf);
+    return _resolveNodeInterface(source, sIf);
   }
 
   function _edgeTargetLabel(source, target, sIf, tIf) {
-    const srcKind = cy ? (cy.getElementById(source).data('kind') || '') : '';
     const tgtKind = cy ? (cy.getElementById(target).data('kind') || '') : '';
-    if (srcKind === '_real_net') return _ifaceResolver(tgtKind, tIf);
     if (tgtKind === '_real_net') return '';
-    return _ifaceResolver(tgtKind, tIf);
+    return _resolveNodeInterface(target, tIf);
   }
 
-  function setInterfaceResolver(fn) {
-    _ifaceResolver = typeof fn === 'function' ? fn : ((_, l) => l);
-    // Relabel existing edges so a late-arriving resolver is reflected.
-    if (!cy) return;
-    cy.edges().forEach(e => {
+  function _refreshEdgeLabels(edges) {
+    edges.forEach(e => {
       e.data('label', _edgeLabel(
         e.data('source'), e.data('target'),
         e.data('source_iface') || '', e.data('target_iface') || '',
@@ -1735,6 +1744,13 @@ const Canvas = (() => {
         e.data('source_iface') || '', e.data('target_iface') || '',
       ));
     });
+  }
+
+  function setInterfaceResolver(fn) {
+    _ifaceResolver = typeof fn === 'function' ? fn : ((_, l) => l);
+    // Relabel existing edges so a late-arriving resolver is reflected.
+    if (!cy) return;
+    _refreshEdgeLabels(cy.edges());
   }
 
   function setLinkStyle(edgeData, style = {}) {

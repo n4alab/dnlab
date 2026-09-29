@@ -265,10 +265,6 @@ def expected_artifacts_from_state(state: DeploymentState) -> list[CleanupArtifac
                     "interface", state.mgmt.vrf, host, lab, source="state",
                     metadata={"role": "mgmt-infra"},
                 ),
-                CleanupArtifact(
-                    "dnsmasq", f"/var/run/dnsmasq-{lab}.pid", host, lab, source="state",
-                    metadata={"role": "mgmt-infra"},
-                ),
             ])
     for link in state.vxlan_dataplane:
         for side_name in ("side_a", "side_b"):
@@ -650,13 +646,6 @@ def _action_for_artifact(
             command=f"ip link delete {shlex.quote(artifact.name)}",
             reason="state-derived stale lab interface",
         )
-    if artifact.kind == "dnsmasq":
-        return CleanupAction(
-            action="stop-dnsmasq",
-            artifact=artifact,
-            command=f"[ -f {shlex.quote(artifact.name)} ] && kill $(cat {shlex.quote(artifact.name)}) 2>/dev/null; rm -f {shlex.quote(artifact.name)}",
-            reason="stale lab dnsmasq pid",
-        )
     return None
 
 
@@ -899,7 +888,6 @@ def _host_teardown_artifacts_remaining(
     containers = {a.name for a in artifacts if a.kind == "container"}
     networks = {a.name for a in artifacts if a.kind == "network"}
     interfaces = {a.name for a in artifacts if a.kind == "interface"}
-    dnsmasq_pids = {a.name for a in artifacts if a.kind == "dnsmasq"}
 
     if containers:
         rc, out, err = client.run_no_check(
@@ -932,12 +920,6 @@ def _host_teardown_artifacts_remaining(
         if present:
             return True, f"interfaces still present: {', '.join(sorted(present))}"
 
-    for pid_file in sorted(dnsmasq_pids):
-        rc, _, err = client.run_no_check(
-            f"test ! -e {shlex.quote(pid_file)}", timeout=10,
-        )
-        if rc != 0:
-            return True, f"dnsmasq pid still present or unverifiable: {(err or '').strip()}"
     return False, ""
 
 
@@ -946,7 +928,6 @@ def _cleanup_action_priority(action: CleanupAction) -> int:
     return {
         "remove-container": 10,
         "remove-network": 20,
-        "stop-dnsmasq": 30,
         "delete-interface": 40,
     }.get(action.action, 50)
 

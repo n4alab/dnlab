@@ -4,6 +4,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         openssh-server \
+        dnsmasq \
         bash-completion \
         iproute2 \
         iputils-ping \

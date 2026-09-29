@@ -15,6 +15,7 @@ import logging
 import secrets
 import shlex
 import string
+import time
 
 from pathlib import PurePosixPath
 
@@ -259,11 +260,49 @@ def allocate_jumphost_ip(client: SSHClient, net: JumphostNet) -> str:
     )
 
 
+def render_dhcp_config(topo: DistributedTopology, resolver_ip: str | None = None) -> str:
+    """Return dnsmasq configuration with reservation-only dual-stack DHCP."""
+    if not topo.mgmt.dhcp:
+        return ""
+    network4 = ipaddress.IPv4Network(topo.mgmt.ipv4_subnet, strict=False)
+    lines = [
+        "interface=eth1", "bind-dynamic", "dhcp-authoritative",
+        "pid-file=/run/dnlab-dnsmasq.pid",
+        f"dhcp-range=set:mgmt,{network4.network_address},static,12h",
+        f"dhcp-option=tag:mgmt,option:router,{topo.mgmt.ipv4_gw}",
+    ]
+    if resolver_ip:
+        lines.append(f"dhcp-option=tag:mgmt,option:dns-server,{resolver_ip}")
+    if topo.mgmt.ipv6_subnet:
+        prefix6 = ipaddress.IPv6Network(topo.mgmt.ipv6_subnet, strict=False).prefixlen
+        lines.extend(["enable-ra", f"dhcp-range=tag:mgmt,::,static,{prefix6},12h", "ra-param=eth1,60,1800"])
+    for name in sorted(topo.nodes):
+        node = topo.nodes[name]
+        lines.append(f"dhcp-host={node.mgmt_mac},{node.mgmt_ipv4}")
+        if node.mgmt_ipv6:
+            lines.append(f"dhcp-host=id:{node.mgmt_duid},[{node.mgmt_ipv6}]")
+    return "\n".join(lines) + "\n"
+
+
+def refresh_dhcp_config(
+    topo: DistributedTopology, client: SSHClient, container: str, resolver_ip: str | None = None,
+) -> None:
+    """Atomically refresh jumphost reservations after a node lifecycle change."""
+    if not topo.mgmt.dhcp:
+        return
+    path = f"/tmp/dnlab-{topo.name}-dhcp.conf"
+    client.upload_text(render_dhcp_config(topo, resolver_ip), path)
+    client.run(
+        f"docker exec {shlex.quote(container)} sh -c " + shlex.quote("kill -HUP $(cat /run/dnlab-dnsmasq.pid)")
+    )
+
+
 def deploy_jumphost(
     topo: DistributedTopology,
     client: SSHClient,
     mgmt_ip: str,
     resolver_ip: str | None = None,
+    dhcp_config: str = "",
     vd_names: list[str] | None = None,
     vd_map: dict[str, str] | None = None,
     authorized_keys: str | None = None,
@@ -332,6 +371,11 @@ def deploy_jumphost(
     # Start container on the shared jumphost network so docker's -p
     # DNAT targets the externally-routable IP (see docstring).
     dns_flag = f"--dns {resolver_ip} " if resolver_ip else ""
+    dhcp_flag = ""
+    if dhcp_config:
+        dhcp_path = f"/tmp/dnlab-{topo.name}-dhcp.conf"
+        client.upload_text(dhcp_config, dhcp_path)
+        dhcp_flag = f"-v {dhcp_path}:/etc/dnsmasq.d/dnlab-mgmt.conf:ro "
 
     env_flags = [
         f"-e JUMPHOST_PASSWORD={shlex.quote(password)}",
@@ -370,6 +414,9 @@ def deploy_jumphost(
         f"{port_flag}"
         f"--cap-add NET_ADMIN "
         f"--sysctl net.ipv4.ip_forward=1 "
+        f"--cap-add NET_RAW "
+        f"--sysctl net.ipv6.conf.all.forwarding=1 "
+        f"{dhcp_flag}"
         f"{env_block} "
         f"{image}"
     )
@@ -396,6 +443,8 @@ def deploy_jumphost(
             bridge=topo.mgmt.bridge,
             mgmt_ip=mgmt_ip,
             mgmt_subnet=topo.mgmt.ipv4_subnet,
+            mgmt_ipv6=topo.mgmt.ipv6_gw,
+            mgmt_ipv6_subnet=topo.mgmt.ipv6_subnet,
         )
         log.info(
             "Jumphost %s attached to mgmt bridge '%s' with IP %s",
@@ -425,21 +474,42 @@ def _verify_jumphost_ssh_publish(
     ssh_bind_ip: str,
     ssh_port: int,
 ) -> None:
-    """Ensure Docker kept the jumphost's published SSH port after mgmt attach."""
-    rc, out, err = client.run_no_check(
-        f"docker port {shlex.quote(container)} 22",
-        timeout=15,
-    )
+    """Wait for Docker's SSH port view to settle after the manual veth attach.
+
+    Docker can briefly report no published port while it reconciles container
+    networking. A stopped container is never retried: that is a real startup
+    failure and its logs are included in the error.
+    """
     expected = f"{ssh_bind_ip}:{ssh_port}"
-    published = {line.strip() for line in (out or "").splitlines() if line.strip()}
-    if rc == 0 and expected in published:
-        return
-    detail = (err or out or "no docker port output").strip()
+    detail = "no docker port output"
+    for attempt in range(20):
+        rc, out, err = client.run_no_check(
+            f"docker port {shlex.quote(container)} 22", timeout=15,
+        )
+        published = {line.strip() for line in (out or "").splitlines() if line.strip()}
+        if rc == 0 and expected in published:
+            return
+        detail = (err or out or detail).strip()
+
+        state_rc, state, _ = client.run_no_check(
+            f"docker inspect -f '{{{{.State.Running}}}}' {shlex.quote(container)}", timeout=15,
+        )
+        if state_rc != 0 or state.strip() != "true":
+            _, logs, _ = client.run_no_check(
+                f"docker logs {shlex.quote(container)} 2>&1 | tail -40", timeout=15,
+            )
+            raise RuntimeError(
+                f"Jumphost container '{container}' stopped while management network was attached; "
+                f"SSH port {expected}->22/tcp was not published ({detail!r}).\n"
+                f"--- docker logs (last 40 lines) ---\n{logs}\n-----------------------------------"
+            )
+        if attempt < 19:
+            time.sleep(0.25)
+
     raise RuntimeError(
-        f"Jumphost container '{container}' lost SSH port publishing after "
-        f"management network attach: expected {expected}->22/tcp "
-        f"but docker reported {detail!r}. The lab was not left with an "
-        "unreachable jumphost."
+        f"Jumphost container '{container}' did not restore SSH port publishing after "
+        f"management network attach: expected {expected}->22/tcp but docker reported "
+        f"{detail!r}. The lab was not left with an unreachable jumphost."
     )
 
 
@@ -451,6 +521,8 @@ def attach_jumphost_to_mgmt_bridge(
     bridge: str,
     mgmt_ip: str,
     mgmt_subnet: str,
+    mgmt_ipv6: str = "",
+    mgmt_ipv6_subnet: str = "",
 ) -> None:
     """Attach jumphost to the lab mgmt bridge without a Docker endpoint.
 
@@ -460,6 +532,8 @@ def attach_jumphost_to_mgmt_bridge(
     the jumphost image's forwarding rules.
     """
     prefix = ipaddress.ip_network(mgmt_subnet, strict=False).prefixlen
+    prefix6 = ipaddress.ip_network(mgmt_ipv6_subnet, strict=False).prefixlen if mgmt_ipv6 and mgmt_ipv6_subnet else 0
+    ipv6_cmd = ("nsenter -t \"$pid\" -n ip -6 addr add " + shlex.quote(f"{mgmt_ipv6}/{prefix6}") + " dev eth1; ") if mgmt_ipv6 else ""
     suffix = "".join(ch for ch in lab_name if ch.isalnum())[:8] or "lab"
     host_if = f"jh-{suffix}"
     peer_if = f"jhc-{suffix}"
@@ -477,6 +551,7 @@ def attach_jumphost_to_mgmt_bridge(
         f"ip link set {shlex.quote(peer_if)} netns \"$pid\"; "
         f"nsenter -t \"$pid\" -n ip link set {shlex.quote(peer_if)} name eth1; "
         f"nsenter -t \"$pid\" -n ip addr add {shlex.quote(f'{mgmt_ip}/{prefix}')} dev eth1; "
+        f"{ipv6_cmd}"
         f"nsenter -t \"$pid\" -n ip link set eth1 up",
         timeout=30,
     )

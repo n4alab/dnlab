@@ -1012,6 +1012,7 @@ const AdminPage = (() => {
       return meta.kinds.map(k => ({
         kind: k.kind,
         patchable: Boolean(k.patchable),
+        persistent: Boolean(k.persistent || k.patchable),
         builder: k.builder || (k.patchable ? 'dnlab-image-build' : 'vrnetlab-make'),
         vrnetlab_dir: k.vrnetlab_dir || null,
         image_globs: Array.isArray(k.image_globs) ? k.image_globs : [],
@@ -1022,6 +1023,7 @@ const AdminPage = (() => {
     return (meta?.patchable || []).map(kind => ({
       kind,
       patchable: true,
+      persistent: true,
       builder: 'dnlab-image-build',
       vrnetlab_dir: null,
       image_globs: [],
@@ -1031,7 +1033,7 @@ const AdminPage = (() => {
   }
 
   function _kindBuildLabel(kind) {
-    return kind.patchable ? 'persistent' : 'plain vrnetlab';
+    return kind.persistent ? 'persistent' : 'plain vrnetlab';
   }
 
   function _imageSyncSummary(sync) {

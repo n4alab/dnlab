@@ -7,7 +7,7 @@ from pathlib import Path
 
 from dnlab_multinode.models.topology import DistributedTopology
 from dnlab_multinode.models.schedule import SchedulePlan, VDResources
-from dnlab_multinode.services.config import assign_sticky_mgmt_ipv4, parse_topology
+from dnlab_multinode.services.config import assign_sticky_mgmt_identities, assign_sticky_mgmt_ipv4, parse_topology
 from dnlab_multinode.services.persistence import load_placement_preferences
 from dnlab_multinode.services.resources import extract_resources, check_images_on_hosts
 from dnlab_multinode.services.scheduler import compute_schedule, gather_host_resources
@@ -63,6 +63,15 @@ class PlanController:
             self.topo.mgmt,
             previous_reservations,
         )
+        identities = assign_sticky_mgmt_identities(
+            self.topo.nodes, self.topo.mgmt, lab_name=self.topo.name,
+            ipv6_reservations=(previous_state.mgmt_ipv6_reservations if previous_state else {}),
+            mac_reservations=(previous_state.mgmt_mac_reservations if previous_state else {}),
+            duid_reservations=(previous_state.mgmt_duid_reservations if previous_state else {}),
+            iaid_reservations=(previous_state.mgmt_iaid_reservations if previous_state else {}),
+        )
+        for key, value in zip(("dnlab_mgmt_ipv6_reservations", "dnlab_mgmt_mac_reservations", "dnlab_mgmt_duid_reservations", "dnlab_mgmt_iaid_reservations"), identities):
+            self.topo.raw[key] = value
 
         # Phase 1: Extract VD resources
         images = {name: node.image for name, node in self.topo.nodes.items()}
@@ -87,7 +96,7 @@ class PlanController:
                 lines = []
                 for img, hosts in missing.items():
                     lines.append(f"  [✗] {img} not found on: {', '.join(hosts)}")
-                lines.append(f"  Esegui: dnlab-multinode sync-images -t {self.topology_file}")
+                lines.append(f"  RUN: dnlab-multinode sync-images -t {self.topology_file}")
                 raise PlanError(
                     "Images not aligned across nodes:\n" + "\n".join(lines)
                 )

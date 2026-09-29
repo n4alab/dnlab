@@ -53,6 +53,7 @@
   let currentMgmt = {
     subnet: '', gw: '',
     subnet_v6: '', gw_v6: '',
+    dhcp: false,
     pos: null,
     userTouchedV6: false,
   };
@@ -230,6 +231,7 @@
           ipv4_gw:     currentMgmt.gw     || '',
           ipv6_subnet: currentMgmt.subnet_v6 || '',
           ipv6_gw:     currentMgmt.gw_v6     || '',
+          dhcp:        Boolean(currentMgmt.dhcp),
           canvas_pos:  { x: Math.round(position.x), y: Math.round(position.y) },
         });
         currentMgmt.pos = { x: Math.round(position.x), y: Math.round(position.y) };
@@ -689,12 +691,13 @@
       updatedTopo = await API.Labs.setNodeMgmtIpv4(currentLabId, name, mgmt_ipv4 || '');
       updatedTopo = await API.Labs.setNodeMgmtIpv6(currentLabId, name, mgmt_ipv6 || '');
       const updatedNode = (updatedTopo.nodes || []).find(n => n.name === name) || null;
+      const updatedOverride = (updatedTopo.gui_node_overrides_state || {})[name] || null;
       const updatedFeatures = (updatedTopo.gui_node_features_state || {})[name] || null;
       const canvasUpdates = {
         kind,
         image,
         webui_state: webui_ports || [],
-        node_overrides_state: node_overrides || null,
+        node_overrides_state: updatedOverride,
         node_features_state: updatedFeatures,
       };
       if (updatedNode && updatedNode.extra) {
@@ -752,6 +755,7 @@
       currentMgmt.gw = _gatewayForSubnet(_parseCidr(currentMgmt.subnet)) || cfg['ipv4-gw'] || '';
       currentMgmt.subnet_v6 = cfg['ipv6-subnet'] || '';
       currentMgmt.gw_v6 = _ipv6GatewayForSubnet(currentMgmt.subnet_v6) || cfg['ipv6-gw'] || '';
+      currentMgmt.dhcp = Boolean(cfg.dhcp);
       currentMgmt.userTouchedV6 = !!(currentMgmt.subnet_v6 && currentMgmt.subnet_v6 !== _deriveIpv6FromIpv4(currentMgmt.subnet).subnet_v6);
       Canvas.setMgmt({ ...currentMgmt });
       MgmtPanel.setTopology(currentLabName, cfg);
@@ -978,7 +982,7 @@
       const vdNode = sourceNode.kind === '_real_net' ? targetNode : sourceNode;
       const vdName = vdNode.name;
       const realName = realNode.name;
-      const ifaces = _getAvailableInterfaces(vdName, vdNode.kind, topoData.links);
+      const ifaces = _getAvailableInterfaces(vdNode, topoData.links);
       const options = ifaces.map(({ linux, vendor }) =>
         `<option value="${linux}" title="${linux}">${vendor}</option>`
       ).join('');
@@ -1011,8 +1015,8 @@
       return;
     }
 
-    const sourceIfaces = _getAvailableInterfaces(sourceName, sourceNode.kind, topoData.links);
-    const targetIfaces = _getAvailableInterfaces(targetName, targetNode.kind, topoData.links);
+    const sourceIfaces = _getAvailableInterfaces(sourceNode, topoData.links);
+    const targetIfaces = _getAvailableInterfaces(targetNode, topoData.links);
 
     const buildOptions = (ifaces) => ifaces.map(({ linux, vendor }) =>
       `<option value="${linux}" title="${linux}">${vendor}</option>`
@@ -1053,24 +1057,37 @@
   }
 
   // Reverse-map a linux iface name (what the YAML stores) to the vendor
-  // name for display. Falls back to the linux name if the kind is unknown
-  // or the index is out of range.
-  function _resolveVendorIface(kind, linuxName) {
+  // name for display. Per-node override state is required for dynamic
+  // interfaces such as Cumulus breakout lanes.
+  function _resolveVendorIface(kind, linuxName, nodeData = null) {
     if (!linuxName) return '';
     const info = _interfaceInfoForKind(kind);
     if (!info) return linuxName;
     const count = info.count || 8;
+    const baseInterfaces = [];
     for (let n = 1; n <= count; n++) {
       const i = n - 1;
-      const lx = _fmtIface(info.linux_fmt, n, i);
-      if (lx === linuxName) {
-        return _fmtIface(info.vendor_fmt, n, i);
-      }
+      baseInterfaces.push({
+        linux: _fmtIface(info.linux_fmt, n, i),
+        vendor: _vendorIfaceName(info, n, i),
+      });
     }
-    return linuxName;
+    let candidates = baseInterfaces;
+    const override = (typeof DeviceCatalog !== 'undefined') ? DeviceCatalog.kindOverrides(kind || '') : null;
+    if (override && typeof NodeOverridePlugins !== 'undefined') {
+      candidates = NodeOverridePlugins.interfaces({
+        nodeData: nodeData || {},
+        override,
+        baseInterfaces,
+      });
+    }
+    const match = candidates.find(({ linux }) => linux === linuxName);
+    return match ? match.vendor : linuxName;
   }
 
-  function _getAvailableInterfaces(nodeName, kind, links) {
+  function _getAvailableInterfaces(node, links) {
+    const nodeName = node.name;
+    const kind = node.kind;
     if (kind === '_real_net') return [{ linux: 'real', vendor: 'real_net' }];
     const ifaceInfo = _interfaceInfoForKind(kind) || { linux_fmt: 'eth{n}', vendor_fmt: 'eth{n}', count: 8 };
     const count = ifaceInfo.count || 8;
@@ -1081,16 +1098,18 @@
       if (lk.source === nodeName && lk.source_iface) used.add(lk.source_iface);
       if (lk.target === nodeName && lk.target_iface) used.add(lk.target_iface);
     });
-    const available = [];
+    let candidates = [];
     for (let n = 1; n <= count; n++) {
       const i = n - 1;
       const linux  = _fmtIface(ifaceInfo.linux_fmt, n, i);
-      const vendor = _fmtIface(ifaceInfo.vendor_fmt, n, i);
-      if (!used.has(linux)) {
-        available.push({ linux, vendor });
-      }
+      const vendor = _vendorIfaceName(ifaceInfo, n, i);
+      candidates.push({ linux, vendor });
     }
-    return available;
+    const override = (typeof DeviceCatalog !== 'undefined') ? DeviceCatalog.kindOverrides(kind || '') : null;
+    if (override && typeof NodeOverridePlugins !== 'undefined') {
+      candidates = NodeOverridePlugins.interfaces({ nodeData: node, override, baseInterfaces: candidates });
+    }
+    return candidates.filter(({ linux }) => !used.has(linux));
   }
 
   function _mgmtLinuxIfaceForKind(kind, ifaceInfo) {
@@ -1103,7 +1122,7 @@
     for (let n = 1; n <= count; n++) {
       const i = n - 1;
       const linux = _fmtIface(ifaceInfo.linux_fmt, n, i);
-      const vendor = _fmtIface(ifaceInfo.vendor_fmt, n, i);
+      const vendor = _vendorIfaceName(ifaceInfo, n, i);
       if (_normIface(linux) === mgmtNorm || _normIface(vendor) === mgmtNorm) {
         return linux;
       }
@@ -1123,6 +1142,11 @@
       .replace(/\{port([+-]\d+)?\}/g, (_, off) => String(port + Number(off || 0)))
       .replace(/\{n([+-]\d+)?\}/g, (_, off) => String(n + Number(off || 0)))
       .replace(/\{i([+-]\d+)?\}/g, (_, off) => String(i + Number(off || 0)));
+  }
+
+  function _vendorIfaceName(info, n, i) {
+    const names = info && typeof info.vendor_names === 'object' ? info.vendor_names : null;
+    return String((names && names[String(n)]) || _fmtIface(info.vendor_fmt, n, i));
   }
 
   function _interfaceInfoForKind(kind) {
@@ -1195,6 +1219,7 @@
         gw:        effectiveV4Gw,
         subnet_v6: effectiveV6Subnet,
         gw_v6:     effectiveV6Gw,
+        dhcp:      Boolean(mgmtCfg.dhcp),
         pos:       mgmtCfg.canvas_pos || null,
         userTouchedV6: !!v6Touched,
       };
@@ -1227,6 +1252,7 @@
     currentMgmt = {
       subnet: '', gw: '',
       subnet_v6: '', gw_v6: '',
+      dhcp: false,
       pos: null,
       userTouchedV6: false,
     };
@@ -1746,6 +1772,7 @@
     const derived = _deriveIpv6FromIpv4(v4Subnet);
     const v6Subnet = currentMgmt.subnet_v6 || derived.subnet_v6 || DEFAULT_MGMT_SUBNET_V6;
     const v6Gw     = _ipv6GatewayForSubnet(v6Subnet) || currentMgmt.gw_v6 || derived.gw_v6 || DEFAULT_MGMT_GW_V6;
+    const dhcp = Boolean(currentMgmt.dhcp);
     const body = `
       <div class="mgmt-modal-body">
         <label>IPv4 subnet<br>
@@ -1768,6 +1795,10 @@
                  value="${_escAttr(v6Gw)}"
                  placeholder="${DEFAULT_MGMT_GW_V6}" disabled>
         </label>
+        <label class="props-check">
+          <input id="mgmt-modal-dhcp" type="checkbox" ${dhcp ? 'checked' : ''} ${readOnly ? 'disabled' : ''}>
+          <span>Abilita DHCPv4 + RA/DHCPv6 per tutta la rete mgmt</span>
+        </label>
         <p class="mgmt-hint">I gateway sono derivati dagli ultimi indirizzi delle subnet.
         IPv6 è derivata da IPv4 se lasciata vuota.</p>
         ${readOnly
@@ -1784,6 +1815,7 @@
               const gw         = document.getElementById('mgmt-modal-gw').value.trim();
               const subnet_v6  = document.getElementById('mgmt-modal-subnet-v6').value.trim();
               const gw_v6      = document.getElementById('mgmt-modal-gw-v6').value.trim();
+              const dhcp       = document.getElementById('mgmt-modal-dhcp').checked;
               const autoDerived = _deriveIpv6FromIpv4(subnet);
               currentMgmt.userTouchedV6 = (
                 (subnet_v6 && subnet_v6 !== autoDerived.subnet_v6)
@@ -1792,11 +1824,13 @@
               currentMgmt.gw        = gw;
               currentMgmt.subnet_v6 = subnet_v6;
               currentMgmt.gw_v6     = gw_v6;
+              currentMgmt.dhcp      = dhcp;
               Canvas.setMgmt({ subnet, gw, subnet_v6, gw_v6, pos: currentMgmt.pos });
               await _persistMgmt();
               MgmtPanel.setTopology(currentLabName, {
                 'ipv4-subnet': subnet,    'ipv4-gw': gw,
                 'ipv6-subnet': subnet_v6, 'ipv6-gw': gw_v6,
+                dhcp,
               });
             },
           },
@@ -1843,6 +1877,7 @@
         ipv4_gw:     currentMgmt.gw        || '',
         ipv6_subnet: currentMgmt.subnet_v6 || '',
         ipv6_gw:     currentMgmt.gw_v6     || '',
+        dhcp:        Boolean(currentMgmt.dhcp),
         canvas_pos:  currentMgmt.pos || undefined,
       });
     } catch (e) {

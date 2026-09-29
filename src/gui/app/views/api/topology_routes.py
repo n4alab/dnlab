@@ -91,6 +91,7 @@ class MgmtConfigRequest(BaseModel):
     ipv4_gw: str = ""
     ipv6_subnet: str = ""
     ipv6_gw: str = ""
+    dhcp: bool = False
     # Position of the "mgmt cloud" on the canvas. Stored in topology extra,
     # but has no effect on deployment: it is only used by the GUI to remember
     # where the user placed the dummy mgmt network node.
@@ -316,6 +317,7 @@ async def set_mgmt_config(
             "ipv4-gw":     mgmt.ipv4_gw,
             "ipv6-subnet": mgmt.ipv6_subnet,
             "ipv6-gw":     mgmt.ipv6_gw,
+            "dhcp":        mgmt.dhcp,
         }
         if mgmt.canvas_pos is not None:
             payload["canvas_pos"] = mgmt.canvas_pos

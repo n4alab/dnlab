@@ -365,6 +365,7 @@ class TopologyController:
         current = dict(topo.extra.get("mgmt") or {})
         current.pop("network", None)
         current.pop("bridge", None)
+        current["dhcp"] = bool(mgmt.get("dhcp", False))
         v4_raw = (mgmt.get("ipv4-subnet") or "").strip()
         if v4_raw:
             v4_net = self._validate_mgmt_ipv4_subnet(v4_raw)

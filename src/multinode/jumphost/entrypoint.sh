@@ -90,6 +90,25 @@ if [ -n "${JUMPHOST_VD_LIST:-}" ]; then
     fi
 fi
 
+# Start reservation-only DHCPv4/RA/DHCPv6 when provided by the controller.
+# eth1 is manually attached just after Docker starts this container. DHCP must
+# not hold up (or terminate) SSH while that attach settles.
+if [ -f /etc/dnsmasq.d/dnlab-mgmt.conf ]; then
+    (
+        for _ in {1..150}; do
+            ip link show eth1 >/dev/null 2>&1 && break
+            sleep 0.1
+        done
+        if ! ip link show eth1 >/dev/null 2>&1; then
+            echo "ERROR: mgmt eth1 missing; DHCP service was not started" >&2
+            exit 0
+        fi
+        if ! dnsmasq --conf-file=/etc/dnsmasq.d/dnlab-mgmt.conf; then
+            echo "ERROR: dnsmasq failed to start on mgmt eth1" >&2
+        fi
+    ) &
+fi
+
 # ── Routing / NAT ─────────────────────────────
 # Il container deve essere istanziato con --sysctl net.ipv4.ip_forward=1
 # per abilitare il forwarding del traffico

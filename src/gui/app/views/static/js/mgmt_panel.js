@@ -7,9 +7,8 @@
  *   - ipv6-subnet (CIDR, default 3fff:<v4-octets>::/64)
  *   - ipv6-gw     (read-only, ultimo host della subnet IPv6)
  *
- * Il jumphost dnlab opera solo in IPv4 verso i nodi: i campi v6 sono
- * passthrough verso containerlab (assegnazione indirizzi v6 ai nodi),
- * non vengono usati dalla GUI per raggiungere i nodi.
+ * Con DHCP attivo il jumphost offre DHCPv4, RA e DHCPv6 alla rete mgmt.
+ * Ogni guest decide autonomamente se usare DHCP o una configurazione statica.
  *
  * Il nome Docker network e il nome Linux bridge sono **generati
  * deterministicamente lato backend dal nome della topology**
@@ -18,7 +17,7 @@
  * li configura.
  *
  * Il server salva nel topology YAML sotto il key `mgmt:` solo
- * `ipv4-subnet`, `ipv4-gw`, `ipv6-subnet`, `ipv6-gw`; eventuali
+ * `ipv4-subnet`, `ipv4-gw`, `ipv6-subnet`, `ipv6-gw`, `dhcp`; eventuali
  * `network`/`bridge` residui vengono rimossi al save.
  */
 const MgmtPanel = (() => {
@@ -54,6 +53,7 @@ const MgmtPanel = (() => {
     const derivedV6 = _deriveIpv6Subnet(subnet);
     const subnet_v6 = mgmt['ipv6-subnet'] || derivedV6;
     const gw_v6     = _ipv6Gw(subnet_v6) || mgmt['ipv6-gw'] || '';
+    const dhcp = Boolean(mgmt.dhcp);
 
     _panel.innerHTML = `
       <h3 class="props-title">Mgmt Network</h3>
@@ -74,13 +74,18 @@ const MgmtPanel = (() => {
           <input type="text" name="ipv6_gw" value="${_esc(gw_v6)}"
                  placeholder="3fff:172:20:0:ffff:ffff:ffff:ffff" class="props-input" readonly>
         </label>
+        <label class="props-check">
+          <input type="checkbox" name="dhcp" ${dhcp ? 'checked' : ''}>
+          <span>Abilita DHCPv4 + RA/DHCPv6 per tutta la rete mgmt</span>
+        </label>
         <div class="props-actions">
           <button type="submit" class="btn btn-primary btn-sm">Apply</button>
         </div>
         <p class="mgmt-hint">Nome network e bridge sono generati
         automaticamente dal nome lab (limite Linux 15 char sulle
         interfaces). Nodes without <code>mgmt-ipv4</code>/<code>mgmt-ipv6</code>
-        receive an IP auto-assegnato dal pool al deploy. I gateway sono
+        receive an IP auto-assegnato dal pool al deploy. Il servizio DHCP, se attivo,
+        vale per tutta la rete: la scelta DHCP/statico resta nel guest. I gateway sono
         derivati dagli ultimi indirizzi delle rispettive subnet.</p>
       </form>
     `;
@@ -112,6 +117,7 @@ const MgmtPanel = (() => {
         ipv4_gw:     (fd.get('ipv4_gw')     || '').trim(),
         ipv6_subnet: (fd.get('ipv6_subnet') || '').trim(),
         ipv6_gw:     (fd.get('ipv6_gw')     || '').trim(),
+        dhcp:        fd.get("dhcp") === "on",
       });
     });
   }
