@@ -96,6 +96,13 @@ def test_capture_public_base_url_prefers_configured_url(monkeypatch):
     assert capture_routes_mod._public_base_url(request) == "https://public.example.com/gui/"
 
 
+def test_flinos_mgmt_and_data_interface_labels():
+    assert capture_mod._mgmt_linux_iface_for_kind("flinos") == "eth0"
+    assert capture_mod._display_iface("flinos", "eth0") == "mgmt"
+    assert capture_mod._display_iface("flinos", "eth1") == "eth1"
+    assert capture_mod._display_iface("flinos", "eth8") == "eth8"
+
+
 def test_capture_public_base_url_falls_back_to_request_base(monkeypatch):
     monkeypatch.setattr(capture_routes_mod.settings, "PUBLIC_BASE_URL", "")
     request = _request()

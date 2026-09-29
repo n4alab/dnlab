@@ -44,11 +44,13 @@ from __future__ import annotations
 
 import argparse
 import fnmatch
+import importlib
 import os
 import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 
@@ -129,6 +131,12 @@ CONTAINER_NATIVE_KINDS = {
 # directory and therefore intentionally have no uploaded source image.
 SELF_BUILDING_KINDS = {"dnlab_frr"}
 
+# Images built from an uploaded qcow2 by a recipe shipped with dNLab, rather
+# than by one of the vendor directories in /opt/vrnetlab.  These recipes own
+# their persistence implementation and always emit a ``-dnlab`` image tag.
+QCOW_RECIPE_KINDS = {"flinos"}
+RECIPES_DIR = SCRIPT_DIR / "recipes"
+
 
 # ── Utilities ────────────────────────────────────────────────────────
 
@@ -162,8 +170,42 @@ def _has_patch(kind: str) -> bool:
     return (PATCHES_DIR / f"{kind}.py").is_file()
 
 
+def _prepare_qcow_source(
+    kind: str,
+    source: Path,
+    destination: Path,
+    *,
+    dry: bool = False,
+) -> bool:
+    """Run an optional kind-owned QCOW preprocessing hook."""
+    try:
+        mod = importlib.import_module(f"patches.{kind}")
+    except ModuleNotFoundError:
+        return False
+    prepare = getattr(mod, "prepare_qcow", None)
+    if not callable(prepare):
+        return False
+
+    print(
+        f"[{kind}] preparing guest image copy: {source} -> {destination}",
+        file=sys.stderr,
+    )
+    prepare(
+        source,
+        destination,
+        run=lambda cmd: _run(cmd, dry=dry),
+        dry=dry,
+    )
+    return True
+
+
 def has_patch(kind: str) -> bool:
     return _has_patch(kind)
+
+
+def is_persistent_kind(kind: str) -> bool:
+    """Return whether a builder produces an image with dNLab persistence."""
+    return kind in QCOW_RECIPE_KINDS or _has_patch(kind)
 
 
 def resolve_vrnetlab_dir(kind: str, root: Path | None = None) -> Path:
@@ -355,6 +397,41 @@ def _patch_source_tag(kind: str, upstream_tag: str) -> str:
     return upstream_tag
 
 
+def _flinos_tag(qcow2: Path) -> str:
+    """Build the persistent dNLab tag from an uploaded FLINOS qcow2."""
+    version = qcow2.stem
+    if version.startswith("flinos-"):
+        version = version.removeprefix("flinos-")
+    version = re.sub(r"[^A-Za-z0-9_.-]+", "-", version).strip(".-")
+    if not version:
+        raise SystemExit(f"error: cannot derive FLINOS image tag from '{qcow2.name}'")
+    return f"vrnetlab/n4alab_flinos:{version}{PERSIST_SUFFIX}"
+
+
+def _build_qcow_recipe(kind: str, source: str | None, *, dry: bool = False) -> str:
+    if not source:
+        raise SystemExit(f"error: kind '{kind}' requires a qcow2 source image")
+    qcow2 = Path(source).expanduser().resolve()
+    if not qcow2.is_file() or qcow2.suffix.lower() != ".qcow2":
+        raise SystemExit(f"error: kind '{kind}' requires a .qcow2 source image")
+
+    recipe = RECIPES_DIR / kind
+    if not (recipe / "Dockerfile").is_file():
+        raise SystemExit(f"error: recipe for kind '{kind}' is missing: {recipe}")
+    image = _flinos_tag(qcow2)
+    with tempfile.TemporaryDirectory(prefix=f"dnlab-{kind}-") as temporary:
+        context = Path(temporary) / "context"
+        shutil.copytree(recipe, context)
+        shutil.copy2(qcow2, context / "flinos.qcow2")
+        _run(
+            ["docker", "build", "--tag", image, "--build-arg", "FLINOS_QCOW=flinos.qcow2", "."],
+            cwd=context,
+            dry=dry,
+        )
+    _require_built_image(image, dry=dry)
+    return image
+
+
 # ── Subcommands ──────────────────────────────────────────────────────
 
 def cmd_list_patchable(_args: argparse.Namespace) -> int:
@@ -386,12 +463,22 @@ def cmd_build(args: argparse.Namespace) -> int:
     if plain and args.with_persistence:
         raise SystemExit("error: --plain and --with-persistence are mutually exclusive")
 
-    if patch_requested and not _has_patch(kind):
+    if kind not in QCOW_RECIPE_KINDS and patch_requested and not _has_patch(kind):
         raise SystemExit(
             f"error: persistence requested but no patch is available for kind "
             f"'{kind}' (missing {PATCHES_DIR}/{kind}.py).\n"
             f"        currently patchable kinds: {', '.join(_list_patchable()) or '(none)'}"
         )
+
+    if kind in QCOW_RECIPE_KINDS:
+        if plain:
+            raise SystemExit(
+                f"error: kind '{kind}' only has the persistent dNLab recipe; "
+                "--plain is not supported"
+            )
+        image = _build_qcow_recipe(kind, source, dry=args.dry_run)
+        print(f"done: {image}")
+        return 0
 
     if kind in SELF_BUILDING_KINDS:
         if source:
@@ -471,6 +558,21 @@ def cmd_build(args: argparse.Namespace) -> int:
         )
 
     dest = work_dir / qcow2.name
+    prepared_dir: tempfile.TemporaryDirectory[str] | None = None
+    source_for_build = qcow2
+    if patch_requested:
+        prepared_dir = tempfile.TemporaryDirectory(prefix=f"dnlab-{kind}-qcow-")
+        prepared_path = Path(prepared_dir.name) / qcow2.name
+        if _prepare_qcow_source(
+            kind,
+            qcow2,
+            prepared_path,
+            dry=args.dry_run,
+        ):
+            source_for_build = prepared_path
+        else:
+            prepared_dir.cleanup()
+            prepared_dir = None
 
     print(f"[{kind}] vrnetlab dir: {work_dir}", file=sys.stderr)
     print(f"[{kind}] qcow2 source: {qcow2}", file=sys.stderr)
@@ -489,7 +591,7 @@ def cmd_build(args: argparse.Namespace) -> int:
             )
     print(f"[{kind}] copying qcow2 to {dest}", file=sys.stderr)
     if not args.dry_run:
-        shutil.copy2(qcow2, dest)
+        shutil.copy2(source_for_build, dest)
 
     # 2. Build.
     upstream_tag = _docker_tag_for(work_dir, qcow2.name)
@@ -507,6 +609,8 @@ def cmd_build(args: argparse.Namespace) -> int:
                 print(f"[{kind}] removed {dest}", file=sys.stderr)
             except OSError as e:
                 print(f"warning: could not remove {dest}: {e}", file=sys.stderr)
+        if prepared_dir is not None:
+            prepared_dir.cleanup()
 
     # If we could not infer the tag before the build, we do not know what
     # `make` produced; require the user to pass it via flag when they want

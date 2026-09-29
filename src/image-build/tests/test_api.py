@@ -92,6 +92,32 @@ def test_frr_is_source_free_but_other_kinds_require_upload(monkeypatch, tmp_path
         asyncio.run(api.create_job(api.ImageBuildRequest(kind="openwrt")))
 
 
+def test_flinos_recipe_is_persistent_and_requires_qcow2(monkeypatch, tmp_path):
+    _set_store(monkeypatch, tmp_path)
+    monkeypatch.setattr(api, "SCRIPT", tmp_path / "build_image.py")
+    api.SCRIPT.write_text("# script\n", encoding="utf-8")
+
+    data = api._kinds_payload()
+    flinos = next(item for item in data["kinds"] if item["kind"] == "flinos")
+    assert flinos["patchable"] is False
+    assert flinos["persistent"] is True
+    assert flinos["image_globs"] == ["*.qcow2"]
+
+    def fake_create_task(coro):
+        coro.close()
+        return None
+
+    monkeypatch.setattr(api.asyncio, "create_task", fake_create_task)
+    source = api.UPLOADS_DIR / "flinos" / "flinos-1.2.qcow2"
+    source.parent.mkdir(parents=True)
+    source.write_bytes(b"")
+    result = asyncio.run(api.create_job(api.ImageBuildRequest(kind="flinos", source_path=str(source))))
+    assert result["with_persistence"] is True
+
+    with pytest.raises(HTTPException, match="requires a .qcow2"):
+        api._validate_image_filename("flinos", "flinos.iso")
+
+
 def test_upload_sanitizes_filename_and_returns_source_path(monkeypatch, tmp_path):
     _set_store(monkeypatch, tmp_path)
 

@@ -136,6 +136,10 @@ def _validate_image_format(kind: str, source_path: str | None) -> None:
             "source_path must reference an uploaded image "
             f"(under {uploads_root}); got '{source_path}'.",
         )
+    if kind in build_image.QCOW_RECIPE_KINDS:
+        if Path(source_path).suffix.lower() != ".qcow2":
+            raise HTTPException(400, f"kind '{kind}' requires a .qcow2 source image")
+        return
     try:
         work_dir = build_image._resolve_vrnetlab_dir(kind, VRNETLAB_ROOT)
     except SystemExit:
@@ -153,6 +157,10 @@ def _validate_image_filename(
     globs: list[str] | None = None,
 ) -> None:
     if kind in build_image.CONTAINER_NATIVE_KINDS:
+        return
+    if kind in build_image.QCOW_RECIPE_KINDS:
+        if not filename.lower().endswith(".qcow2"):
+            raise HTTPException(400, f"kind '{kind}' requires a .qcow2 source image")
         return
     if work_dir is None:
         try:
@@ -261,7 +269,7 @@ async def create_job(req: ImageBuildRequest) -> dict[str, Any]:
         raise HTTPException(503, f"image-build script not found: {SCRIPT}")
     _validate_image_format(req.kind, req.source_path)
     _ensure_store()
-    with_persistence = build_image.has_patch(req.kind)
+    with_persistence = build_image.is_persistent_kind(req.kind)
     job = Job(
         id=secrets.token_hex(8),
         kind=req.kind,
@@ -434,6 +442,17 @@ def _kinds_payload() -> dict[str, Any]:
             "image_examples": [],
             "source_required": kind not in build_image.SELF_BUILDING_KINDS,
         })
+    for kind in sorted(build_image.QCOW_RECIPE_KINDS):
+        by_kind[kind] = {
+            "kind": kind,
+            "patchable": False,
+            "persistent": True,
+            "builder": "dnlab-image-build",
+            "vrnetlab_dir": None,
+            "image_globs": ["*.qcow2"],
+            "image_examples": ["flinos-<version>.qcow2"],
+            "source_required": True,
+        }
     kinds = [by_kind[kind] for kind in sorted(by_kind)]
     return {
         "root": str(ROOT),

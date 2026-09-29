@@ -417,7 +417,7 @@ async def create_image_build_job(
             raise HTTPException(400, f"source image not found: {source}")
         _validate_local_image_build_source(body.kind, source)
 
-    with_persistence = _local_image_kind_has_patch(body.kind)
+    with_persistence = _local_image_kind_is_persistent(body.kind)
     job = _ImageBuildJob(
         id=secrets.token_hex(8),
         kind=body.kind,
@@ -650,6 +650,17 @@ def _local_image_build_kinds() -> dict:
             "image_examples": [],
             "source_required": kind not in getattr(module, "SELF_BUILDING_KINDS", ()),
         })
+    for kind in sorted(getattr(module, "QCOW_RECIPE_KINDS", ())):
+        by_kind[kind] = {
+            "kind": kind,
+            "patchable": False,
+            "persistent": True,
+            "builder": "dnlab-image-build",
+            "vrnetlab_dir": None,
+            "image_globs": ["*.qcow2"],
+            "image_examples": [f"{kind}-<version>.qcow2"],
+            "source_required": True,
+        }
     return {
         "root": str(root),
         "vrnetlab_root": str(_vrnetlab_dir()),
@@ -660,9 +671,12 @@ def _local_image_build_kinds() -> dict:
     }
 
 
-def _local_image_kind_has_patch(kind: str) -> bool:
+def _local_image_kind_is_persistent(kind: str) -> bool:
     module = _load_image_build_module(_image_build_dir())
     if module is not None:
+        is_persistent = getattr(module, "is_persistent_kind", None)
+        if callable(is_persistent):
+            return bool(is_persistent(kind))
         return bool(module.has_patch(kind))
     return (_image_build_dir() / "patches" / f"{kind}.py").is_file()
 
@@ -678,6 +692,10 @@ def _validate_local_image_build_filename(kind: str, filename: str) -> None:
         return
     container_native = getattr(module, "CONTAINER_NATIVE_KINDS", set())
     if kind in container_native:
+        return
+    if kind in getattr(module, "QCOW_RECIPE_KINDS", set()):
+        if not filename.lower().endswith(".qcow2"):
+            raise HTTPException(400, f"kind '{kind}' requires a .qcow2 source image")
         return
     try:
         work_dir = Path(module.resolve_vrnetlab_dir(kind, _vrnetlab_dir()))

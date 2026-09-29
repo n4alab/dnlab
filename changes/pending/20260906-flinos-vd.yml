@@ -1,0 +1,20 @@
+id: 20260906-flinos-vd
+type: new-vd
+title: Add Flinos virtual device
+description: >-
+  Add the N4ALab Flinos switch appliance to the GUI catalog and image-build
+  workflow with vrnetlab/KVM packaging, Python 3.13 telnetlib and console
+  client compatibility, and dNLab overlay persistence support.
+components:
+  - gui
+  - image-build
+audience:
+  - admin
+  - user
+visibility: public
+breaking: false
+upgrade_notes: []
+references: []
+vd:
+  vendor: N4ALab
+  platform: Flinos

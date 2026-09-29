@@ -158,6 +158,10 @@
       "title": "Nokia",
       "color": "#124191"
     },
+    "n4alab": {
+      "title": "N4ALab",
+      "color": "#001f3f"
+    },
     "huawei": {
       "title": "Huawei",
       "color": "#e60012"
@@ -1982,6 +1986,42 @@
         "not tested"
       ],
       "mgmt_iface": "eth0"
+    },
+    "flinos": {
+      "env": {
+        "VCPU": "2",
+        "RAM": "4096",
+        "CLAB_MGMT_PASSTHROUGH": "true"
+      },
+      "interfaces": {
+        "linux_fmt": "eth{n-1}",
+        "vendor_fmt": "eth{n-1}",
+        "vendor_names": {
+          "1": "mgmt"
+        },
+        "count": 9
+      },
+      "resources": {
+        "cpu": {
+          "source": "env",
+          "key": "VCPU",
+          "type": "int"
+        },
+        "ram_mb": {
+          "source": "env",
+          "key": "RAM",
+          "type": "int",
+          "unit": "mb"
+        }
+      },
+      "label": "FLiNOS",
+      "vendor": "n4alab",
+      "type": "switch",
+      "deploy_kind": "generic_vm",
+      "image_patterns": [
+        "vrnetlab/n4alab_flinos"
+      ],
+      "mgmt_iface": "mgmt"
     },
     "linux": {
       "env": {

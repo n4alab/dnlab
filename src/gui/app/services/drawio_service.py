@@ -382,10 +382,13 @@ class DrawioService:
             count = 8
         linux_fmt = str(info.get("linux_fmt") or "eth{n}")
         vendor_fmt = str(info.get("vendor_fmt") or linux_fmt)
+        vendor_names = info.get("vendor_names")
+        if not isinstance(vendor_names, dict):
+            vendor_names = {}
         for n in range(1, max(0, count) + 1):
             i = n - 1
             if cls._fmt_iface(linux_fmt, n, i) == linux_name:
-                return cls._fmt_iface(vendor_fmt, n, i)
+                return str(vendor_names.get(str(n)) or cls._fmt_iface(vendor_fmt, n, i))
         return linux_name
 
     @staticmethod

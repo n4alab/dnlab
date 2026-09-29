@@ -16,6 +16,8 @@ RUN apt-get update \
         docker-cli \
         docker.io \
         git \
+        libguestfs-tools \
+        linux-image-amd64 \
         make \
         qemu-utils \
     && rm -rf /var/lib/apt/lists/*

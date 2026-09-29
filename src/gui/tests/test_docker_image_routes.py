@@ -21,6 +21,7 @@ def _remote(repository: str):
     [
         ("vrnetlab/juniper_apstra", "juniper_apstra"),
         ("vrnetlab/dnlab_opnsense", "dnlab_opnsense"),
+        ("vrnetlab/n4alab_flinos", "flinos"),
         ("vrnetlab/nvidia_cumulusvx", "nvidia_cumulusvx"),
         ("vrnetlab/dnlab_frr", "frr"),
     ],
@@ -35,6 +36,7 @@ def test_remote_image_exposes_gui_catalog_kind(repository, expected_kind):
     [
         ("vrnetlab/juniper_apstra", "juniper_apstra"),
         ("vrnetlab/dnlab_opnsense", "dnlab_opnsense"),
+        ("vrnetlab/n4alab_flinos", "flinos"),
         ("vrnetlab/nvidia_cumulusvx", "nvidia_cumulusvx"),
         ("vrnetlab/dnlab_frr", "frr"),
     ],

@@ -293,6 +293,12 @@ class Settings:
             "vendor_fmt": "eth{n}",
             "count": 8,
         },
+        "flinos": {
+            "linux_fmt": "eth{n-1}",
+            "vendor_fmt": "eth{n-1}",
+            "vendor_names": {"1": "mgmt"},
+            "count": 9,
+        },
     }
 
     # NOTA storica: qui viveva ``VRNETLAB_CONSOLE_PORT``, una mappa
