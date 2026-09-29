@@ -14,6 +14,7 @@ deprecation warning and honour it.
 
 from __future__ import annotations
 
+import hashlib
 import ipaddress
 import json
 import logging
@@ -264,6 +265,68 @@ def assign_sticky_mgmt_ipv4(
     return sticky
 
 
+def _identity_digest(lab: str, node: VDNode, purpose: str) -> bytes:
+    return hashlib.sha256(f"{lab}\0{node.persist_id or node.name}\0{purpose}".encode()).digest()
+
+
+def _valid_ipv6(value: str, network: ipaddress.IPv6Network) -> bool:
+    try:
+        return ipaddress.IPv6Address(value) in network
+    except ValueError:
+        return False
+
+
+def assign_sticky_mgmt_identities(
+    nodes: dict[str, VDNode], mgmt: MgmtConfig, *, lab_name: str,
+    ipv6_reservations: dict[str, str] | None = None,
+    mac_reservations: dict[str, str] | None = None,
+    duid_reservations: dict[str, str] | None = None,
+    iaid_reservations: dict[str, str] | None = None,
+) -> tuple[dict[str, str], dict[str, str], dict[str, str], dict[str, str]]:
+    """Assign stable IPv6, MAC and DHCPv6 identities for management."""
+    try:
+        network = ipaddress.IPv6Network(mgmt.ipv6_subnet, strict=False)
+    except ValueError as exc:
+        raise ConfigError(f"Invalid mgmt.ipv6-subnet {mgmt.ipv6_subnet!r}: {exc}") from exc
+    v6, macs = dict(ipv6_reservations or {}), dict(mac_reservations or {})
+    duids, iaids = dict(duid_reservations or {}), dict(iaid_reservations or {})
+    used6 = {ipaddress.IPv6Address(value) for value in v6.values() if _valid_ipv6(value, network)}
+    used6.add(ipaddress.IPv6Address(mgmt.ipv6_gw))
+    used_macs = set(macs.values())
+    for offset, name in enumerate(sorted(nodes), start=16):
+        node = nodes[name]
+        if node.mgmt_ipv6_explicit:
+            address = ipaddress.IPv6Address(node.mgmt_ipv6)
+            if address not in network or address == ipaddress.IPv6Address(mgmt.ipv6_gw):
+                raise ConfigError(f"node {name!r} has invalid or reserved mgmt-ipv6 {address}")
+            v6[name] = str(address)
+        elif _valid_ipv6(v6.get(name, ""), network):
+            node.mgmt_ipv6 = v6[name]
+        else:
+            address = ipaddress.IPv6Address(int(network.network_address) + offset)
+            while address in used6:
+                address = ipaddress.IPv6Address(int(address) + 1)
+            node.mgmt_ipv6, v6[name] = str(address), str(address)
+        used6.add(ipaddress.IPv6Address(v6[name]))
+        if node.mgmt_mac:
+            if not re.fullmatch(r"[0-9a-f]{2}(:[0-9a-f]{2}){5}", node.mgmt_mac):
+                raise ConfigError(f"node {name!r} has invalid mgmt-mac {node.mgmt_mac!r}")
+            macs[name] = node.mgmt_mac
+        elif name not in macs:
+            digest = _identity_digest(lab_name, node, "mac")
+            macs[name] = chr(58).join(["02"] + [f"{item:02x}" for item in digest[:5]])
+        if macs[name] in used_macs and node.mgmt_mac:
+            raise ConfigError(f"duplicate mgmt-mac {macs[name]} on node {name!r}")
+        used_macs.add(macs[name])
+        node.mgmt_mac = macs[name]
+        if name not in duids:
+            duids[name] = "00:04:" + chr(58).join(f"{item:02x}" for item in _identity_digest(lab_name, node, "duid")[:16])
+        if name not in iaids:
+            iaids[name] = _identity_digest(lab_name, node, "iaid")[:4].hex()
+        node.mgmt_duid, node.mgmt_iaid = duids[name], iaids[name]
+    return v6, macs, duids, iaids
+
+
 def parse_topology(
     path: str | Path,
     *,
@@ -360,6 +423,8 @@ def parse_topology(
             or ncfg.get("persist_id")
             or ""
         )
+        if "mgmt-addressing" in ncfg:
+            log.warning("Topology node %s: mgmt-addressing is ignored; DHCP is configured per management network", nname)
         nodes[nname] = VDNode(
             name=nname,
             kind=ncfg.get("kind", "linux"),
@@ -367,10 +432,13 @@ def parse_topology(
             persist_id=persist_id,
             mgmt_ipv4=ncfg.get("mgmt-ipv4", ""),
             mgmt_ipv4_explicit=bool(ncfg.get("mgmt-ipv4", "")),
+            mgmt_ipv6=ncfg.get("mgmt-ipv6", ""),
+            mgmt_ipv6_explicit=bool(ncfg.get("mgmt-ipv6", "")),
+            mgmt_mac=str(ncfg.get("mgmt-mac", "") or "").lower(),
             env=ncfg.get("env", {}),
             extra={k: v for k, v in ncfg.items()
                    if k not in (
-                       "kind", "image", "mgmt-ipv4", "env",
+                       "kind", "image", "mgmt-ipv4", "mgmt-ipv6", "mgmt-addressing", "mgmt-mac", "env",
                        "dnlab-persist-id", "persist_id",
                    )},
         )
@@ -438,6 +506,7 @@ def parse_topology(
         docker_ipv4_gw=docker_gw,
         ipv6_subnet=mgmt_subnet_v6,
         ipv6_gw=mgmt_gw_v6,
+        dhcp=bool(mgmt_cfg.get("dhcp", False)),
     )
 
     # ── Jumphost (per-lab image; network is shared infrastructure) ────

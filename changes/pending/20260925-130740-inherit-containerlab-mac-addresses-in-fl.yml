@@ -1,0 +1,16 @@
+id: 20260925-130740-inherit-containerlab-mac-addresses-in-fl
+type: bugfix
+title: Preserve reserved management MAC addresses in FLiNOS
+description: Use dNLab's reserved management MAC address for the FLiNOS guest DHCP
+  client while retaining runtime Containerlab MAC addresses for connected data interfaces.
+components:
+- image-build
+- multinode
+audience:
+- admin
+- operator
+- user
+visibility: public
+breaking: false
+upgrade_notes: []
+references: []

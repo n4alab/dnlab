@@ -166,6 +166,7 @@ def test_persist_bind_uses_stable_persist_id(topo_factory):
 
 def test_needs_persist_bind_uses_image_tag_suffix():
     assert _needs_persist_bind("vrnetlab/cisco_n9kv_v2:10.5-dnlab")
+    assert _needs_persist_bind("vrnetlab/n4alab_flinos:1.2.3-dnlab")
     assert _needs_persist_bind("quay.io/frrouting/frr:10.2.6-dnlab")
     assert _needs_persist_bind("vrnetlab/dnlab_frr:10.6.1")
     assert _needs_persist_bind("registry.example/dnlab_custom:latest")
@@ -202,6 +203,27 @@ def test_render_node_feature_persist_bool_file(topo_factory):
     assert files == {
         "/var/lib/docker/dnlab-backups/lab/stable-r1/frr/daemons": "bgpd=no\nospfd=yes\n",
     }
+
+
+def test_vm_guest_dhcp_flag_is_preserved_and_runtime_identity_is_stable(topo_factory):
+    node = VDNode(
+        name="R1", kind="linux", image="vrnetlab/example:latest",
+        mgmt_ipv4="172.20.0.11", mgmt_ipv6="2001:db8::11",
+        mgmt_mac="02:00:00:00:00:11", mgmt_duid="0001000112345678",
+        mgmt_iaid="305419896", env={"CLAB_MGMT_DHCP": "true"},
+    )
+    topo = topo_factory(nodes={"R1": node}, links=[], num_workers=0)
+    plan = _plan_single_host(topo, "master", ["R1"])
+
+    for enabled in (False, True):
+        topo.mgmt.dhcp = enabled
+        rendered = yaml.safe_load(generate_topology_files(topo, plan)["master"])
+        env = rendered["topology"]["nodes"]["R1"]["env"]
+        assert env["CLAB_MGMT_DHCP"] == "true"
+        assert env["CLAB_MGMT_PASSTHROUGH"] == "true"
+        assert env["CLAB_MGMT_MAC"] == "02:00:00:00:00:11"
+        assert env["CLAB_MGMT_DUID"] == "0001000112345678"
+        assert env["CLAB_MGMT_IAID"] == "305419896"
 
 
 def test_endpoints_flow_style_in_text(topo_factory):

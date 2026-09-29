@@ -184,6 +184,11 @@ class DeploymentState:
     # anche nodi rimossi dalla topology corrente finché lo state file vive,
     # così gli IP non vengono riciclati accidentalmente su deploy successivi.
     mgmt_ip_reservations: dict[str, str] = field(default_factory=dict)
+    # IPv6, L2 and DHCPv6 identities remain sticky for removed nodes too.
+    mgmt_ipv6_reservations: dict[str, str] = field(default_factory=dict)
+    mgmt_mac_reservations: dict[str, str] = field(default_factory=dict)
+    mgmt_duid_reservations: dict[str, str] = field(default_factory=dict)
+    mgmt_iaid_reservations: dict[str, str] = field(default_factory=dict)
     realnets: list[RealNetState] = field(default_factory=list)
     # Track completed phases for rollback
     phases_completed: list[str] = field(default_factory=list)
@@ -235,6 +240,10 @@ class DeploymentState:
         for node, allocs in (d.get("webui_allocations") or {}).items():
             state.webui_allocations[node] = [WebUIAllocation(**a) for a in allocs]
         state.mgmt_ip_reservations = dict(d.get("mgmt_ip_reservations") or {})
+        state.mgmt_ipv6_reservations = dict(d.get("mgmt_ipv6_reservations") or {})
+        state.mgmt_mac_reservations = dict(d.get("mgmt_mac_reservations") or {})
+        state.mgmt_duid_reservations = dict(d.get("mgmt_duid_reservations") or {})
+        state.mgmt_iaid_reservations = dict(d.get("mgmt_iaid_reservations") or {})
         for rn in d.get("realnets", []):
             rn = dict(rn)
             if "ospf" in rn and "bgp" not in rn:

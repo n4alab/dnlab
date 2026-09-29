@@ -13,7 +13,7 @@ from dnlab_multinode.services.images import image_for
 from dnlab_multinode.services.mgmt_ips import ipv4_reservations
 from dnlab_multinode.services.paths import PATHS, persist_dir_for, persist_dir_for_node
 from dnlab_multinode.utils import naming
-from dnlab_multinode.services import warm_links
+from dnlab_multinode.services import node_plugins, warm_links
 
 log = logging.getLogger(__name__)
 
@@ -25,7 +25,8 @@ PERSIST_DIR_ROOT = PATHS.persist_root
 __all__ = [
     "PERSIST_DIR_ROOT", "persist_dir_for", "persist_dir_for_node", "generate_topology_files",
     "generate_micro_topology_files", "generate_mgmt_anchor_topology_files",
-    "node_asset_path", "render_node_asset", "render_node_feature_files",
+    "node_asset_path", "render_node_asset", "render_node_override_files",
+    "render_node_feature_files",
 ]
 
 MGMT_ANCHOR_NODE = "mgmt-anchor"
@@ -56,24 +57,34 @@ def node_asset_path(topo_name: str, node_name: str, filename: str) -> str:
 
 
 def render_node_asset(state: dict, filename: str) -> str | None:
-    if filename != "vswitch.xml" or state.get("type") != "cat9kv_vswitch":
+    plugin = node_plugins.for_state(state)
+    if not plugin:
         return None
-    platform = str(state.get("platform") or "UADP").upper()
-    if platform not in {"UADP", "Q200"}:
-        platform = "UADP"
-    try:
-        port_count = int(state.get("port_count") or 24)
-    except (TypeError, ValueError):
-        port_count = 24
-    serial = re.sub(r"[^A-Za-z0-9]", "", str(state.get("serial_number") or "")).upper()[:12]
-    return (
-        "<vswitch>\n"
-        f"  <asic_type>{platform}</asic_type>\n"
-        f"  <port_count>{max(1, min(port_count, 256))}</port_count>\n"
-        f"  <serial_number>{serial}</serial_number>\n"
-        f"  <prod_serial_number>{serial}</prod_serial_number>\n"
-        "</vswitch>\n"
-    )
+    asset = plugin.render_assets(state).get(filename)
+    return asset[1] if asset else None
+
+
+def render_node_override_files(topo: DistributedTopology, node_name: str) -> dict[str, str]:
+    state = (topo.node_overrides or {}).get(node_name) or {}
+    plugin = node_plugins.for_state(state)
+    if not plugin:
+        return {}
+    return {
+        node_asset_path(topo.name, node_name, filename): content
+        for filename, (_target, content, _read_only) in plugin.render_assets(state).items()
+    }
+
+
+def _node_override_binds(topo: DistributedTopology, node_name: str) -> list[str]:
+    state = (topo.node_overrides or {}).get(node_name) or {}
+    plugin = node_plugins.for_state(state)
+    if not plugin:
+        return []
+    return [
+        f"{node_asset_path(topo.name, node_name, filename)}:{target}"
+        + (":ro" if read_only else "")
+        for filename, (target, _content, read_only) in plugin.render_assets(state).items()
+    ]
 
 
 def render_node_feature_files(topo: DistributedTopology, node_name: str) -> dict[str, str]:
@@ -302,6 +313,8 @@ def _build_node_dict(
     }
     if vd.mgmt_ipv4:
         node_dict["mgmt-ipv4"] = vd.mgmt_ipv4
+    if vd.mgmt_ipv6:
+        node_dict["mgmt-ipv6"] = vd.mgmt_ipv6
     if vd.env:
         node_dict["env"] = {
             key: value for key, value in vd.env.items()
@@ -310,6 +323,13 @@ def _build_node_dict(
                 warm_links.BASE_DIGEST_ENV,
             }
         }
+    # Enforce after catalog/user environment merge.
+    if vd.image.startswith("vrnetlab/"):
+        env = node_dict.setdefault("env", {})
+        env["CLAB_MGMT_PASSTHROUGH"] = "true"
+        env["CLAB_MGMT_MAC"] = vd.mgmt_mac
+        env["CLAB_MGMT_DUID"] = vd.mgmt_duid
+        env["CLAB_MGMT_IAID"] = vd.mgmt_iaid
     warm_capacity = warm_links.capacity_for_node(topo, vd_name)
     if warm_capacity:
         profile = warm_links.profile_for_node(vd)
@@ -328,13 +348,14 @@ def _build_node_dict(
         node_dict.update(extra_clean)
 
     override_state = (topo.node_overrides or {}).get(vd_name) or {}
-    if override_state.get("type") == "cat9kv_vswitch":
-        bind_spec = f"{node_asset_path(topo.name, vd_name, 'vswitch.xml')}:/vswitch.xml"
+    plugin = node_plugins.for_state(override_state)
+    if plugin:
+        managed_targets = set(plugin.managed_targets)
         existing = [
-            str(b) for b in list(node_dict.get("binds") or [])
-            if not str(b).endswith(":/vswitch.xml")
+            str(bind) for bind in list(node_dict.get("binds") or [])
+            if not any(f":{target}" in str(bind) for target in managed_targets)
         ]
-        existing.append(bind_spec)
+        existing.extend(_node_override_binds(topo, vd_name))
         node_dict["binds"] = existing
 
     node_allocs = (webui_allocations or {}).get(vd_name) or []

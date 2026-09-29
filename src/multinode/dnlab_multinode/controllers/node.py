@@ -23,7 +23,7 @@ from dnlab_multinode.services import (
     mgmt_network as mgmt_network_svc,
 )
 from dnlab_multinode.services.hostsfile import HostEntry
-from dnlab_multinode.services.config import assign_sticky_mgmt_ipv4, parse_topology
+from dnlab_multinode.services.config import assign_sticky_mgmt_identities, assign_sticky_mgmt_ipv4, parse_topology
 from dnlab_multinode.services.ssh import create_clients
 from dnlab_multinode.services.state import load_state, save_state
 from dnlab_multinode.utils import naming
@@ -224,6 +224,13 @@ class NodeLifecycleController:
         reservations = assign_sticky_mgmt_ipv4(
             self.topo.nodes, self.topo.mgmt, self.state.mgmt_ip_reservations,
         )
+        identities = assign_sticky_mgmt_identities(
+            self.topo.nodes, self.topo.mgmt, lab_name=self.topo.name,
+            ipv6_reservations=self.state.mgmt_ipv6_reservations,
+            mac_reservations=self.state.mgmt_mac_reservations,
+            duid_reservations=self.state.mgmt_duid_reservations,
+            iaid_reservations=self.state.mgmt_iaid_reservations,
+        )
         clients = create_clients(self.topo.all_hosts)
         self._set_active_clients(clients)
         runtime: NodeRuntimeState | None = None
@@ -289,6 +296,8 @@ class NodeLifecycleController:
             )
             self.state.node_runtime[node] = runtime
             self.state.mgmt_ip_reservations = reservations
+            (self.state.mgmt_ipv6_reservations, self.state.mgmt_mac_reservations,
+             self.state.mgmt_duid_reservations, self.state.mgmt_iaid_reservations) = identities
             self._update_scheduling(plan, underlay_ips)
             self._set_phase(runtime, "starting")
             self._check_cancelled()
@@ -301,10 +310,7 @@ class NodeLifecycleController:
             for path, content in generator.render_node_feature_files(self.topo, node).items():
                 client.run(f"mkdir -p '{Path(path).parent}'")
                 client.upload_text(content, path)
-            override = (self.topo.node_overrides or {}).get(node) or {}
-            asset = generator.render_node_asset(override, "vswitch.xml")
-            if asset is not None:
-                path = generator.node_asset_path(self.topo.name, node, "vswitch.xml")
+            for path, asset in generator.render_node_override_files(self.topo, node).items():
                 client.run(f"mkdir -p '{Path(path).parent}'")
                 client.upload_text(asset, path)
 
@@ -822,6 +828,10 @@ class NodeLifecycleController:
                     }
             jumphost_svc.refresh_jumphost_inventory(
                 self.topo.name, clients["master"], vd_map, relay_map,
+            )
+            jumphost_svc.refresh_dhcp_config(
+                self.topo, clients["master"], self.state.jumphost.container,
+                self.state.jumphost.resolver or None,
             )
 
     def _ensure_per_vd_runtime(self, runtime) -> None:

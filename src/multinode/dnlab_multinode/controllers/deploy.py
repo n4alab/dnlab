@@ -84,6 +84,10 @@ class DeployController:
         self._state.mgmt_ip_reservations = dict(
             topo.raw.get("dnlab_mgmt_ip_reservations") or {}
         )
+        self._state.mgmt_ipv6_reservations = dict(topo.raw.get("dnlab_mgmt_ipv6_reservations") or {})
+        self._state.mgmt_mac_reservations = dict(topo.raw.get("dnlab_mgmt_mac_reservations") or {})
+        self._state.mgmt_duid_reservations = dict(topo.raw.get("dnlab_mgmt_duid_reservations") or {})
+        self._state.mgmt_iaid_reservations = dict(topo.raw.get("dnlab_mgmt_iaid_reservations") or {})
 
         # Connect SSH
         self._clients = create_clients(topo.all_hosts)
@@ -105,20 +109,22 @@ class DeployController:
                         self._deploy_realnets, topo, plan)
             self._phase("persistence", "Preparing persistent overlays",
                         self._prepare_persistence, topo, plan)
+            self._phase("dns", "Starting centralized DNS",
+                        self._deploy_dns, topo, plan)
+            self._phase("jumphost", "Starting jump host",
+                        self._deploy_jumphost, topo, plan)
             self._phase("mgmt-anchor", "Deploying management anchors",
                         self._deploy_mgmt_anchors, topo, plan)
             self._phase("dnlab-deploy", "Deploying containerlab on each host",
                         self._deploy_clab, topo, plan)
             self._phase("health-check", "Checking VD container health",
                         self._health_check_vds, topo, plan)
+            self._phase("dns-refresh", "Refreshing DNS records",
+                        self._refresh_dns, topo)
             self._phase("runtime-links", "Reconciling runtime dataplane links",
                         self._deploy_runtime_links, topo, plan)
             self._phase("runtime-relay", "Starting runtime relays",
                         self._deploy_runtime_relays, topo, plan)
-            self._phase("dns", "Starting centralized DNS",
-                        self._deploy_dns, topo, plan)
-            self._phase("jumphost", "Starting jump host",
-                        self._deploy_jumphost, topo, plan)
             self._phase("vd-routes", "Setting VD default routes",
                         self._set_vd_default_routes, topo)
             self._phase("verify", "Verifying tunnels + DNS",
@@ -217,8 +223,6 @@ class DeployController:
         log.info("Phase 2: Setting up mgmt infrastructure")
         all_ips = self._underlay_ips
 
-        # Determine if DHCP is needed (any node without static mgmt IP)
-        needs_dhcp = any(not n.mgmt_ipv4 for n in topo.nodes.values())
 
         def _setup_host(host_name):
             client = self._clients[host_name]
@@ -235,9 +239,6 @@ class DeployController:
                 except Exception as e:
                     raise DeployError(f"[{host}] Mgmt setup failed: {e}")
 
-        # DHCP on master if needed
-        if needs_dhcp:
-            netsetup.setup_dhcp(topo, self._clients["master"], "master")
 
         self._state.mgmt = MgmtState(
             subnet=topo.mgmt.ipv4_subnet,
@@ -435,13 +436,40 @@ class DeployController:
                 client.upload_text(content, remote_path)
             log.info("[%s] Uploaded %d runtime asset file(s)", host_name, len(assets))
 
+        # Register every deploy target before issuing the first containerlab
+        # command.  ``containerlab deploy`` can create a container and then
+        # fail (for example when its entrypoint exits).  These entries let the
+        # outer rollback destroy that partial topology, including targets on
+        # other workers whose futures have not been collected yet.
+        active_hosts = {
+            host_name: host_files
+            for host_name, host_files in topo_files.items()
+            if host_files
+        }
+        for host_name, host_files in active_hosts.items():
+            for vd_name in host_files:
+                vd = topo.nodes[vd_name]
+                self._state.node_runtime[vd_name] = NodeRuntimeState(
+                    node=vd_name,
+                    state="starting",
+                    host=host_name,
+                    container=micro_vd_container_name(topo.name, vd_name),
+                    topology_file=naming.micro_topology_file(topo.name, vd_name, host_name),
+                    kind=vd.kind,
+                    image=vd.image,
+                    mgmt_ipv4=vd.mgmt_ipv4,
+                    warm_ports=warm_links_svc.capacity_for_node(topo, vd_name),
+                    hot_links_status=warm_links_svc.status_for_node(vd),
+                )
+        if "dnlab" not in self._state.phases_completed:
+            self._state.phases_completed.append("dnlab")
+
         # Upload and deploy every VD micro-topology. Deploys are
         # sequential per Docker daemon because all micro-topologies on a
         # host share the same management network; concurrent clab deploys
         # race while creating that network. Hosts still run in parallel.
         def _deploy_host(host_name, host_files):
             client = self._clients[host_name]
-            deployed = []
             for vd_name, yaml_content in host_files.items():
                 remote_path = naming.micro_topology_file(topo.name, vd_name, host_name)
 
@@ -456,27 +484,8 @@ class DeployController:
                         f"{vd_name} ({remote_path}): {e}"
                     ) from e
                 log.info("[%s] containerlab deploy OK for %s", host_name, vd_name)
+            return host_name
 
-                vd = topo.nodes[vd_name]
-                deployed.append(NodeRuntimeState(
-                    node=vd_name,
-                    state="starting",
-                    host=host_name,
-                    container=micro_vd_container_name(topo.name, vd_name),
-                    topology_file=remote_path,
-                    kind=vd.kind,
-                    image=vd.image,
-                    mgmt_ipv4=vd.mgmt_ipv4,
-                    warm_ports=warm_links_svc.capacity_for_node(topo, vd_name),
-                    hot_links_status=warm_links_svc.status_for_node(vd),
-                ))
-            return host_name, deployed
-
-        active_hosts = {
-            host_name: host_files
-            for host_name, host_files in topo_files.items()
-            if host_files
-        }
         with ThreadPoolExecutor(max_workers=max(1, len(active_hosts))) as pool:
             futures = {
                 pool.submit(_deploy_host, host_name, host_files): host_name

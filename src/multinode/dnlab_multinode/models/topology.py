@@ -15,6 +15,11 @@ class VDNode:
     image: str
     mgmt_ipv4: str = ""
     mgmt_ipv4_explicit: bool = False
+    mgmt_ipv6: str = ""
+    mgmt_ipv6_explicit: bool = False
+    mgmt_mac: str = ""
+    mgmt_duid: str = ""
+    mgmt_iaid: str = ""
     env: dict[str, str] = field(default_factory=dict)
     extra: dict = field(default_factory=dict)
     persist_id: str = ""
@@ -81,6 +86,7 @@ class MgmtConfig:
     docker_ipv4_gw: str = ""  # technical Docker/bridge gateway
     ipv6_subnet: str = ""
     ipv6_gw: str = ""
+    dhcp: bool = False
 
 
 @dataclass

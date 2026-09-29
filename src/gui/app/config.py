@@ -276,6 +276,7 @@ class Settings:
         "ext-container":         "linux",
         "host":                  "linux",
         "generic_vm":            "generic",
+        "flinos":                "n4alab",
     }
 
     # Fallback minimale for l'endpoint /api/docker/interfaces quando il catalogo
