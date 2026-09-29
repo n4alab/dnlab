@@ -710,7 +710,7 @@ def _disabled_code(reason: str) -> str:
 
 def _mgmt_linux_iface_for_kind(kind: str) -> str:
     entry = device_catalog.kind_entry(kind)
-    catalog = _raw_catalog()
+    catalog = device_catalog.catalog()
     defaults = catalog.get("defaults") if isinstance(catalog, dict) else {}
     mgmt = entry.get("mgmt_iface") if "mgmt_iface" in entry else (defaults or {}).get("mgmt_iface", "eth0")
     if not mgmt:
@@ -720,12 +720,15 @@ def _mgmt_linux_iface_for_kind(kind: str) -> str:
         return str(mgmt)
     linux_fmt = str(interfaces.get("linux_fmt") or "eth{n}")
     vendor_fmt = str(interfaces.get("vendor_fmt") or linux_fmt)
+    vendor_names = interfaces.get("vendor_names")
+    if not isinstance(vendor_names, dict):
+        vendor_names = {}
     count = int(interfaces.get("count") or 8)
     mgmt_norm = _norm_iface(str(mgmt))
     for n in range(1, count + 1):
         i = n - 1
         linux = _fmt_iface(linux_fmt, n, i)
-        vendor = _fmt_iface(vendor_fmt, n, i)
+        vendor = str(vendor_names.get(str(n)) or _fmt_iface(vendor_fmt, n, i))
         if _norm_iface(linux) == mgmt_norm or _norm_iface(vendor) == mgmt_norm:
             return linux
     return str(mgmt)
@@ -745,10 +748,13 @@ def _display_iface(kind: str, linux_name: str) -> str:
         count = 8
     linux_fmt = str(info.get("linux_fmt") or "eth{n}")
     vendor_fmt = str(info.get("vendor_fmt") or linux_fmt)
+    vendor_names = info.get("vendor_names")
+    if not isinstance(vendor_names, dict):
+        vendor_names = {}
     for n in range(1, max(0, count) + 1):
         i = n - 1
         if _fmt_iface(linux_fmt, n, i) == linux_name:
-            return _fmt_iface(vendor_fmt, n, i)
+            return str(vendor_names.get(str(n)) or _fmt_iface(vendor_fmt, n, i))
     return linux_name
 
 
@@ -766,17 +772,6 @@ def _interface_info_for_kind(kind: str | None) -> dict[str, Any] | None:
         return info
     fallback = interface_map.get("linux")
     return fallback if isinstance(fallback, dict) else None
-
-
-def _raw_catalog() -> dict[str, Any]:
-    path = settings.STATIC_DIR / "config" / "devices.json"
-    try:
-        import json
-
-        data = json.loads(path.read_text())
-        return data if isinstance(data, dict) else {}
-    except Exception:
-        return {}
 
 
 def _fmt_iface(fmt: str, n: int, i: int) -> str:

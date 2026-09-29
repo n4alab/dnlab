@@ -212,8 +212,9 @@ Important settings:
 - `DNLAB_PROXY_SERVER_NAME`: public GUI hostname; also drives Apache wildcard aliases and the GUI Web UI suffix.
 - `DNLABGUI_ALLOWED_ORIGINS`: browser-facing origin for CORS and WebSocket
   origin checks.
-- `DNLAB_TOPOLOGIES_DIR`, `DNLAB_PERSIST_ROOT`, `DNLAB_LOG_ROOT`,
-  `DNLAB_IMAGE_BUILD_WORKSPACE`: host-side storage and log directories.
+- `DNLAB_TOPOLOGIES_DIR`, `DNLAB_PERSIST_ROOT`, `DNLAB_DEVICE_CATALOG_DIR`,
+  `DNLAB_LOG_ROOT`, `DNLAB_IMAGE_BUILD_WORKSPACE`: host-side storage and log
+  directories.
 
 Do not keep real bootstrap admin passwords in `.env`; export them only for the
 single seed command.
@@ -561,6 +562,14 @@ catalog metadata from the Admin area.
 The device catalog controls how the GUI displays device kinds, recognizes
 Docker images, chooses icons, maps GUI kinds to Containerlab kinds, injects
 defaults and exposes known Web UI metadata.
+
+When an administrator saves the catalog, dNLab stores the complete effective
+catalog under `${DNLAB_DEVICE_CATALOG_DIR:-/var/lib/dnlab-device-catalog}` on
+the Docker host instead of changing the image asset. On a later image upgrade,
+dNLab merges release additions into that saved catalog; if both sides changed
+the same value, the administrator's value is retained and the conflict is
+logged. Delete this directory only when intentionally resetting all catalog
+customizations.
 
 ![Device catalog admin](images/admin-device-catalog.png)
 

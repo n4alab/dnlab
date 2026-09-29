@@ -50,6 +50,7 @@ from app.services.admin_config import (
 )
 from app.services.admin_config.base import ConfigParseError, read_text_or_default
 from app.services import realnet_bgp
+from app.services import device_catalog
 from app.services.paths import DEFAULT_PATHS_FILE, PATHS
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -124,7 +125,7 @@ def _hosts_file() -> Path:
 
 
 def _devices_file() -> Path:
-    return settings.STATIC_DIR / "config" / "devices.json"
+    return device_catalog.active_path()
 
 
 def _image_build_dir() -> Path:
@@ -165,7 +166,9 @@ async def read_config_file(
     _admin: Annotated[User, Depends(require_role(Role.admin))],
 ) -> ConfigFileOut:
     path = _config_path(key)
-    content = path.read_text(encoding="utf-8") if path.exists() else _default_content(key)
+    content = device_catalog.catalog_json() if key == "devices" else (
+        path.read_text(encoding="utf-8") if path.exists() else _default_content(key)
+    )
     parsed = _parse_config(key, content)
     return ConfigFileOut(
         key=key,
@@ -182,7 +185,10 @@ async def read_config_model(
     _admin: Annotated[User, Depends(require_role(Role.admin))],
 ):
     path = _config_path(key)
-    content, exists = read_text_or_default(path, _default_content(key))
+    if key == "devices":
+        content, exists = device_catalog.catalog_json(), path.exists()
+    else:
+        content, exists = read_text_or_default(path, _default_content(key))
     try:
         return _parse_config_model(key, content, path, exists)
     except ConfigParseError as exc:
@@ -207,12 +213,11 @@ async def write_config_model(
         raise HTTPException(422, f"{key} validation failed: {exc}") from exc
 
     try:
-        backup = _atomic_write(path, content)
+        backup = device_catalog.write_custom(content) if key == "devices" else _atomic_write(path, content)
     except OSError as exc:
         raise HTTPException(500, f"cannot write {path}: {exc}") from exc
     if key == "devices":
-        from app.services import device_catalog
-        device_catalog.reload()
+        path = device_catalog.active_path()
 
     await audit.record(
         db,

@@ -3,7 +3,7 @@
 import asyncio
 import logging
 import logging.handlers
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -111,11 +111,23 @@ def create_app() -> FastAPI:
     application.include_router(webui_router)
     install_openapi_docs(application)
 
+    @application.get("/config/devices.json", include_in_schema=False)
+    async def active_device_catalog() -> Response:
+        """Serve the merged catalog instead of the immutable static asset."""
+        from app.services import device_catalog
+        return Response(
+            content=device_catalog.catalog_json(),
+            media_type="application/json",
+            headers={"Cache-Control": "no-store"},
+        )
+
     @application.on_event("startup")
     async def _on_startup() -> None:
         # EventsBus.publish() is thread-safe only after it knows the
         # owning loop. Orchestrator callbacks run on worker threads.
         loop = asyncio.get_running_loop()
+        from app.services import device_catalog
+        device_catalog.initialize()
         bus.bind_loop(loop)
         from app.services.shutdown_registry import shutdown_registry
         shutdown_registry.bind_loop(loop)

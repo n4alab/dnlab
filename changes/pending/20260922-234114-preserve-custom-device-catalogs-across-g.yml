@@ -1,0 +1,14 @@
+id: 20260922-234114-preserve-custom-device-catalogs-across-g
+type: bugfix
+title: Preserve custom device catalogs across GUI rebuilds
+description: Store administrator-managed device catalogs on the Docker host and merge
+  release catalog updates without overwriting local customizations.
+components:
+- distribution
+- gui
+audience:
+- admin
+visibility: public
+breaking: false
+upgrade_notes: []
+references: []

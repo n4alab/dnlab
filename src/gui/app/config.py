@@ -54,6 +54,11 @@ class Settings:
 
     TOPOLOGIES_DIR: Path = Path(os.getenv("TOPOLOGIES_DIR", PATHS.topologies_dir))
     STATIC_DIR: Path = Path(__file__).parent / "views" / "static"
+    # Writable host-mounted state for the administrator-managed device catalog.
+    # The built-in catalog remains part of the immutable application image.
+    DEVICE_CATALOG_DIR: Path = Path(os.getenv(
+        "DNLAB_DEVICE_CATALOG_DIR", "/var/lib/dnlab-device-catalog",
+    ))
 
     # ── Multinode backend (dnlab-multinode) ──────────────────────────
     # Path to the site-wide host inventory. If unset here, the

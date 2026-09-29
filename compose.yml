@@ -52,10 +52,12 @@ services:
       DNLABGUI_ALLOWED_ORIGINS: ${DNLABGUI_ALLOWED_ORIGINS:-https://${DNLAB_PROXY_SERVER_NAME:?set DNLAB_PROXY_SERVER_NAME}}
       DNLABGUI_WEBUI_HOST_SUFFIX: ${DNLAB_PROXY_SERVER_NAME:?set DNLAB_PROXY_SERVER_NAME}
       DNLABGUI_AUTH_DATABASE_URL: ${DNLABGUI_AUTH_DATABASE_URL:-postgresql+asyncpg://${POSTGRES_USER:-dnlab_gui}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@auth-db:5432/${POSTGRES_DB:-dnlab_auth}}
+      DNLAB_DEVICE_CATALOG_DIR: /var/lib/dnlab-device-catalog
     volumes:
       - ${DNLAB_CONFIG_DIR:-/etc/dnlab}:/etc/dnlab:ro
       - ${DNLAB_TOPOLOGIES_DIR:-/root/dnlab-topologies}:${DNLAB_TOPOLOGIES_DIR:-/root/dnlab-topologies}
       - ${DNLAB_PERSIST_ROOT:-/var/lib/docker/dnlab-backups}:${DNLAB_PERSIST_ROOT:-/var/lib/docker/dnlab-backups}
+      - ${DNLAB_DEVICE_CATALOG_DIR:-/var/lib/dnlab-device-catalog}:/var/lib/dnlab-device-catalog
       - ${DNLAB_LOG_ROOT:-/var/log/dnlab}:/var/log/dnlab
       - ${DNLAB_SSH_DIR:-/root/.ssh}:/root/.ssh:ro
     # Reach the per-lab jumphosts' SSH ports published on the master host

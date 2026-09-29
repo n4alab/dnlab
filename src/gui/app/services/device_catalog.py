@@ -3,33 +3,175 @@
 from __future__ import annotations
 
 import json
+import logging
+import os
+import shutil
+from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from app.config import settings
 
 
-_CATALOG_CACHE: tuple[float | None, dict[str, Any]] | None = None
+_CATALOG_CACHE: tuple[tuple[float | None, float | None], dict[str, Any]] | None = None
+_MISSING = object()
+log = logging.getLogger(__name__)
+
+
+def builtin_path() -> Path:
+    return settings.STATIC_DIR / "config" / "devices.json"
+
+
+def custom_path() -> Path:
+    return settings.DEVICE_CATALOG_DIR / "devices.custom.json"
+
+
+def baseline_path() -> Path:
+    return settings.DEVICE_CATALOG_DIR / "devices.base.json"
+
+
+def active_path() -> Path:
+    """Path displayed to administrators for the currently active catalog."""
+    return custom_path() if custom_path().exists() else builtin_path()
+
+
+def _mtime(path: Path) -> float | None:
+    try:
+        return path.stat().st_mtime
+    except OSError:
+        return None
+
+
+def _read_json(path: Path) -> dict[str, Any]:
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError("catalog must be a JSON object")
+    return data
+
+
+def _validate(data: dict[str, Any], path: Path) -> None:
+    # Keep the runtime catalog subject to the same structural validation as the
+    # Admin editor, including references from kinds to vendors and icon types.
+    from app.services.admin_config.devices_parser import parse_devices_config
+
+    parse_devices_config(json.dumps(data), path, True)
 
 
 def _catalog() -> dict[str, Any]:
-    path = settings.STATIC_DIR / "config" / "devices.json"
-    try:
-        mtime = path.stat().st_mtime
-    except OSError:
-        mtime = None
+    stamp = (_mtime(builtin_path()), _mtime(custom_path()))
 
     global _CATALOG_CACHE
-    if _CATALOG_CACHE and _CATALOG_CACHE[0] == mtime:
+    if _CATALOG_CACHE and _CATALOG_CACHE[0] == stamp:
         return _CATALOG_CACHE[1]
 
     try:
-        data = json.loads(path.read_text())
+        path = custom_path() if custom_path().exists() else builtin_path()
+        data = _read_json(path)
+        _validate(data, path)
     except Exception:
-        data = {"kinds": {}, "defaults": {}}
+        # A manually damaged persistent file must not take down the browser
+        # catalog while the process is running; retain the immutable fallback.
+        try:
+            data = _read_json(builtin_path())
+            _validate(data, builtin_path())
+        except Exception:
+            data = {"kinds": {}, "defaults": {}}
     if not isinstance(data, dict):
         data = {"kinds": {}, "defaults": {}}
-    _CATALOG_CACHE = (mtime, data)
+    _CATALOG_CACHE = (stamp, data)
     return data
+
+
+def catalog_json() -> str:
+    """Return the active catalog for the browser-facing config endpoint."""
+    return json.dumps(_catalog(), indent=2, ensure_ascii=False) + "\n"
+
+
+def catalog() -> dict[str, Any]:
+    """Return the active parsed catalog for backend consumers."""
+    return _catalog()
+
+
+def _merge(base: Any, custom: Any, builtin: Any, path: str = "$") -> Any:
+    """Three-way JSON merge where local administrator changes win conflicts."""
+    if custom == base:
+        return builtin
+    if builtin == base or custom == builtin:
+        return custom
+    if isinstance(base, dict) and isinstance(custom, dict) and isinstance(builtin, dict):
+        merged: dict[str, Any] = {}
+        for key in base.keys() | custom.keys() | builtin.keys():
+            value = _merge(
+                base.get(key, _MISSING), custom.get(key, _MISSING),
+                builtin.get(key, _MISSING), f"{path}.{key}",
+            )
+            if value is not _MISSING:
+                merged[key] = value
+        return merged
+    log.warning("Device catalog upgrade conflict at %s; keeping administrator value", path)
+    return custom
+
+
+def _atomic_write(path: Path, content: str, *, backup: bool = False) -> Path | None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    saved_backup = None
+    if backup and path.exists():
+        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        saved_backup = path.with_name(f"{path.name}.{stamp}.bak")
+        shutil.copy2(path, saved_backup)
+    tmp = path.with_name(f".{path.name}.tmp-{os.getpid()}")
+    tmp.write_text(content, encoding="utf-8")
+    os.replace(tmp, path)
+    return saved_backup
+
+
+def initialize() -> None:
+    """Merge a saved full catalog with a newer built-in catalog at startup."""
+    custom = custom_path()
+    base = baseline_path()
+    if not custom.exists():
+        reload()
+        return
+    try:
+        saved = _read_json(custom)
+        _validate(saved, custom)
+        if not base.exists():
+            # A manually restored catalog has no trustworthy common ancestor.
+            # Never attempt a lossy merge; preserve it and establish a baseline
+            # for the next image upgrade.
+            _atomic_write(base, builtin_path().read_text(encoding="utf-8"))
+            log.warning("Device catalog baseline missing; preserved %s without upgrade merge", custom)
+            reload()
+            return
+        previous_builtin = _read_json(base)
+        current_builtin = _read_json(builtin_path())
+        _validate(previous_builtin, base)
+        _validate(current_builtin, builtin_path())
+        merged = _merge(previous_builtin, saved, current_builtin)
+        _validate(merged, custom)
+        if merged != saved:
+            _atomic_write(custom, json.dumps(merged, indent=2, ensure_ascii=False) + "\n")
+        if previous_builtin != current_builtin:
+            _atomic_write(base, json.dumps(current_builtin, indent=2, ensure_ascii=False) + "\n")
+        reload()
+    except Exception as exc:
+        # Availability beats a broken user file: the immutable catalog remains
+        # usable and no local data is changed until an admin repairs it.
+        log.exception("Persistent device catalog is invalid; using built-in catalog: %s", exc)
+        global _CATALOG_CACHE
+        _CATALOG_CACHE = ((_mtime(builtin_path()), _mtime(custom_path())), _read_json(builtin_path()))
+
+
+def write_custom(content: str) -> Path | None:
+    """Persist a validated complete admin catalog and refresh its baseline."""
+    data = json.loads(content)
+    if not isinstance(data, dict):
+        raise ValueError("catalog must be a JSON object")
+    _validate(data, custom_path())
+    backup = _atomic_write(custom_path(), json.dumps(data, indent=2, ensure_ascii=False) + "\n", backup=True)
+    _atomic_write(baseline_path(), builtin_path().read_text(encoding="utf-8"))
+    reload()
+    return backup
 
 
 def kind_entry(kind: str | None) -> dict[str, Any]:
