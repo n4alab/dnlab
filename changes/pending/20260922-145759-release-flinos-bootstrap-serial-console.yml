@@ -1,0 +1,16 @@
+id: 20260922-145759-release-flinos-bootstrap-serial-console
+type: bugfix
+title: Release FLiNOS bootstrap serial console for runtime relay
+description: Close the vrnetlab bootstrap serial probe after FLiNOS starts so the
+  runtime relay can attach the one-client QEMU serial console.
+components:
+- image-build
+- multinode
+audience:
+- admin
+- operator
+- user
+visibility: public
+breaking: false
+upgrade_notes: []
+references: []

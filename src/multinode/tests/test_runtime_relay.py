@@ -260,6 +260,7 @@ def test_destroy_runtime_relays_removes_sidecar_on_each_host():
 
 def test_connect_cmd_returns_serial_port(monkeypatch):
     monkeypatch.setattr(relay_daemon, "_discover_console_port", lambda _container: "5003")
+    monkeypatch.setattr(relay_daemon, "_serial_console_ready", lambda _container: True)
 
     cmd, port = relay_daemon._connect_cmd("container1")
 
@@ -267,6 +268,38 @@ def test_connect_cmd_returns_serial_port(monkeypatch):
     assert cmd == [
         "docker", "exec", "-it", "container1", "telnet", "127.0.0.1", "5003",
     ]
+
+
+@pytest.mark.parametrize(
+    "returncode, output, expected",
+    [
+        (0, "0 running\n", True),
+        (0, "0 running-degraded: breakout reconciliation failed\n", True),
+        (0, "1 starting\n", False),
+        (1, "", None),
+    ],
+)
+def test_serial_console_readiness_uses_vrnetlab_health(
+    monkeypatch, returncode, output, expected,
+):
+    monkeypatch.setattr(
+        relay_daemon.subprocess,
+        "run",
+        lambda *_args, **_kwargs: MagicMock(
+            returncode=returncode,
+            stdout=output,
+        ),
+    )
+
+    assert relay_daemon._serial_console_ready("container1") is expected
+
+
+@pytest.mark.parametrize("ready", [False, None])
+def test_connect_cmd_waits_for_launcher_to_release_serial(monkeypatch, ready):
+    monkeypatch.setattr(relay_daemon, "_discover_console_port", lambda _container: "5003")
+    monkeypatch.setattr(relay_daemon, "_serial_console_ready", lambda _container: ready)
+
+    assert relay_daemon._connect_cmd("container1") is None
 
 
 def test_console_discovery_prefers_launcher_declared_port(monkeypatch):

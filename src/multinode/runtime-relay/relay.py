@@ -454,9 +454,28 @@ def _serial_console_expected(container: str) -> bool | None:
     return None
 
 
+def _serial_console_ready(container: str) -> bool | None:
+    """Return explicit vrnetlab readiness; ``None`` means not published yet."""
+    proc = subprocess.run(
+        ["docker", "exec", container, "cat", "/health"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+        timeout=5,
+        check=False,
+    )
+    if proc.returncode != 0:
+        return None
+    status, _, message = proc.stdout.strip().partition(" ")
+    return status == "0" and message.startswith("running")
+
+
 def _connect_cmd(container: str) -> tuple[list[str], str | None] | None:
     port = _discover_console_port(container)
     if port:
+        console_ready = _serial_console_ready(container)
+        if console_ready is not True:
+            return None
         return (
             ["docker", "exec", "-it", container, "telnet", "127.0.0.1", port],
             port,
