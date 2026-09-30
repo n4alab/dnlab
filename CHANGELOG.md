@@ -6,6 +6,79 @@ This changelog is generated from the structured release sources in
 `docs/releases/`. Internal bug-tracking references stay in the private
 operational repository and are not published here.
 
+## 0.2.5 - 2026-09-30
+
+Feature release for Flinos, dual-stack management DHCP, Cumulus VX breakout
+support, and the n4alab namespace migration.
+
+### Added
+
+- Add Cumulus VX breakout ports and platform readiness: Preserve 32 flat Cumulus
+  VX ports while allocating additive breakout lanes, expose breakout
+  configuration and lane selection in the GUI, prevent a warm-link monitor race
+  from leaving QEMU paused, wait for switchd and nvued before readiness through
+  a lab-only control account, leave the factory cumulus account unchanged,
+  reconcile lane names while switchd is stopped, gate the interactive console
+  until vrnetlab releases the serial line, preallocate 64 data NICs with a
+  bounded virtio MSI-X vector profile, and align the image to the enhanced CPU
+  and 4 GiB RAM profile.
+- Add global dual-stack DHCP for management networks: Add the optional mgmt.dhcp
+  service, with jumphost-hosted DHCPv4, IPv6 router advertisements and DHCPv6
+  reservations. Stable reservations preserve management addresses across
+  topology changes while guests may keep static addressing.
+
+### New Virtual Devices
+
+- Add Flinos virtual device: Add the N4ALab Flinos switch appliance to the GUI
+  catalog and image-build workflow with vrnetlab/KVM packaging, Python 3.13
+  telnetlib and console client compatibility, and dNLab overlay persistence
+  support.
+
+### Changed
+
+- Migrate the public GitHub namespace: The canonical dNLab repositories and GHCR
+  images now use the n4alab namespace, and release workflows derive their
+  publishing owner from the GitHub repository context.
+
+### Fixed
+
+- Clean partial per-VD deploy containers immediately: Register every per-VD
+  Containerlab topology before deployment so rollback removes containers created
+  by a failed deploy without waiting for the lab-cleanup grace window.
+- Keep MikroTik RouterOS patch compatible with CHR login prompts: Updated the
+  MikroTik RouterOS image patcher to support current vrnetlab launchers that
+  include the CHR Login prompt while preserving persistent overlay reuse
+  behavior.
+- Preserve custom device catalogs across GUI rebuilds: Store
+  administrator-managed device catalogs on the Docker host and merge release
+  catalog updates without overwriting local customizations.
+- Preserve reserved management MAC addresses in FLiNOS: Use dNLab's reserved
+  management MAC address for the FLiNOS guest DHCP client while retaining
+  runtime Containerlab MAC addresses for connected data interfaces.
+- Release FLiNOS bootstrap serial console for runtime relay: Close the vrnetlab
+  bootstrap serial probe after FLiNOS starts so the runtime relay can attach the
+  one-client QEMU serial console.
+
+### Breaking Changes
+
+- Migrate the public GitHub namespace: The canonical dNLab repositories and GHCR
+  images now use the n4alab namespace, and release workflows derive their
+  publishing owner from the GitHub repository context.
+
+### Upgrade Notes
+
+- Replace ghcr.io/scaci image prefixes with ghcr.io/n4alab in deployment
+  environment files, registry mirrors and automation.
+
+### Artifacts
+
+- Source archives: *-0.2.5-source.tar.gz (GitHub Release)
+- Source checksums: SHA256SUMS (GitHub Release)
+- Proxmox LXC template: dnlab-lxc-proxmox-0.2.5-amd64.tar.zst (GHCR and GitHub
+  Release mirror)
+- Proxmox LXC release notes: LXC-RELEASE-NOTES-0.2.5.md (GHCR and GitHub Release
+  mirror)
+
 ## 0.2.0 - 2026-07-29
 
 Feature release for live topology changes, overlapping management subnets,

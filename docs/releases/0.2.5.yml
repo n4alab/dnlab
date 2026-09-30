@@ -1,0 +1,150 @@
+version: 0.2.5
+date: '2026-09-30'
+tag: v0.2.5
+summary: Feature release for Flinos, dual-stack management DHCP, Cumulus VX breakout
+  support, and the n4alab namespace migration.
+entries:
+- category: Added
+  title: Add Cumulus VX breakout ports and platform readiness
+  body: Preserve 32 flat Cumulus VX ports while allocating additive breakout lanes,
+    expose breakout configuration and lane selection in the GUI, prevent a warm-link
+    monitor race from leaving QEMU paused, wait for switchd and nvued before readiness
+    through a lab-only control account, leave the factory cumulus account unchanged,
+    reconcile lane names while switchd is stopped, gate the interactive console until
+    vrnetlab releases the serial line, preallocate 64 data NICs with a bounded virtio
+    MSI-X vector profile, and align the image to the enhanced CPU and 4 GiB RAM profile.
+  change_id: 20260925-150221-add-cumulus-vx-breakout-ports-and-platfo
+  components:
+  - gui
+  - image-build
+  - multinode
+  audience:
+  - user
+- category: Added
+  title: Add global dual-stack DHCP for management networks
+  body: Add the optional mgmt.dhcp service, with jumphost-hosted DHCPv4, IPv6 router
+    advertisements and DHCPv6 reservations. Stable reservations preserve management
+    addresses across topology changes while guests may keep static addressing.
+  change_id: 20260925-094947-add-dual-stack-management-dhcp-reservati
+  components:
+  - gui
+  - multinode
+  audience:
+  - operator
+- category: New Virtual Devices
+  title: Add Flinos virtual device
+  body: Add the N4ALab Flinos switch appliance to the GUI catalog and image-build
+    workflow with vrnetlab/KVM packaging, Python 3.13 telnetlib and console client
+    compatibility, and dNLab overlay persistence support.
+  change_id: 20260906-flinos-vd
+  components:
+  - gui
+  - image-build
+  audience:
+  - admin
+  - user
+  vd:
+    vendor: N4ALab
+    platform: Flinos
+- category: Changed
+  title: Migrate the public GitHub namespace
+  body: The canonical dNLab repositories and GHCR images now use the n4alab namespace,
+    and release workflows derive their publishing owner from the GitHub repository
+    context.
+  change_id: 20260901-n4alab-namespace
+  components:
+  - distribution
+  - release
+  audience:
+  - user
+  - admin
+  - developer
+- category: Fixed
+  title: Clean partial per-VD deploy containers immediately
+  body: Register every per-VD Containerlab topology before deployment so rollback
+    removes containers created by a failed deploy without waiting for the lab-cleanup
+    grace window.
+  change_id: 20260922-135834-clean-partial-per-vd-deploy-containers-i
+  components:
+  - cleanup
+  - multinode
+  audience:
+  - admin
+  - operator
+  - user
+- category: Fixed
+  title: Keep MikroTik RouterOS patch compatible with CHR login prompts
+  body: Updated the MikroTik RouterOS image patcher to support current vrnetlab launchers
+    that include the CHR Login prompt while preserving persistent overlay reuse behavior.
+  change_id: 20260907-224219-keep-mikrotik-routeros-patch-compatible
+  components:
+  - image-build
+  audience:
+  - operator
+- category: Fixed
+  title: Preserve custom device catalogs across GUI rebuilds
+  body: Store administrator-managed device catalogs on the Docker host and merge release
+    catalog updates without overwriting local customizations.
+  change_id: 20260922-234114-preserve-custom-device-catalogs-across-g
+  components:
+  - distribution
+  - gui
+  audience:
+  - admin
+- category: Fixed
+  title: Preserve reserved management MAC addresses in FLiNOS
+  body: Use dNLab's reserved management MAC address for the FLiNOS guest DHCP client
+    while retaining runtime Containerlab MAC addresses for connected data interfaces.
+  change_id: 20260925-130740-inherit-containerlab-mac-addresses-in-fl
+  components:
+  - image-build
+  - multinode
+  audience:
+  - admin
+  - operator
+  - user
+- category: Fixed
+  title: Release FLiNOS bootstrap serial console for runtime relay
+  body: Close the vrnetlab bootstrap serial probe after FLiNOS starts so the runtime
+    relay can attach the one-client QEMU serial console.
+  change_id: 20260922-145759-release-flinos-bootstrap-serial-console
+  components:
+  - image-build
+  - multinode
+  audience:
+  - admin
+  - operator
+  - user
+breaking_changes:
+- title: Migrate the public GitHub namespace
+  body: The canonical dNLab repositories and GHCR images now use the n4alab namespace,
+    and release workflows derive their publishing owner from the GitHub repository
+    context.
+upgrade_notes:
+- Replace ghcr.io/scaci image prefixes with ghcr.io/n4alab in deployment environment
+  files, registry mirrors and automation.
+artifacts:
+- name: Source archives
+  type: github-release
+  path: '*-0.2.5-source.tar.gz'
+  channel: GitHub Release
+  notes: Corresponding source archives for the published GHCR images.
+- name: Source checksums
+  type: github-release
+  path: SHA256SUMS
+  channel: GitHub Release
+  notes: Checksums for downloadable release assets.
+- name: Proxmox LXC template
+  type: lxc-proxmox
+  path: dnlab-lxc-proxmox-0.2.5-amd64.tar.zst
+  channel: GHCR and GitHub Release mirror
+  notes: Canonical OCI artifact ghcr.io/n4alab/dnlab-lxc-proxmox:0.2.5.
+- name: Proxmox LXC release notes
+  type: lxc-proxmox
+  path: LXC-RELEASE-NOTES-0.2.5.md
+  channel: GHCR and GitHub Release mirror
+  notes: Browser-friendly release note mirror for the LXC artifact.
+source_notes:
+- CHANGELOG.md
+- changes/archive/0.2.5/
+internal_refs: []
