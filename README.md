@@ -6,7 +6,7 @@
 
 > Build network labs on one node or across many, orchestrated automatically and transparently.
 
-![Release](https://img.shields.io/badge/release-0.2.0-blue)
+![Release](https://img.shields.io/badge/release-0.2.5-blue)
 ![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue)
 ![Images](https://img.shields.io/badge/images-GHCR-blue)
 
@@ -72,8 +72,8 @@ Public release packages are published as `ghcr.io/n4alab/dnlab-*` container
 images and are linked to the public `n4alab/dnlab` repository. The matching
 AGPL source archives are attached to the corresponding GitHub Release.
 
-Current release: `0.2.0`. The Compose stack requires `DNLAB_VERSION=0.2.0`
-in `.env`; this selects the published GHCR images for the release.
+Current stable release: `0.2.5`. The Compose stack requires `DNLAB_VERSION=0.2.5`
+in `.env`; this selects the published GHCR images for the stable release.
 
 The stack contains these Compose services:
 
@@ -169,6 +169,7 @@ The following virtual-device images have been tested with dNLab.
 | `cisco_xrv9k_v2` | `25.2.2` | OK |
 | `dnlab_frr` | `10.6.1` | OK |
 | `dnlab_opnsense` | `26.1.6` | OK |
+| `vrnetlab/n4alab_flinos` | administrator-supplied QCOW2 | Supported; persistent image build |
 | `juniper_apstra` | `6.1.2-28` | OK |
 | `juniper_vjunos-router_v2` | `25.2R1.9` | Disk reports an error; after reboot it starts but takes longer |
 | `juniper_vjunos-router_v2` | `25.4R1.12` | Shutdown must be performed from Junos; otherwise the disk is reported as corrupted after reboot. Juniper image bug. Image works |

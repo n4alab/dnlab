@@ -181,7 +181,7 @@ Create `.env` from `.env.example` and set a strong database password before
 starting the stack. At minimum, set:
 
 ```text
-DNLAB_VERSION=0.2.0
+DNLAB_VERSION=0.2.5
 POSTGRES_PASSWORD=<long random value>
 DNLAB_PROXY_SERVER_NAME=<gui-hostname>
 DNLAB_PROXY_HTTPS_PORT=<https-port>
@@ -201,9 +201,7 @@ DNLABGUI_ALLOWED_ORIGINS=https://localhost:8443
 
 Important settings:
 
-- `DNLAB_VERSION`: image tag. For the current published release, use
-  `DNLAB_VERSION=0.2.0`; this is the release that introduces overlapping
-  management subnets.
+- `DNLAB_VERSION`: image tag. For the current published release, use `DNLAB_VERSION=0.2.5`.
 - `DNLAB_IMAGE_PREFIX`: image registry prefix, normally `ghcr.io/n4alab/`.
 - `DNLAB_RUNTIME_IMAGE_PREFIX`: runtime image prefix, normally
   `ghcr.io/n4alab/dnlab-`.
@@ -788,7 +786,7 @@ Pull the full release image set selected by `.env`, then recreate the internal
 services and proxy:
 
 ```bash
-grep '^DNLAB_VERSION=0.2.0$' .env
+grep '^DNLAB_VERSION=0.2.5$' .env
 docker compose -f compose.yml --profile release-images pull
 docker compose -f compose.yml up -d --force-recreate multinode image-sync lab-cleanup image-build gui proxy auth-db
 ```
