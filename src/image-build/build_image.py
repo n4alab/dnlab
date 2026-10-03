@@ -53,6 +53,7 @@ import sys
 import tempfile
 from pathlib import Path
 
+from flinos_bundle import FlinosBundleError, REQUIRED_FILES, validate_and_extract
 
 # ── Constants ────────────────────────────────────────────────────────
 
@@ -397,37 +398,32 @@ def _patch_source_tag(kind: str, upstream_tag: str) -> str:
     return upstream_tag
 
 
-def _flinos_tag(qcow2: Path) -> str:
-    """Build the persistent dNLab tag from an uploaded FLINOS qcow2."""
-    version = qcow2.stem
-    if version.startswith("flinos-"):
-        version = version.removeprefix("flinos-")
-    version = re.sub(r"[^A-Za-z0-9_.-]+", "-", version).strip(".-")
-    if not version:
-        raise SystemExit(f"error: cannot derive FLINOS image tag from '{qcow2.name}'")
-    return f"vrnetlab/n4alab_flinos:{version}{PERSIST_SUFFIX}"
+def _flinos_tag(release: str) -> str:
+    """Build the persistent dNLab tag from a verified FLINOS release."""
+    return f"vrnetlab/n4alab_flinos:{release}{PERSIST_SUFFIX}"
 
 
 def _build_qcow_recipe(kind: str, source: str | None, *, dry: bool = False) -> str:
     if not source:
-        raise SystemExit(f"error: kind '{kind}' requires a qcow2 source image")
-    qcow2 = Path(source).expanduser().resolve()
-    if not qcow2.is_file() or qcow2.suffix.lower() != ".qcow2":
-        raise SystemExit(f"error: kind '{kind}' requires a .qcow2 source image")
-
+        raise SystemExit(f"error: kind {kind!r} requires a .zip release bundle")
+    bundle_path = Path(source).expanduser().resolve()
+    if not bundle_path.is_file() or bundle_path.suffix.lower() != ".zip":
+        raise SystemExit(f"error: kind {kind!r} requires a .zip release bundle")
     recipe = RECIPES_DIR / kind
     if not (recipe / "Dockerfile").is_file():
-        raise SystemExit(f"error: recipe for kind '{kind}' is missing: {recipe}")
-    image = _flinos_tag(qcow2)
+        raise SystemExit(f"error: recipe for kind {kind!r} is missing: {recipe}")
     with tempfile.TemporaryDirectory(prefix=f"dnlab-{kind}-") as temporary:
-        context = Path(temporary) / "context"
+        temporary_path = Path(temporary)
+        try:
+            release = validate_and_extract(bundle_path, temporary_path / "verified")
+        except FlinosBundleError as exc:
+            raise SystemExit(f"error: {exc}") from exc
+        image = _flinos_tag(release.release)
+        context = temporary_path / "context"
         shutil.copytree(recipe, context)
-        shutil.copy2(qcow2, context / "flinos.qcow2")
-        _run(
-            ["docker", "build", "--tag", image, "--build-arg", "FLINOS_QCOW=flinos.qcow2", "."],
-            cwd=context,
-            dry=dry,
-        )
+        for name in REQUIRED_FILES:
+            shutil.copy2(release.directory / name, context / name)
+        _run(["docker", "build", "--tag", image, "."], cwd=context, dry=dry)
     _require_built_image(image, dry=dry)
     return image
 

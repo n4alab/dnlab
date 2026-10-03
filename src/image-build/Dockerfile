@@ -19,6 +19,7 @@ RUN apt-get update \
         libguestfs-tools \
         linux-image-amd64 \
         make \
+        openssl \
         qemu-utils \
     && rm -rf /var/lib/apt/lists/*
 

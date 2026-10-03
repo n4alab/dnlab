@@ -1,0 +1,13 @@
+id: 20261003-161940-prevent-opnsense-bootstrap-from-holding
+type: bugfix
+title: Prevent OPNsense bootstrap from holding the serial console
+description: Avoid a blocking Scrapli serial read during first boot so OPNsense can
+  complete management configuration and release its console.
+components:
+- image-build
+audience:
+- admin
+visibility: public
+breaking: false
+upgrade_notes: []
+references: []

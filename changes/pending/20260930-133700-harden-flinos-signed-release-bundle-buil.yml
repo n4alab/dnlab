@@ -1,0 +1,13 @@
+id: 20260930-133700-harden-flinos-signed-release-bundle-buil
+type: security
+title: Harden FLINOS signed release bundle builds
+description: Build FLINOS virtual-device images only from validated signed release
+  bundles with Secure Boot firmware and fail-closed runtime checks.
+components:
+- image-build
+audience:
+- admin
+visibility: public
+breaking: false
+upgrade_notes: []
+references: []

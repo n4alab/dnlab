@@ -1,0 +1,13 @@
+id: 20261003-150650-install-scrapli-in-custom-dnlab-vrnetlab
+type: bugfix
+title: Install Scrapli in custom dNLab vrnetlab images
+description: Fix OPNsense and FRR image rebuilds by installing the runtime dependency
+  required by the shared vrnetlab launcher.
+components:
+- image-build
+audience:
+- admin
+visibility: public
+breaking: false
+upgrade_notes: []
+references: []

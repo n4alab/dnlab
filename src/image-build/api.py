@@ -137,8 +137,8 @@ def _validate_image_format(kind: str, source_path: str | None) -> None:
             f"(under {uploads_root}); got '{source_path}'.",
         )
     if kind in build_image.QCOW_RECIPE_KINDS:
-        if Path(source_path).suffix.lower() != ".qcow2":
-            raise HTTPException(400, f"kind '{kind}' requires a .qcow2 source image")
+        if Path(source_path).suffix.lower() != ".zip":
+            raise HTTPException(400, f"kind '{kind}' requires a .zip release bundle")
         return
     try:
         work_dir = build_image._resolve_vrnetlab_dir(kind, VRNETLAB_ROOT)
@@ -160,7 +160,7 @@ def _validate_image_filename(
         return
     if kind in build_image.QCOW_RECIPE_KINDS:
         if not filename.lower().endswith(".qcow2"):
-            raise HTTPException(400, f"kind '{kind}' requires a .qcow2 source image")
+            raise HTTPException(400, f"kind '{kind}' requires a .zip release bundle")
         return
     if work_dir is None:
         try:
@@ -449,8 +449,8 @@ def _kinds_payload() -> dict[str, Any]:
             "persistent": True,
             "builder": "dnlab-image-build",
             "vrnetlab_dir": None,
-            "image_globs": ["*.qcow2"],
-            "image_examples": ["flinos-<version>.qcow2"],
+            "image_globs": ["*.zip"],
+            "image_examples": ["flinos-<release>.zip"],
             "source_required": True,
         }
     kinds = [by_kind[kind] for kind in sorted(by_kind)]

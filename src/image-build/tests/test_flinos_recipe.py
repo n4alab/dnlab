@@ -2,6 +2,7 @@ import argparse
 import importlib.util
 import sys
 import types
+from types import SimpleNamespace
 from pathlib import Path
 
 import pytest
@@ -41,39 +42,30 @@ def _load_flinos_launcher(monkeypatch):
 
 
 def test_flinos_recipe_is_listed_and_derives_a_stable_tag(tmp_path):
-    qcow = tmp_path / "flinos-0.1.0-dev1.qcow2"
-    qcow.write_bytes(b"qcow")
+    release = "0.1.0-dev1"
 
     assert "flinos" in build_image.QCOW_RECIPE_KINDS
     assert build_image.is_persistent_kind("flinos")
-    assert build_image._flinos_tag(qcow) == "vrnetlab/n4alab_flinos:0.1.0-dev1-dnlab"
+    assert build_image._flinos_tag(release) == "vrnetlab/n4alab_flinos:0.1.0-dev1-dnlab"
 
 
-def test_flinos_recipe_builds_from_uploaded_qcow_without_vrnetlab_directory(tmp_path, monkeypatch):
-    qcow = tmp_path / "flinos-1.2.3.qcow2"
-    qcow.write_bytes(b"qcow")
+def test_flinos_recipe_builds_from_verified_bundle_without_vrnetlab_directory(tmp_path, monkeypatch):
+    bundle = tmp_path / "flinos-1.2.3.zip"
+    bundle.write_bytes(b"zip")
     calls = []
+    def verified(_bundle, directory):
+        directory.mkdir()
+        for name in build_image.REQUIRED_FILES:
+            (directory / name).write_bytes(b"artifact")
+        return SimpleNamespace(release="1.2.3", directory=directory)
+    monkeypatch.setattr(build_image, "validate_and_extract", verified)
     monkeypatch.setattr(build_image, "_run", lambda command, **kwargs: calls.append((command, kwargs)))
     monkeypatch.setattr(build_image, "_require_built_image", lambda *_args, **_kwargs: None)
 
-    result = build_image.cmd_build(
-        argparse.Namespace(
-            kind="flinos",
-            source=str(qcow),
-            plain=False,
-            with_persistence=False,
-            dry_run=False,
-            vrnetlab_root=str(tmp_path / "vrnetlab"),
-        )
-    )
+    result = build_image.cmd_build(argparse.Namespace(kind="flinos", source=str(bundle), plain=False, with_persistence=False, dry_run=False, vrnetlab_root=str(tmp_path / "vrnetlab")))
 
     assert result == 0
-    assert calls == [
-        (
-            ["docker", "build", "--tag", "vrnetlab/n4alab_flinos:1.2.3-dnlab", "--build-arg", "FLINOS_QCOW=flinos.qcow2", "."],
-            {"cwd": calls[0][1]["cwd"], "dry": False},
-        )
-    ]
+    assert calls == [(["docker", "build", "--tag", "vrnetlab/n4alab_flinos:1.2.3-dnlab", "."], {"cwd": calls[0][1]["cwd"], "dry": False})]
     assert calls[0][1]["cwd"].name == "context"
 
 
@@ -96,12 +88,16 @@ def test_flinos_recipe_patches_vrnetlab_overlay_to_the_persist_bind(tmp_path):
     patcher_spec.loader.exec_module(patcher)
 
     assert "patch-vrnetlab.py" in dockerfile
-    source = 'overlay_disk_image = re.sub(r"(\\.[^.]+$)", r"-overlay\\1", disk_image)\n'
+    assert "ARG VRNETLAB" not in dockerfile
+    assert "3e8578d2e946d38a3176480e80f8510bdb2ee53a" in dockerfile
+    assert "entrypoint.sh" in dockerfile
+    source = "def build():\n        " + patcher.ANCHOR + "\n"
     target = tmp_path / "vrnetlab.py"
     target.write_text(source, encoding="utf-8")
     patcher.patch(target)
 
     assert "/persist/overlay.qcow2" in target.read_text(encoding="utf-8")
+    compile(target.read_text(encoding="utf-8"), str(target), "exec")
 
 
 def test_flinos_recipe_keeps_vrnetlab_telnetlib_available_on_python_313():
