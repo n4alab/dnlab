@@ -1,24 +1,25 @@
 /**
- * MgmtPanel — pannello che mostra/edita il blocco `mgmt:` della topology.
+ * MgmtPanel - panel that displays/edits the `mgmt:` block of the topology.
  *
- * Fields visibili all'user:
- *   - ipv4-subnet (CIDR, es. 172.20.0.0/24)
- *   - ipv4-gw     (read-only, ultimo host della subnet)
+ * Fields visible to the user:
+ *   - ipv4-subnet (CIDR, e.g. 172.20.0.0/24)
+ *   - ipv4-gw     (read-only, last host of the subnet)
  *   - ipv6-subnet (CIDR, default 3fff:<v4-octets>::/64)
- *   - ipv6-gw     (read-only, ultimo host della subnet IPv6)
+ *   - ipv6-gw     (read-only, last host of the IPv6 subnet)
  *
- * Con DHCP attivo il jumphost offre DHCPv4, RA e DHCPv6 alla rete mgmt.
- * Ogni guest decide autonomamente se usare DHCP o una configurazione statica.
+ * With DHCP enabled, the jumphost provides DHCPv4, RA, and DHCPv6
+ * services to the management network. Each guest independently
+ * decides whether to use DHCP or a static configuration.
  *
- * Il nome Docker network e il nome Linux bridge sono **generati
- * deterministicamente lato backend dal nome della topology**
- * (network ≤12 char, bridge = "br-" + network ≤15 char) for rispettare
- * the Linux 15-character limit on interface names. L'user non
- * li configura.
+ * The Docker network name and Linux bridge name are **generated
+ * deterministically by the backend from the topology name**
+ * (network = 12 chars, bridge = "br-" + network = 15 chars) to comply
+ * with the Linux 15-character limit for interface names. The user
+ * does not configure them.
  *
- * Il server salva nel topology YAML sotto il key `mgmt:` solo
- * `ipv4-subnet`, `ipv4-gw`, `ipv6-subnet`, `ipv6-gw`, `dhcp`; eventuali
- * `network`/`bridge` residui vengono rimossi al save.
+ * The server stores only `ipv4-subnet`, `ipv4-gw`, `ipv6-subnet`,
+ * `ipv6-gw`, and `dhcp` under the `mgmt:` key in the topology YAML;
+ * any leftover `network`/`bridge` entries are removed on save.
  */
 const MgmtPanel = (() => {
   let _panel = null;
@@ -81,12 +82,13 @@ const MgmtPanel = (() => {
         <div class="props-actions">
           <button type="submit" class="btn btn-primary btn-sm">Apply</button>
         </div>
-        <p class="mgmt-hint">Nome network e bridge sono generati
-        automaticamente dal nome lab (limite Linux 15 char sulle
-        interfaces). Nodes without <code>mgmt-ipv4</code>/<code>mgmt-ipv6</code>
-        receive an IP auto-assegnato dal pool al deploy. Il servizio DHCP, se attivo,
-        vale per tutta la rete: la scelta DHCP/statico resta nel guest. I gateway sono
-        derivati dagli ultimi indirizzi delle rispettive subnet.</p>
+        <p class="mgmt-hint">Network and bridge names are generated
+        automatically from the lab name (Linux has a 15-character limit on
+        interface names). Nodes without <code>mgmt-ipv4</code>/<code>mgmt-ipv6</code>
+        receive an IP automatically assigned from the pool during deployment.
+        If enabled, DHCP applies to the entire network: the choice between
+        DHCP and static configuration remains with the guest. Gateways are
+        derived from the last addresses of their respective subnets.</p>
       </form>
     `;
 

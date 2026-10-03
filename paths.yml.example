@@ -1,0 +1,29 @@
+# Canonical dNLab shared-paths configuration.
+# Copy to /etc/dnlab/paths.yml before starting Docker Compose.
+# All keys are top-level; do not wrap them in `paths:` or `persistence:`.
+
+# Shared site inventory read by GUI and orchestration services.
+hosts_file: /etc/dnlab/hosts.yml
+
+# Daemon state published for the Admin UI.
+image_sync_state: /var/lib/dnlab-image-sync/state.json
+lab_cleanup_state: /var/lib/dnlab-lab-cleanup/state.json
+
+# Host paths mounted into the dNLab services.
+persist_root: /var/lib/docker/dnlab-backups
+topologies_dir: /root/dnlab-topologies
+gui_dir: /opt/dnlab-gui
+multinode_dir: /opt/dnlab-multinode
+image_build_dir: /opt/dnlab-image-build
+vrnetlab_dir: /opt/vrnetlab
+image_build_workspace: /var/lib/dnlab-image-build
+log_root: /var/log/dnlab
+tmp_dir: /tmp
+
+# SSH keys: orchestration uses ssh_key; browser-facing tunnels use gui_ssh_key.
+ssh_key: /root/.ssh/id_ed25519_dnlab
+gui_ssh_key: /root/.ssh/dnlab-gui.key
+
+# Host integration endpoints.
+containerlab_bin: /usr/bin/containerlab
+docker_socket: unix:///var/run/docker.sock

@@ -128,6 +128,11 @@ def _devices_file() -> Path:
     return device_catalog.active_path()
 
 
+def _require_config_writable() -> None:
+    if not settings.CONFIG_WRITABLE:
+        raise HTTPException(403, "configuration writes are disabled by the hardened Compose profile")
+
+
 def _image_build_dir() -> Path:
     return Path(os.getenv("DNLAB_IMAGE_BUILD_DIR", PATHS.image_build_dir))
 
@@ -203,6 +208,7 @@ async def write_config_model(
     admin: Annotated[User, Depends(require_role(Role.admin))],
     db: Annotated[AsyncSession, Depends(get_session)],
 ):
+    _require_config_writable()
     path = _config_path(key)
     try:
         model = _model_from_payload(key, body, path)
@@ -267,6 +273,7 @@ async def write_realnet_bgp_config(
     admin: Annotated[User, Depends(require_role(Role.admin))],
     db: Annotated[AsyncSession, Depends(get_session)],
 ):
+    _require_config_writable()
     path = _hosts_file()
     content, exists = read_text_or_default(path, _default_content("hosts"))
     try:
@@ -298,6 +305,7 @@ async def regenerate_realnet_bgp_rr_password(
     admin: Annotated[User, Depends(require_role(Role.admin))],
     db: Annotated[AsyncSession, Depends(get_session)],
 ):
+    _require_config_writable()
     path = _hosts_file()
     content, exists = read_text_or_default(path, _default_content("hosts"))
     try:
@@ -657,8 +665,8 @@ def _local_image_build_kinds() -> dict:
             "persistent": True,
             "builder": "dnlab-image-build",
             "vrnetlab_dir": None,
-            "image_globs": ["*.qcow2"],
-            "image_examples": [f"{kind}-<version>.qcow2"],
+            "image_globs": ["*.zip"],
+            "image_examples": [f"{kind}-<release>.zip"],
             "source_required": True,
         }
     return {
@@ -694,8 +702,8 @@ def _validate_local_image_build_filename(kind: str, filename: str) -> None:
     if kind in container_native:
         return
     if kind in getattr(module, "QCOW_RECIPE_KINDS", set()):
-        if not filename.lower().endswith(".qcow2"):
-            raise HTTPException(400, f"kind '{kind}' requires a .qcow2 source image")
+        if not filename.lower().endswith(".zip"):
+            raise HTTPException(400, f"kind '{kind}' requires a .zip release bundle")
         return
     try:
         work_dir = Path(module.resolve_vrnetlab_dir(kind, _vrnetlab_dir()))
@@ -721,13 +729,13 @@ def _image_globs_for_kind_dir(module, work_dir: Path) -> list[str]:
         globs = module.image_globs_for(work_dir)
     except Exception:
         globs = _makefile_image_globs(work_dir)
-    return [str(p) for p in globs if str(p)] or ["*.qcow2"]
+    return [str(p) for p in globs if str(p)] or ["*.zip"]
 
 
 def _makefile_image_globs(work_dir: Path) -> list[str]:
     raw = _makefile_var(work_dir, "IMAGE_GLOB")
     if not raw:
-        return ["*.qcow2"]
+        return ["*.zip"]
     fmt = _makefile_var(work_dir, "IMAGE_FORMAT") or "qcow2"
     raw = raw.replace("$(IMAGE_FORMAT)", fmt).replace("${IMAGE_FORMAT}", fmt)
     return [part for part in raw.split() if part]

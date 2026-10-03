@@ -211,3 +211,25 @@ infrastructure:
     assert "host: 10.0.0.11" in dumped
     assert "follow_the_rabbit:" in dumped
     assert "max_sessions: 2" in dumped
+
+
+def test_hosts_serializer_normalizes_legacy_aliases():
+    content = """
+plus:
+  follow_the_rabbit:
+    max_sessions: 2
+infrastructure:
+  master: {host: 10.0.0.1}
+  workers: {}
+  realnet:
+    bgp_as: 64512
+    lab_as_pool: 64513-64520
+"""
+    model = parse_hosts_config(content, Path("hosts.yml"), True)
+    dumped = serialize_hosts_config(model, validate_with_orchestrator=False)
+    assert "rr_as: 64512" in dumped
+    assert "router_as_pool: 64513-64520" in dumped
+    assert "bgp_as:" not in dumped
+    assert "lab_as_pool:" not in dumped
+    assert "plus:" not in dumped
+    assert "follow_the_rabbit:" in dumped

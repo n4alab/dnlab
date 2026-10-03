@@ -6,7 +6,7 @@ cd "$(dirname "$0")"
 PROJECT="${DNLAB_PREFLIGHT_PROJECT:-dnlabpre}"
 HTTP_PORT="${DNLAB_PREFLIGHT_HTTP_PORT:-18080}"
 HTTPS_PORT="${DNLAB_PREFLIGHT_HTTPS_PORT:-18443}"
-PROXY_SERVER_NAME="${DNLAB_PREFLIGHT_PROXY_SERVER_NAME:-localhost}"
+PROXY_SERVER_NAME="${DNLAB_PREFLIGHT_PROXY_SERVER_NAME:-dnlab.preflight.test}"
 TLS_DIR="${DNLAB_PREFLIGHT_TLS_DIR:-/tmp/dnlab-pre-tls}"
 TOPO_DIR="${DNLAB_PREFLIGHT_TOPO_DIR:-/tmp/dnlab-pre-topologies}"
 LOG_ROOT="${DNLAB_PREFLIGHT_LOG_ROOT:-/tmp/dnlab-pre-log-root}"
@@ -36,12 +36,14 @@ cleanup() {
 trap cleanup EXIT
 
 mkdir -p "$TOPO_DIR" "$LOG_ROOT" "$IMAGE_BUILD_WORKSPACE" "$TLS_DIR"
-if [ ! -f "${TLS_DIR}/dnlab-gui.crt" ] || [ ! -f "${TLS_DIR}/dnlab-gui.key" ]; then
+if [ ! -f "${TLS_DIR}/dnlab-gui.crt" ] || [ ! -f "${TLS_DIR}/dnlab-gui.key" ] \
+  || ! openssl x509 -in "${TLS_DIR}/dnlab-gui.crt" -noout -checkhost "${PROXY_SERVER_NAME}" >/dev/null 2>&1 \
+  || ! openssl x509 -in "${TLS_DIR}/dnlab-gui.crt" -noout -checkhost "test.${PROXY_SERVER_NAME}" >/dev/null 2>&1; then
   openssl req -x509 -nodes -newkey rsa:2048 -days 7 \
     -keyout "${TLS_DIR}/dnlab-gui.key" \
     -out "${TLS_DIR}/dnlab-gui.crt" \
     -subj "/CN=${PROXY_SERVER_NAME}" \
-    -addext "subjectAltName=DNS:${PROXY_SERVER_NAME},IP:127.0.0.1" >/dev/null 2>&1
+    -addext "subjectAltName=DNS:${PROXY_SERVER_NAME},DNS:*.${PROXY_SERVER_NAME}" >/dev/null 2>&1
 fi
 
 echo "== fresh install stack =="
@@ -69,6 +71,7 @@ docker compose -p "$PROJECT" -f compose.yml --profile seed-admin run --rm auth-s
 echo "== login =="
 login_code="$(curl -k -sS -o /tmp/dnlab-preflight-login.json -w '%{http_code}' \
   --max-time 10 \
+  --resolve "${PROXY_SERVER_NAME}:${HTTPS_PORT}:127.0.0.1" \
   -H 'Content-Type: application/json' \
   -d "{\"username\":\"${ADMIN_USERNAME}\",\"password\":\"${ADMIN_PASSWORD}\"}" \
   "${PROXY_URL}/api/auth/login")"

@@ -1,0 +1,15 @@
+id: 20261003-222421-clarify-bare-metal-first-start-documenta
+type: none
+title: Clarify bare-metal first-start documentation
+description: Reorganize the administrator guide around a linear bare-metal bootstrap,
+  image download and complete stack startup flow; move VRF driver operations out of
+  the install path and reserve smoke for troubleshooting.
+components:
+- documentation
+audience:
+- admin
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
+reason: Documentation-only reorganization; no runtime behavior changes.

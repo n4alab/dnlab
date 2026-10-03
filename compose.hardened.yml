@@ -6,6 +6,10 @@ services:
       - /tmp
 
   gui:
+    environment:
+      DNLABGUI_CONFIG_WRITABLE: "false"
+    volumes:
+      - ${DNLAB_CONFIG_DIR:-/etc/dnlab}:/etc/dnlab:ro
     read_only: true
     cap_drop:
       - ALL

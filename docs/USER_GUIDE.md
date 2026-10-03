@@ -8,8 +8,10 @@ For platform setup and operations, see [ADMIN_GUIDE.md](ADMIN_GUIDE.md).
 
 ## Sign In
 
-Open the dNLab URL provided by your administrator. In a local default install
-this may be `https://localhost:8443` with a self-signed certificate; production deployments normally use a site hostname such as `https://dnlab.example.com`.
+Open the dNLab HTTPS URL provided by your administrator, such as
+`https://dnlab.example.com` or `https://192.0.2.10`. The dNLab GUI itself can
+use either form. Device Web UI access requires an FQDN and that its wildcard
+subdomains resolve through the site DNS service.
 
 ![dNLab login page](images/user-login.png)
 
@@ -129,8 +131,10 @@ placement, image availability and warnings before confirming the start.
 
 ![Lab start plan](images/user-lab-start-plan.png)
 
-During deployment and teardown, the footer shows live events. A deployed lab has
-active dNLab runtime infrastructure; each virtual device also has its own state
+During deployment and teardown, the collapsible diagnostic panel below the
+canvas shows live events. Its **Logs** tab contains only operational records
+correlated with the current lab, while **Trace** presents Follow the Rabbit
+paths. A deployed lab has active dNLab runtime infrastructure; each virtual device also has its own state
 such as `running`, `stopped`, `starting`, `reconciling`, `cancelling`,
 `stopping` or `error`.
 
@@ -144,8 +148,8 @@ needed.
 
 ## Per-Device Actions
 
-Open a device context menu to operate one virtual device without restarting the
-whole lab.
+Right-click a device to open its Properties panel and operate one virtual
+device without restarting the whole lab. A left click only selects the device.
 
 ![Node context menu](images/user-node-context-menu.png)
 
@@ -153,7 +157,8 @@ Common actions include:
 
 - start or stop a single virtual device;
 - reconcile a device when the backend supports live repair;
-- open console or logs;
+- open console or logs; use **VD Logs** in the top bar for an aggregated live
+  log view of all running devices;
 - open a device Web UI;
 - start or stop packet capture;
 - wipe persistent device data for supported kinds.
@@ -226,8 +231,8 @@ device without exposing internal Docker networks directly.
 
 ![Device Web UI](images/user-device-webui.png)
 
-In production, administrators normally configure wildcard DNS and certificates
-so hostnames under `*.dnlab.example.com` can route to device Web UIs.
+Administrators must configure wildcard DNS and a matching TLS certificate so
+hostnames under `*.dnlab.example.com` can route to device Web UIs.
 
 ## Console And Logs
 
@@ -337,7 +342,10 @@ required role for that lab.
   device configuration was saved inside the guest OS.
 - If Start shows warnings, read the pre-deploy plan before continuing.
 - If a device Web UI does not open, confirm the lab is deployed and the device
-  is running; administrators should check wildcard DNS, TLS and proxy settings.
+  is running. It is unavailable when the GUI is configured with an IP address;
+  dNLab opens an explanatory page with administrator contacts when configured.
+  Administrators should instead configure an FQDN, wildcard DNS, TLS and proxy
+  settings.
 - If console is blank, wait for the virtual device to finish booting and try
   again.
 - If a lab operation appears stuck, review the event footer and ask an

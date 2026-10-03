@@ -234,7 +234,8 @@ The first-boot service runs `/usr/local/sbin/dnlab-firstboot`, which:
 
 - creates `/opt/dnlab/.env` from `.env.example`;
 - generates `POSTGRES_PASSWORD`;
-- creates a local self-signed certificate under `/etc/ssl/dnlab`;
+- creates a local self-signed certificate under `/etc/ssl/dnlab` for the
+  detected FQDN, or with an IP SAN for the CT address when no FQDN is available;
 - writes `/etc/dnlab/paths.yml`;
 - creates a local root SSH key and authorizes it for root-to-root access;
 - creates the GUI-to-jumphost SSH key used for Web UI, console and log
@@ -263,14 +264,18 @@ management-network deployment or reconciliation. The driver is not a patched
 Docker Engine and does not require a separate package, Compose service or
 Proxmox CT setting.
 
-The generated HTTPS URL defaults to port `8443`:
+The GUI can be reached through the detected CT IP address. To enable device
+Web UI proxying as well, configure an FQDN, wildcard DNS and a certificate
+covering both the FQDN and its wildcard subdomain from the CT console.
+
+After configuration, the HTTPS URL defaults to port `8443`:
 
 ```text
-https://<ct-ip>:8443/
+https://<ct-address>:8443/
 ```
 
-Because the default certificate is self-signed, your browser will show a
-certificate warning. Replace it with a site certificate before production use.
+Because a self-signed certificate is not trusted by default, install its CA in
+each browser client or replace it with a site certificate before production use.
 
 Read the generated first-admin credentials as root:
 
@@ -293,9 +298,15 @@ Run the guided configurator inside the CT:
 sudo dnlab-configure-env
 ```
 
+Run this before attempting to sign in through the browser. It accepts a public
+GUI FQDN, IP address or `localhost`. An FQDN must have client-reachable
+wildcard DNS, or be ready for the DNS configuration in the administrator guide,
+when device Web UI access is required.
+
 It prompts for:
 
-- `DNLAB_PROXY_SERVER_NAME`: public GUI hostname or IP;
+- `DNLAB_PROXY_SERVER_NAME`: public GUI FQDN, IP address or `localhost`.
+  IP addresses and `localhost` support the GUI but not device Web UI proxying;
 - `DNLAB_PROXY_HTTP_PORT` and `DNLAB_PROXY_HTTPS_PORT`: public proxy ports;
 - `DNLAB_PROXY_TLS_DIR`: host directory mounted into the proxy as
   `/etc/ssl/dnlab`;
@@ -308,32 +319,35 @@ The TLS directory is a host path mounted into the proxy container as
 `DNLAB_PROXY_CERT_KEY_FILE` must be paths under `/etc/ssl/dnlab` as seen inside
 the proxy container. If the configured certificate or key is missing under the
 host TLS directory, the script can generate a new local self-signed certificate
-for the selected hostname.
-
-For production, install a publicly trusted certificate and point the certificate
-settings at that material instead. If per-device Web UI access uses wildcard
-hostnames, use a certificate that covers both the GUI hostname and
+with the selected IP as an IP SAN, or covering the selected FQDN and
 `*.${DNLAB_PROXY_SERVER_NAME}`.
+
+For device Web UI access, install a certificate that covers both the GUI FQDN
+and `*.${DNLAB_PROXY_SERVER_NAME}`. Configure a client-reachable wildcard DNS
+zone for the same names; see [TLS and Wildcard Web UI](ADMIN_GUIDE.md#tls-and-wildcard-web-ui)
+for dnsmasq and BIND examples. For GUI-only IP access, use a certificate with
+the address as an IP SAN. A self-signed certificate must be trusted by each
+browser client.
 
 The generated `/etc/dnlab/paths.yml` should match the bare metal shape and
 include both SSH keys plus the shared log root:
 
 ```yaml
-ssh_key: /root/.ssh/id_ed25519_github_dnlab
-ssh_gui_key: /root/.ssh/dnlab-gui.key
+ssh_key: /root/.ssh/id_ed25519_dnlab
+gui_ssh_key: /root/.ssh/dnlab-gui.key
 log_root: /var/log/dnlab
 ```
 
 The corresponding public keys are:
 
 ```bash
-cat /root/.ssh/id_ed25519_github_dnlab.pub
+cat /root/.ssh/id_ed25519_dnlab.pub
 cat /root/.ssh/dnlab-gui.key.pub
 ```
 
 `ssh_key` is the master-to-worker orchestration key. On the generated
 single-node CT, its public key is added to `/root/.ssh/authorized_keys` for
-root-to-root access. `ssh_gui_key` is used by the GUI for per-lab jumphost Web
+root-to-root access. `gui_ssh_key` is used by the GUI for per-lab jumphost Web
 UI, console and log tunnels.
 
 If you edit `.env` manually instead of using the guided script, recreate the GUI
@@ -355,7 +369,7 @@ cat /root/dnlab-first-admin.txt
 Then open:
 
 ```text
-https://<ct-ip>:8443/
+https://<ct-address-or-fqdn>:8443/
 ```
 
 ## Validate
@@ -374,10 +388,14 @@ Run the HTTPS smoke check:
 ```bash
 cd /opt/dnlab
 COMPOSE_FILES=compose.yml \
-DNLAB_SMOKE_PROXY_URL=https://<ct-ip>:8443/ \
+DNLAB_SMOKE_PROXY_URL=https://dnlab.example.test:8443/ \
+DNLAB_SMOKE_CURL_RESOLVE=dnlab.example.test:8443:192.0.2.10 \
 DNLAB_SMOKE_CURL_INSECURE=1 \
 ./smoke.sh
 ```
+
+Replace `dnlab.example.test` and `192.0.2.10` with the configured FQDN and CT
+address when the client resolver does not already provide the wildcard record.
 
 To rerun the first-boot configurator safely:
 

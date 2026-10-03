@@ -1,0 +1,17 @@
+id: 20261002-104930-validate-and-manage-the-complete-hosts-y
+type: change
+title: Validate and document the complete dNLab YAML inventory
+description: Add canonical installation templates for hosts.yml and paths.yml, expose supported
+  inventory settings in Admin, and reject ignored configuration keys.
+components:
+- gui
+- multinode
+audience:
+- admin
+- operator
+visibility: public
+breaking: true
+upgrade_notes:
+- Replace per-host master.interface or workers.*.interface entries with infrastructure.underlay_iface
+  before upgrading.
+references: []

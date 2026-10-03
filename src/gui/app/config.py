@@ -64,6 +64,10 @@ class Settings:
     # Path to the site-wide host inventory. If unset here, the
     # orchestrator falls back to PATHS.hosts_file internally.
     DNLAB_MULTINODE_HOSTS: str | None = os.getenv("DNLAB_MULTINODE_HOSTS")
+    # Base Compose intentionally permits administrator-managed hosts.yml and
+    # paths.yml updates. compose.hardened.yml sets this false and remounts the
+    # directory read-only, so the API can return a clear error before writing.
+    CONFIG_WRITABLE: bool = os.getenv("DNLABGUI_CONFIG_WRITABLE", "true").lower() == "true"
 
     # Optional HTTP API for the dockerized multinode backend. Empty keeps the
     # current local Python adapter, which is the safe transition fallback.

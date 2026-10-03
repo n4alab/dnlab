@@ -86,10 +86,23 @@ def serialize_hosts_config(model: HostsConfigModel, validate_with_orchestrator: 
 
     infra: dict[str, Any] = {}
     infra.update(model.data.extra_infrastructure or {})
+    realnet = infra.get("realnet")
+    if isinstance(realnet, dict):
+        realnet = dict(realnet)
+        if "rr_as" not in realnet and "bgp_as" in realnet:
+            realnet["rr_as"] = realnet["bgp_as"]
+        if "router_as_pool" not in realnet and "lab_as_pool" in realnet:
+            realnet["router_as_pool"] = realnet["lab_as_pool"]
+        realnet.pop("bgp_as", None)
+        realnet.pop("lab_as_pool", None)
+        infra["realnet"] = realnet
     infra["master"] = master
     infra["workers"] = workers
     data: dict[str, Any] = {}
     data.update(model.data.extra_top_level or {})
+    plus = data.pop("plus", None)
+    if "follow_the_rabbit" not in data and isinstance(plus, dict) and "follow_the_rabbit" in plus:
+        data["follow_the_rabbit"] = plus["follow_the_rabbit"]
     data["infrastructure"] = infra
     content = dump_yaml(data)
     if validate_with_orchestrator:

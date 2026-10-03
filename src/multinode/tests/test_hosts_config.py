@@ -1,6 +1,9 @@
 """Tests for hosts.yml parsing — focused on the jumphost_net SSH fields."""
 
+from pathlib import Path
+
 import pytest
+import yaml
 
 from dnlab_multinode.services.hosts_config import (
     HostsConfigError, _parse_hosts_dict,
@@ -93,3 +96,57 @@ def test_ssh_port_range_malformed(bad):
 def test_ssh_port_range_out_of_bounds(bad):
     with pytest.raises(HostsConfigError, match="ssh_port_range"):
         _parse_hosts_dict(_base_raw(ssh_port_range=bad))
+
+
+def test_rejects_ignored_per_host_interface():
+    raw = _base_raw()
+    raw["infrastructure"]["master"]["interface"] = "fabric0"
+    with pytest.raises(HostsConfigError, match="underlay_iface"):
+        _parse_hosts_dict(raw)
+
+
+def test_rejects_unknown_nested_key():
+    raw = _base_raw()
+    raw["infrastructure"]["jumphost_net"]["typo"] = "value"
+    with pytest.raises(HostsConfigError, match="unknown key 'typo'"):
+        _parse_hosts_dict(raw)
+
+
+def test_rejects_string_boolean_and_integer_values():
+    raw = _base_raw()
+    raw["image_sync"] = {"enabled": "false"}
+    with pytest.raises(HostsConfigError, match="image_sync.enabled must be a boolean"):
+        _parse_hosts_dict(raw)
+    raw["image_sync"] = {"enabled": True, "interval_seconds": "300"}
+    with pytest.raises(HostsConfigError, match="image_sync.interval_seconds must be an integer"):
+        _parse_hosts_dict(raw)
+
+
+def test_complete_canonical_inventory_is_accepted():
+    raw = _base_raw()
+    raw["infrastructure"].update({
+        "underlay_iface": "infra",
+        "webui_ports": {"port_range": "9000-9099", "bind_ip": "127.0.0.1"},
+        "realnet": {"wan_iface": "eth1", "rr_as": 64512},
+        "persistence": {"backend": "local-sticky"},
+    })
+    raw.update({
+        "defaults": {"mgmt": {"ipv4_subnet": "172.31.0.0/24", "ipv4_gw": "172.31.0.1"}},
+        "image_sync": {"enabled": True, "include": ["*"], "exclude": [], "interval_seconds": 300},
+        "lab_cleanup": {"enabled": True, "interval_seconds": 300, "grace_seconds": 0, "dry_run": False},
+        "follow_the_rabbit": {"max_sessions": 2},
+    })
+    cfg = _parse_hosts_dict(raw)
+    assert cfg.underlay_iface == "infra"
+    assert cfg.webui_ports.port_range == "9000-9099"
+    assert cfg.follow_the_rabbit.max_sessions == 2
+
+
+def test_canonical_examples_are_accepted_and_match():
+    source_example = Path(__file__).parents[1] / "examples" / "hosts.yml.example"
+    root_example = Path(__file__).parents[3] / "hosts.yml.example"
+    assert source_example.read_text() == root_example.read_text()
+    cfg = _parse_hosts_dict(yaml.safe_load(root_example.read_text()))
+    assert cfg.underlay_iface == "eth0"
+    assert cfg.jumphost_net.ssh_port_range == "2200-2299"
+    assert cfg.image_sync.include == ["*"]

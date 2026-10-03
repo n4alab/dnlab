@@ -40,6 +40,10 @@ Recommended baseline:
 - [Containerlab](https://containerlab.dev) installed.
 - Root or sudo access for Docker, Containerlab and host networking.
 - Public inbound access only to the proxy ports, normally 80/443.
+- The dNLab GUI can be reached through a client-reachable hostname or IP
+  address. Device Web UI access additionally requires an FQDN for the proxy,
+  wildcard DNS for its subdomains, and a TLS certificate covering both names;
+  see the [administrator DNS and TLS guide](docs/ADMIN_GUIDE.md#tls-and-wildcard-web-ui).
 
 Use the Docker packages from Docker's repository, not the generic Debian
 `docker.io` package. Record the output of `docker version` and
