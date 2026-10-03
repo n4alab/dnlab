@@ -23,23 +23,26 @@ successivi.
 from __future__ import annotations
 
 import asyncio
+from html import escape
+import ipaddress
 import logging
 import re
 import ssl as _ssl
 from typing import Annotated, Optional
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import quote, urlsplit, urlunsplit
 from uuid import UUID
 
 import httpx
 import websockets
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, WebSocket
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from starlette.responses import PlainTextResponse
+from starlette.responses import HTMLResponse, PlainTextResponse
 
 from app.auth.db import AsyncSessionLocal, get_session
 from app.auth.deps import authenticate_ws, get_current_user
-from app.auth.models import User
+from app.auth.models import Role, User
 from app.config import settings
 from app.security import reject_if_bad_origin
 from app.services import multinode_service as multinode_mod
@@ -68,6 +71,11 @@ _RESPONSE_STRIP = {
     "content-security-policy", "content-security-policy-report-only",
     "x-frame-options",
 }
+
+_WEBUI_FQDN_REQUIRED = (
+    "Device Web UI proxying requires a DNS hostname, wildcard DNS, and a TLS "
+    "certificate covering the hostname and its wildcard subdomain."
+)
 
 
 class WebUIHostProxyMiddleware:
@@ -133,6 +141,67 @@ class WebUIOpenResponse(BaseModel):
     label: str
 
 
+@router.get("/webui/unavailable", response_class=HTMLResponse, include_in_schema=False)
+async def webui_unavailable_page(
+    db: Annotated[AsyncSession, Depends(get_session)],
+    _user: Annotated[User, Depends(get_current_user)],
+) -> HTMLResponse:
+    """Explain why a browser VD Web UI cannot be opened in IP mode.
+
+    This is intentionally a normal authenticated GUI page.  The tunnel-open
+    API remains responsible for returning 409 before it can start an SSH
+    process.
+    """
+    rows = (await db.execute(
+        select(User.username, User.email)
+        .where(
+            User.role == Role.admin,
+            User.is_active.is_(True),
+            User.email.is_not(None),
+        )
+        .order_by(User.username)
+    )).all()
+    contacts = [
+        (username, email.strip()) for username, email in rows if email and email.strip()
+    ]
+    contact_html = ""
+    if contacts:
+        items = "".join(
+            "<li><a href=\"mailto:{mailto}\">{email}</a>"
+            " <span>({username})</span></li>".format(
+                mailto=escape(quote(email, safe="@._+-"), quote=True),
+                email=escape(email),
+                username=escape(username),
+            )
+            for username, email in contacts
+        )
+        contact_html = (
+            "<p>Please contact your administrator:</p>"
+            f"<ul>{items}</ul>"
+        )
+    else:
+        contact_html = "<p>Please contact your administrator.</p>"
+
+    return HTMLResponse(
+        content=(
+            "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
+            "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
+            "<title>Device Web UI unavailable</title>"
+            "<style>body{margin:0;background:#f5f7fb;color:#18212f;font:16px/1.5 "
+            "system-ui,sans-serif}main{max-width:680px;margin:10vh auto;padding:32px;"
+            "background:#fff;border-radius:10px;box-shadow:0 4px 18px #0002}"
+            "h1{margin-top:0;color:#9d2736}a{color:#175fa8}</style></head><body><main>"
+            "<h1>Device Web UI is unavailable</h1>"
+            "<p>Device Web UI proxying requires a DNS hostname, wildcard DNS, and "
+            "a TLS certificate covering the hostname and its wildcard subdomain.</p>"
+            "<p>The dNLab GUI, consoles, and logs remain available with the current "
+            "configuration.</p>"
+            f"{contact_html}</main></body></html>"
+        ),
+        headers={"Cache-Control": "no-store"},
+    )
+
+
 @router.post(
     "/api/labs/{lab_id}/nodes/{node_name}/webui/open",
     response_model=WebUIOpenResponse,
@@ -145,6 +214,9 @@ async def open_webui(
     db: Annotated[AsyncSession, Depends(get_session)],
     user: Annotated[User, Depends(get_current_user)],
 ) -> WebUIOpenResponse:
+    if not _webui_proxy_is_available(request):
+        raise HTTPException(409, _WEBUI_FQDN_REQUIRED)
+
     lab = await resolve_for_read(db, lab_id, user)
 
     # Recuperiamo l'IP mgmt del VD dal report live del multinode. Non
@@ -354,6 +426,33 @@ def _webui_host_suffix(gui_host: str) -> str:
         return host.split(".webui.", 1)[1]
     parts = host.split(".", 1)
     return parts[1] if len(parts) == 2 else host
+
+
+def _webui_proxy_is_available(request: Request) -> bool:
+    """Whether this request can mint a wildcard-host Web UI URL."""
+    suffix = settings.WEBUI_HOST_SUFFIX or _webui_host_suffix(_external_host(request))
+    return _is_valid_webui_hostname(suffix)
+
+
+def _is_valid_webui_hostname(value: str) -> bool:
+    """Return true only for an FQDN suitable for token subdomains."""
+    host = (value or "").strip()
+    if host.startswith(".") or host.endswith("."):
+        return False
+    if not host or len(host) > 253 or host.lower() == "localhost":
+        return False
+    try:
+        ipaddress.ip_address(host)
+        return False
+    except ValueError:
+        pass
+    if not re.fullmatch(
+        r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?"
+        r"(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+",
+        host,
+    ):
+        return False
+    return bool(re.search(r"[A-Za-z]", host))
 
 
 def _webui_token_from_scope(scope) -> str | None:

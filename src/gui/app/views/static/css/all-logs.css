@@ -1,0 +1,27 @@
+:root { color-scheme: dark; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: #0d0d1a; color: #e0e0e0; }
+html, body { height: 100%; margin: 0; overflow: hidden; }
+body { display: grid; grid-template-rows: 38px 42px minmax(0, 1fr); background: #0d0d1a; }
+#logs-header { display: flex; align-items: center; gap: 12px; padding: 0 14px; background: #151529; border-bottom: 1px solid #2a2a3e; }
+#logs-header .title { color: #00d4ff; font-size: 13px; font-weight: 700; }
+#logs-header .sub { color: #8a8ab0; font-size: 12px; }
+#logs-header .summary { margin-left: auto; color: #aaaac2; font-size: 11px; }
+#log-tabs { display: flex; align-items: end; gap: 3px; padding: 6px 8px 0; overflow-x: auto; background: #111122; border-bottom: 1px solid #303047; }
+.log-tab { display: flex; flex: 0 0 auto; align-items: center; gap: 7px; min-width: 130px; height: 34px; padding: 0 7px 0 10px; border: 1px solid #303047; border-bottom: 0; border-radius: 6px 6px 0 0; background: #1a1a30; color: #c5c5d8; cursor: pointer; }
+.log-tab.active { background: #24243c; color: #fff; box-shadow: inset 0 2px #00d4ff; }
+.log-tab-name { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 600; }
+.log-tab-status { font-size: 10px; color: #aaaac2; }
+.log-tab[data-status="connected"] .log-tab-status { color: #7aff9a; }
+.log-tab[data-status="closed"] .log-tab-status, .log-tab[data-status="error"] .log-tab-status, .log-tab[data-status="unauthorized"] .log-tab-status { color: #ff8aa2; }
+.log-tab-close { margin-left: auto; padding: 1px 4px; border: 0; background: transparent; color: #9999b2; font: inherit; cursor: pointer; }
+.log-tab-close:hover { color: #fff; }
+#log-panes { position: relative; min-height: 0; }
+.log-pane { position: absolute; inset: 0; display: none; }
+.log-pane.active { display: block; }
+.log-viewer { position: absolute; inset: 0; overflow-y: auto; padding: 6px 12px; box-sizing: border-box; font-family: 'Fira Mono', 'Cascadia Code', monospace; font-size: 12.5px; line-height: 1.55; background: #0d0d1a; }
+.log-line { white-space: pre-wrap; word-break: break-word; }
+.log-line:hover { background: rgba(255,255,255,0.04); }
+.log-line-warn { color: #ffcb6b; }
+.log-line-err { color: #ff5370; }
+.log-reconnect { position: absolute; z-index: 2; top: 10px; right: 14px; padding: 5px 10px; border: 1px solid #00a7cc; border-radius: 4px; background: #133643; color: #b7f4ff; cursor: pointer; }
+.log-reconnect[hidden] { display: none; }
+.message { position: absolute; inset: 0; display: grid; place-items: center; padding: 30px; box-sizing: border-box; color: #9999b2; text-align: center; }

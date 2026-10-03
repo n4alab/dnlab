@@ -1,0 +1,14 @@
+id: 20261003-111532-require-wildcard-hostname-configuration
+type: change
+title: Require wildcard hostname configuration for device Web UI
+description: The dNLab GUI remains available through an IP address, while device
+  Web UI proxying opens an explanatory browser page for its FQDN, wildcard DNS and TLS requirements.
+components:
+- gui
+audience:
+- admin
+- operator
+visibility: public
+breaking: false
+upgrade_notes: []
+references: []

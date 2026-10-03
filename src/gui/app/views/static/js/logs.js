@@ -8,6 +8,7 @@
  * API:
  *   LogsPanel.init()
  *   LogsPanel.open(labId, nodeName)   — WindowManager.open('/logs.html?…')
+ *   LogsPanel.openAll(labId)          — aggregated snapshot window
  *   LogsPanel.close(nodeName)         — noop
  */
 const LogsPanel = (() => {
@@ -20,7 +21,13 @@ const LogsPanel = (() => {
     WindowManager.open(url, winName, { width: 1100, height: 720 });
   }
 
+  function openAll(labId) {
+    if (!labId) return null;
+    const url = `/all-logs.html?lab=${encodeURIComponent(labId)}`;
+    return WindowManager.open(url, '_blank', { width: 1280, height: 820 });
+  }
+
   function close(_nodeName) {}
 
-  return { init, open, close };
+  return { init, open, openAll, close };
 })();

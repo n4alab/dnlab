@@ -12,6 +12,7 @@ Typical flows::
     ./venv/bin/python scripts/manage_users.py list
     ./venv/bin/python scripts/manage_users.py add --username alice --role student
     ./venv/bin/python scripts/manage_users.py set-role --username alice --role graduate
+    ./venv/bin/python scripts/manage_users.py set-email --username alice --email alice@example.test
     ./venv/bin/python scripts/manage_users.py set-password --username alice
     ./venv/bin/python scripts/manage_users.py disable --username alice
     ./venv/bin/python scripts/manage_users.py enable  --username alice
@@ -46,6 +47,7 @@ from sqlalchemy import func, select  # noqa: E402
 from app.auth.db import AsyncSessionLocal  # noqa: E402
 from app.auth.models import AuthBackend, Role, User  # noqa: E402
 from app.auth.password import hash_password, verify_password  # noqa: E402
+from app.auth.sessions import revoke_all_for_user  # noqa: E402
 from app.config import settings  # noqa: E402
 
 
@@ -217,8 +219,29 @@ async def cmd_set_role(db, admin: User, args) -> int:
             _fatal("cannot demote the last active admin", code=5)
     old = u.role
     u.role = new_role
+    await revoke_all_for_user(db, user_id=u.id)
     await db.commit()
     _info(f"{u.username}: role {old.value} → {new_role.value} by={admin.username}")
+    return 0
+
+
+async def cmd_set_email(db, admin: User, args) -> int:
+    u = await _get_user(db, args.username)
+    if u is None:
+        _fatal(f"user {args.username!r} not found", code=6)
+    if u.backend != AuthBackend.local_db:
+        _fatal(
+            f"user {u.username!r} backend={u.backend.value}; email "
+            "managed by upstream directory",
+            code=4,
+        )
+    email = args.email.strip() or None
+    if u.email == email:
+        _info(f"{u.username}: email unchanged.")
+        return 0
+    u.email = email
+    await db.commit()
+    _info(f"{u.username}: email {'cleared' if email is None else 'updated'} by={admin.username}")
     return 0
 
 
@@ -240,6 +263,7 @@ async def cmd_set_password(db, admin: User, args) -> int:
     if len(password) < 8:
         _fatal("password too short (min 8 chars)", code=4)
     u.password_hash = hash_password(password)
+    await revoke_all_for_user(db, user_id=u.id)
     await db.commit()
     _info(f"{u.username}: password reset by={admin.username}")
     return 0
@@ -260,6 +284,8 @@ async def _set_active(db, admin: User, username: str, active: bool) -> int:
             if remaining == 0:
                 _fatal("cannot disable the last active admin", code=5)
     u.is_active = active
+    if not active:
+        await revoke_all_for_user(db, user_id=u.id)
     await db.commit()
     _info(f"{u.username}: {'enabled' if active else 'disabled'} by={admin.username}")
     return 0
@@ -320,6 +346,10 @@ def _build_parser() -> argparse.ArgumentParser:
     pr.add_argument("--username", required=True)
     pr.add_argument("--role", required=True)
 
+    pe = sub.add_parser("set-email", help="change or clear a local user's email")
+    pe.add_argument("--username", required=True)
+    pe.add_argument("--email", required=True, help="empty string clears the email")
+
     pp = sub.add_parser("set-password", help="reset a user's password")
     pp.add_argument("--username", required=True)
     pp.add_argument("--password", help="new password (else prompt / env)")
@@ -342,6 +372,7 @@ _DISPATCH = {
     "list": cmd_list,
     "add": cmd_add,
     "set-role": cmd_set_role,
+    "set-email": cmd_set_email,
     "set-password": cmd_set_password,
     "enable": cmd_enable,
     "disable": cmd_disable,

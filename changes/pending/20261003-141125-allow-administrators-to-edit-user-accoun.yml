@@ -1,0 +1,14 @@
+id: 20261003-141125-allow-administrators-to-edit-user-accoun
+type: feature
+title: Allow administrators to edit user accounts
+description: Administrators can edit local account email addresses, roles, active
+  state and passwords from the Users tab. Role changes, deactivation and password
+  resets revoke active sessions.
+components:
+- gui
+audience:
+- admin
+visibility: public
+breaking: false
+upgrade_notes: []
+references: []

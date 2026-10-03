@@ -1,8 +1,8 @@
-ServerName ${DNLAB_PROXY_SERVER_NAME}
+${DNLAB_PROXY_APACHE_SERVER_NAME_DIRECTIVE}
 
 <VirtualHost *:80>
-    ServerName ${DNLAB_PROXY_SERVER_NAME}
-    ServerAlias *.${DNLAB_PROXY_WEBUI_SUFFIX}
+    ${DNLAB_PROXY_APACHE_SERVER_NAME_DIRECTIVE}
+    ${DNLAB_PROXY_WEBUI_SERVER_ALIAS}
     ServerAdmin ${DNLAB_PROXY_SERVER_ADMIN}
 
     Alias "/.well-known/acme-challenge/" "/var/www/acme-challenge/"
@@ -19,8 +19,8 @@ ServerName ${DNLAB_PROXY_SERVER_NAME}
 </VirtualHost>
 
 <VirtualHost *:443>
-    ServerName ${DNLAB_PROXY_SERVER_NAME}
-    ServerAlias *.${DNLAB_PROXY_WEBUI_SUFFIX}
+    ${DNLAB_PROXY_APACHE_SERVER_NAME_DIRECTIVE}
+    ${DNLAB_PROXY_WEBUI_SERVER_ALIAS}
     ServerAdmin ${DNLAB_PROXY_SERVER_ADMIN}
 
     SSLEngine on

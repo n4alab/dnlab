@@ -10,6 +10,11 @@
 </head>
 <body>
 
+<!-- Vendored, local Lucide-style icon symbols: no runtime icon CDN. -->
+<svg class="icon-sprite" aria-hidden="true" focusable="false">
+  <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol><symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol><symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7h6l2 2h10v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol><symbol id="i-play" viewBox="0 0 24 24"><path d="m8 5 11 7-11 7z"/></symbol><symbol id="i-square" viewBox="0 0 24 24"><path d="M5 5h14v14H5z"/></symbol><symbol id="i-terminal" viewBox="0 0 24 24"><path d="m4 17 6-6-6-6M12 19h8"/></symbol><symbol id="i-file-text" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M8 13h8M8 17h5"/></symbol><symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></symbol><symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol><symbol id="i-mouse-pointer" viewBox="0 0 24 24"><path d="m5 3 14 9-6 2-3 6z"/></symbol><symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.1.1l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1M14 11a5 5 0 0 0-7.1-.1l-2 2A5 5 0 0 0 12 20l1.1-1.1"/></symbol><symbol id="i-type" viewBox="0 0 24 24"><path d="M4 6V4h16v2M12 4v16"/></symbol><symbol id="i-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/></symbol><symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M6 6l1 15h10l1-15M10 11v6M14 11v6"/></symbol><symbol id="i-maximize" viewBox="0 0 24 24"><path d="M8 3H3v5M16 3h5v5M3 16v5h5M21 16v5h-5"/></symbol><symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></symbol><symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m20 20-4-4"/></symbol>
+</svg>
+
 <!-- ── Toolbar ─────────────────────────────────────────────────────── -->
 <div id="toolbar">
   <a class="brand" href="/" title="dNLab — distributed Network Labs">
@@ -17,58 +22,13 @@
     <img class="brand-mark brand-mark-light" src="/img/brand/05-mark-light.svg" alt="dNLab">
     <span class="brand-text">dNLab</span>
   </a>
-  <div class="toolbar-sep"></div>
-
-  <button id="btn-new"    class="btn" title="New topology">+ New</button>
-  <button id="btn-open"   class="btn" title="Open topology">📂 Open</button>
-
-  <div class="toolbar-sep"></div>
-
-  <button id="btn-import-drawio" class="btn" title="Importa da draw.io XML">⬆ Import draw.io</button>
-  <button id="btn-export-drawio" class="btn" title="Esporta in draw.io XML">⬇ Export draw.io</button>
-
-  <div class="toolbar-sep"></div>
-
-  <button id="btn-mode-select" class="btn active" title="Selection mode (V)">↖ Select</button>
-  <button id="btn-mode-link"   class="btn"        title="Link mode (L)">🔗 Link</button>
-  <button id="btn-add-note"    class="btn" title="Add note">T Note</button>
-  <button id="btn-add-rect"    class="btn" title="Add rectangle">□ Rect</button>
-  <button id="btn-add-ellipse" class="btn" title="Add circle">○ Circle</button>
-
-  <div class="toolbar-sep"></div>
-
-  <button id="btn-deploy"  class="btn btn-start" title="Start lab">▶ Start</button>
-  <button id="btn-destroy" class="btn btn-stop"  title="Ferma lab">■ Stop</button>
-  <button id="btn-all-consoles" class="btn btn-console" title="Open all live VD consoles" disabled>▣ Consoles</button>
-  <button id="btn-delete-topo" class="btn btn-danger" title="Delete topology and persistent data">✕ Delete</button>
-
-  <div class="toolbar-sep"></div>
-
-  <button id="btn-fit"    class="btn" title="Adatta schermo">⊞ Fit</button>
-  <button id="btn-toggle-mgmt" class="btn active" title="Show/nascondi mgmt cloud e link">🌐 Mgmt</button>
-  <button id="btn-follow-rabbit" class="btn btn-follow-rabbit" title="follow-the-rabbit">follow-the-rabbit</button>
-  <button id="btn-delete" class="btn btn-danger btn-sm" title="Delete selected items">🗑</button>
-
-  <div class="toolbar-sep"></div>
-
-  <span id="topo-name-display">(no topology)</span>
-  <span id="lab-status-badge" class="status-badge status-stopped">stopped</span>
-
-  <span id="jumphost-box" class="jumphost-box"></span>
-
+  <div class="toolbar-menu"><button id="btn-file-menu" class="app-menu-trigger" type="button">File <svg class="icon"><use href="#i-chevron-down"/></svg></button><div id="file-menu" class="app-menu-popover" hidden><button id="btn-new" type="button"><svg class="icon"><use href="#i-plus"/></svg>New lab</button><button id="btn-open" type="button"><svg class="icon"><use href="#i-folder"/></svg>Open lab</button><button id="btn-import-drawio" type="button">Import draw.io</button><button id="btn-export-drawio" class="canvas-only" type="button">Export draw.io</button></div></div>
+  <div class="lab-context canvas-only"><span>Labs</span><span class="context-slash">/</span><strong id="topo-name-display">(no topology)</strong><span id="lab-status-badge" class="status-badge status-stopped">stopped</span></div>
+  <div class="toolbar-lifecycle canvas-only"><button id="btn-deploy" class="btn btn-start" title="Start lab"><svg class="icon"><use href="#i-play"/></svg>Start</button><button id="btn-destroy" class="btn btn-stop" title="Stop lab"><svg class="icon"><use href="#i-square"/></svg>Stop</button><button id="btn-all-consoles" class="btn" title="Open all live VD consoles" disabled><svg class="icon"><use href="#i-terminal"/></svg>Consoles</button><button id="btn-all-logs" class="btn" title="Open all live VD logs" disabled><svg class="icon"><use href="#i-file-text"/></svg>VD Logs</button></div>
+  <div class="toolbar-menu canvas-only"><button id="btn-access-menu" class="app-menu-trigger" type="button">Access <svg class="icon"><use href="#i-chevron-down"/></svg></button><div id="access-menu" class="app-menu-popover access-popover" hidden><span id="jumphost-box" class="jumphost-box"></span><p class="access-empty">Start the lab to access its bastion.</p></div></div>
+  <div class="toolbar-menu canvas-only"><button id="btn-more-menu" class="icon-btn" type="button" title="More lab actions"><svg class="icon"><use href="#i-more"/></svg></button><div id="more-menu" class="app-menu-popover" hidden><button id="btn-delete-topo" class="menu-danger" type="button"><svg class="icon"><use href="#i-trash"/></svg>Delete lab</button></div></div>
   <div class="toolbar-spacer"></div>
-
-  <span id="user-badge" class="user-badge" title="Current user"></span>
-  <div id="view-switch" class="view-switch" hidden>
-    <button id="view-labs" class="view-switch-btn active" type="button">Labs</button>
-    <button id="view-admin" class="view-switch-btn" type="button">Admin</button>
-  </div>
-  <button id="btn-logout" class="btn btn-sm" title="Logout">⎋ Logout</button>
-
-  <select id="theme-select" class="theme-select" title="Tema">
-    <option value="dark">🌙 Dark</option>
-    <option value="light">☀️ Light</option>
-  </select>
+  <div class="toolbar-menu"><button id="btn-user-menu" class="user-badge" type="button" title="Current user"><svg class="icon"><use href="#i-user"/></svg><span id="user-badge"></span></button><div id="user-menu" class="app-menu-popover user-menu" hidden><button id="btn-labs" type="button">Labs</button><button id="view-admin" type="button" hidden>Admin</button><label class="theme-menu-label">Theme <select id="theme-select" class="theme-select"><option value="dark">Dark</option><option value="light">Light</option></select></label><button id="btn-logout" type="button">Logout</button></div></div>
 </div>
 
 <div id="lab-view" class="app-view active">
@@ -88,6 +48,11 @@
   <!-- Centre: canvas + pannello inferiore -->
   <div id="centre-area">
     <div id="cy"></div>
+    <div id="canvas-tools" class="canvas-floating" role="toolbar" aria-label="Canvas tools">
+      <button id="btn-mode-select" class="icon-btn active" title="Select (V)" aria-label="Select"><svg class="icon"><use href="#i-mouse-pointer"/></svg></button><button id="btn-mode-link" class="icon-btn" title="Link (L)" aria-label="Link"><svg class="icon"><use href="#i-link"/></svg></button><button id="btn-add-note" class="icon-btn" title="Note (N)" aria-label="Add note"><svg class="icon"><use href="#i-type"/></svg></button><button id="btn-add-rect" class="icon-btn" title="Rectangle (R)" aria-label="Add rectangle"><svg class="icon"><use href="#i-square"/></svg></button><button id="btn-add-ellipse" class="icon-btn" title="Circle (O)" aria-label="Add circle"><svg class="icon"><use href="#i-circle"/></svg></button><span class="tool-sep"></span><button id="btn-delete" class="icon-btn icon-btn-danger" title="Erase selected item (Delete)" aria-label="Erase selected item"><svg class="icon"><use href="#i-trash"/></svg></button>
+    </div>
+    <button id="btn-follow-rabbit" class="follow-rabbit-trigger" type="button"><svg class="icon"><use href="#i-search"/></svg>Follow the Rabbit</button>
+    <div id="canvas-view-controls" class="canvas-view-controls" role="toolbar" aria-label="Canvas view"><button id="btn-fit" class="icon-btn" title="Fit canvas" aria-label="Fit canvas"><svg class="icon"><use href="#i-maximize"/></svg></button><button id="btn-toggle-mgmt" class="icon-btn active" title="Show management network (M)" aria-label="Toggle management network"><svg class="icon"><use href="#i-globe"/></svg></button><button id="btn-zoom-in" class="icon-btn" title="Zoom in" aria-label="Zoom in"><svg class="icon"><use href="#i-plus"/></svg></button><button id="btn-zoom-out" class="icon-btn" title="Zoom out" aria-label="Zoom out">−</button></div>
 
     <!-- Pannello inferiore: console + log (condiviso) -->
     <div id="console-panel">
@@ -95,12 +60,12 @@
       <div id="console-term-area"></div>
     </div>
   </div>
-  <div id="props-panel" hidden></div>
   <div id="mgmt-panel" hidden></div>
 </div>
 
-<!-- ── Events footer (fuori da #main-area: pinnato in fondo al viewport) ── -->
-<div id="events-footer" class="collapsed"></div>
+<aside id="workspace-drawer" hidden aria-label="Lab tools"><div class="drawer-header"><div class="drawer-tabs" role="tablist"><button class="drawer-tab active" data-drawer-tab="properties" type="button">Properties</button><button class="drawer-tab" data-drawer-tab="rabbit" type="button">Follow the Rabbit</button></div><button id="btn-close-drawer" class="icon-btn" title="Close panel" aria-label="Close panel">×</button></div><div id="props-panel" class="drawer-content"></div><div id="rabbit-panel" class="drawer-content" hidden></div></aside>
+
+<section id="lab-inspector" class="collapsed" aria-label="Lab diagnostics"><div class="inspector-header"><div class="inspector-tabs" role="tablist"><button class="inspector-tab active" data-inspector-tab="events" type="button">Events</button><button class="inspector-tab" data-inspector-tab="logs" type="button">Logs</button><button class="inspector-tab" data-inspector-tab="trace" type="button">Trace</button></div><span id="inspector-summary" class="inspector-summary">—</span><button id="btn-inspector-collapse" class="icon-btn" title="Expand panel" aria-label="Expand panel">⌃</button></div><div id="inspector-events" class="inspector-body"></div><div id="inspector-logs" class="inspector-body" hidden></div><div id="inspector-trace" class="inspector-body" hidden></div></section>
 
 </div>
 
@@ -142,6 +107,8 @@
 <script src="/js/console.js"></script>
 <script src="/js/logs.js"></script>
 <script src="/js/events.js"></script>
+<script src="/js/lab_inspector.js"></script>
+<script src="/js/lab_logs.js"></script>
 <script src="/js/context_menu.js"></script>
 <script src="/js/capture_modal.js"></script>
 <script src="/js/follow_rabbit_modal.js"></script>
@@ -160,13 +127,16 @@
 	    if (e.ctrlKey && e.key === 's') { e.preventDefault(); }
     if ((e.key === 'Delete' || e.key === 'Backspace') && document.activeElement === document.body)
       document.getElementById('btn-delete')?.click();
-    if (e.key === 'v' || e.key === 'V') document.getElementById('btn-mode-select')?.click();
-    if (e.key === 'l' || e.key === 'L') document.getElementById('btn-mode-link')?.click();
+    if ((e.key === 'v' || e.key === 'V') && !_isTypingTarget(e.target)) document.getElementById('btn-mode-select')?.click();
+    if ((e.key === 'l' || e.key === 'L') && !_isTypingTarget(e.target)) document.getElementById('btn-mode-link')?.click();
+    if ((e.key === 'n' || e.key === 'N') && !e.shiftKey && !_isTypingTarget(e.target)) { e.preventDefault(); document.getElementById('btn-add-note')?.click(); }
+    if ((e.key === 'r' || e.key === 'R') && !_isTypingTarget(e.target)) { e.preventDefault(); document.getElementById('btn-add-rect')?.click(); }
+    if ((e.key === 'o' || e.key === 'O') && !_isTypingTarget(e.target)) { e.preventDefault(); document.getElementById('btn-add-ellipse')?.click(); }
     if ((e.key === 'm' || e.key === 'M') && !_isTypingTarget(e.target)) {
       e.preventDefault();
       Toolbar.toggleMgmtVisible?.();
     }
-    if ((e.key === 'n' || e.key === 'N') && !_isTypingTarget(e.target)) {
+    if ((e.key === 'n' || e.key === 'N') && e.shiftKey && !_isTypingTarget(e.target)) {
       e.preventDefault();
       Canvas.toggleRealNetInfoVisible?.();
     }

@@ -118,7 +118,7 @@ class CanvasAnnotationsRequest(BaseModel):
     annotations: list[dict] = Field(default_factory=list)
 
 
-# ── Createte ────────────────────────────────────────────────────────
+# ── Create ────────────────────────────────────────────────────────
 
 @router.post("/")
 async def create_lab_route(
@@ -127,7 +127,7 @@ async def create_lab_route(
     db: Annotated[AsyncSession, Depends(get_session)],
     user: Annotated[User, Depends(get_current_user)],
 ):
-    """Createte an empty lab owned by the caller.
+    """Create an empty lab owned by the caller.
 
     Rookies are rejected. The (owner_id, name) unique constraint
     prevents one user from having two labs with the same display name;

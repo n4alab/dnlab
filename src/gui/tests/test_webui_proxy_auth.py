@@ -10,10 +10,12 @@ from app.services.webui_service import WebUITunnel
 from app.views.api import webui_routes
 from app.views.api.webui_routes import (
     _find_jumphost_ssh_port,
+    _is_valid_webui_hostname,
     _is_logout_path,
     _prepare_upstream_headers,
     WebUIOpenRequest,
     open_webui,
+    webui_unavailable_page,
 )
 
 
@@ -128,6 +130,85 @@ def test_logout_path_detection_is_generic():
     assert _is_logout_path("api/v1/signout")
     assert _is_logout_path("/user/logoff")
     assert not _is_logout_path("/webui/login/assets/logout-icon.svg")
+
+
+@pytest.mark.parametrize("hostname", ["dnlab.example.test", "lab.internal.example"])
+def test_webui_proxy_hostname_validator_accepts_fqdn(hostname):
+    assert _is_valid_webui_hostname(hostname)
+
+
+@pytest.mark.parametrize("hostname", [
+    "192.0.2.10", "2001:db8::10", "localhost", "dnlab", ".dnlab.example",
+    "dnlab.example.", "dnlab..example", "bad_name.example",
+])
+def test_webui_proxy_hostname_validator_rejects_non_fqdn(hostname):
+    assert not _is_valid_webui_hostname(hostname)
+
+
+@pytest.mark.parametrize("host_suffix", [
+    "192.0.2.10", "2001:db8::10", "localhost", "bad_name.example",
+])
+def test_open_webui_rejects_unavailable_suffix_before_creating_tunnel(
+    monkeypatch, host_suffix,
+):
+    from app.config import settings
+
+    async def forbidden_resolve(*args, **kwargs):
+        raise AssertionError("a Web UI tunnel must not be considered in IP mode")
+
+    monkeypatch.setattr(settings, "WEBUI_HOST_SUFFIX", host_suffix)
+    monkeypatch.setattr(webui_routes, "resolve_for_read", forbidden_resolve)
+
+    with pytest.raises(webui_routes.HTTPException) as exc_info:
+        asyncio.run(open_webui(
+            lab_id=uuid4(),
+            node_name="node1",
+            req=WebUIOpenRequest(scheme="https", port=443, path="/", label="Web UI"),
+            request=_request({"Host": host_suffix}),
+            db=SimpleNamespace(),
+            user=SimpleNamespace(id=7),
+        ))
+
+    assert exc_info.value.status_code == 409
+    assert "wildcard DNS" in exc_info.value.detail
+
+
+def test_webui_unavailable_page_lists_only_safe_admin_contacts():
+    captured = {}
+
+    class FakeResult:
+        def all(self):
+            # The real query filters role and active status.  This response
+            # represents the rows it returns, including a blank address that
+            # must still be suppressed.
+            return [
+                ("alpha", "alpha@example.test"),
+                ("unsafe<name>", "unsafe@example.test"),
+                ("blank", "   "),
+            ]
+
+    class FakeDb:
+        async def execute(self, statement):
+            captured["statement"] = statement
+            return FakeResult()
+
+    response = asyncio.run(webui_unavailable_page(
+        db=FakeDb(),
+        _user=SimpleNamespace(id=7),
+    ))
+
+    body = response.body.decode("utf-8")
+    query = str(captured["statement"])
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+    assert "Device Web UI is unavailable" in body
+    assert "Please contact your administrator:" in body
+    assert 'href="mailto:alpha@example.test"' in body
+    assert "unsafe&lt;name&gt;" in body
+    assert "blank" not in body
+    assert "users.role" in query
+    assert "users.is_active IS true" in query
+    assert "users.email IS NOT NULL" in query
 
 
 def test_openwrt_webui_uses_mgmt_ip_not_runtime_relay(monkeypatch):

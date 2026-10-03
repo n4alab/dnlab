@@ -2,10 +2,13 @@ const FollowRabbitModal = (() => {
   let _labId = null;
   let _nodes = [];
   let _timer = null;
+  let _host = null;
 
-  function open(labId, nodes) {
+  function open(labId, nodes, host = null) {
+    close();
     _labId = labId;
     _nodes = (nodes || []).filter(n => n.kind !== '_real_net');
+    _host = host || document.getElementById('rabbit-panel');
     _render();
     _poll();
     _timer = setInterval(_poll, 2500);
@@ -48,7 +51,8 @@ const FollowRabbitModal = (() => {
       </div>
       <div id="rabbit-sessions" class="rabbit-sessions"></div>
     `;
-    showModal('follow-the-rabbit', body, [{ label: 'Close', class: 'btn-secondary', action: close }]);
+    if (!_host) return;
+    _host.replaceChildren(body);
     body.querySelector('#rabbit-start').addEventListener('click', _start);
     body.querySelector('#rabbit-refresh').addEventListener('click', _poll);
   }
@@ -74,7 +78,7 @@ const FollowRabbitModal = (() => {
 
   async function _poll() {
     if (!_labId) return;
-    if (!document.getElementById('modal-overlay')?.classList.contains('active')) {
+    if (!_host || !document.body.contains(_host) || document.getElementById('workspace-drawer')?.hidden) {
       close();
       return;
     }
@@ -83,6 +87,7 @@ const FollowRabbitModal = (() => {
       const sessions = res.sessions || [];
       Canvas.setFollowRabbitSessions(sessions);
       _renderSessions(sessions);
+      LabInspector?.setTraceSessions(sessions);
     } catch (_) {}
   }
 

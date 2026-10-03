@@ -49,8 +49,8 @@ OPERATION_DOCS: dict[tuple[str, str], OperationDoc] = {
     # User administration
     ("get", "/api/users/"): _doc(
         "List user accounts",
-        "Return every local user account and its role, status, and profile "
-        "metadata. This read-only operation requires the admin role.",
+        "Return every persisted user account and its role, status, backend, "
+        "and profile metadata. This read-only operation requires the admin role.",
     ),
     ("post", "/api/users/"): _doc(
         "Create a user account",
@@ -60,9 +60,11 @@ OPERATION_DOCS: dict[tuple[str, str], OperationDoc] = {
     ),
     ("patch", "/api/users/{user_id}"): _doc(
         "Update a user account",
-        "Change selected profile, role, or active-state fields on an existing "
-        "local user. This persistent operation requires the admin role and "
-        "protects the deployment from losing its last active administrator.",
+        "Change role or active state on a persisted user; local-database users "
+        "may also change or clear their email address. Usernames are immutable "
+        "and federated email addresses are managed upstream. This persistent "
+        "operation requires the admin role, revokes sessions after role changes "
+        "or deactivation, and protects the last active local administrator.",
     ),
     ("post", "/api/users/{user_id}/password"): _doc(
         "Reset a user's password",

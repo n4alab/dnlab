@@ -1,0 +1,14 @@
+id: 20261003-174129-add-aggregated-live-vd-logs-view
+type: feature
+title: Add aggregated live VD logs view
+description: Add a read-only toolbar action that opens eager live log streams for
+  every running virtual device in tabbed browser view.
+components:
+- gui
+audience:
+- operator
+- user
+visibility: public
+breaking: false
+upgrade_notes: []
+references: []

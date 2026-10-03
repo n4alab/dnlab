@@ -88,12 +88,11 @@ const AdminPage = (() => {
       </table>
     `;
     _content.querySelector('#admin-user-add').addEventListener('click', _toggleUserForm);
-    _wireUserActions();
+    _wireUserActions(users);
   }
 
   function _userRow(u, myUsername) {
     const isSelf = u.username === myUsername;
-    const federated = u.backend !== 'local_db';
     return `
       <tr data-user-id="${u.id}" data-username="${_esc(u.username)}" data-role="${_esc(u.role)}"
           data-backend="${_esc(u.backend)}" data-active="${u.is_active ? '1' : '0'}">
@@ -104,9 +103,7 @@ const AdminPage = (() => {
         <td>${u.is_active ? '<span class="admin-ok">yes</span>' : '<span class="admin-warn">no</span>'}</td>
         <td class="admin-muted">${u.last_login_at ? _fmtDate(u.last_login_at) : '-'}</td>
         <td class="admin-actions">
-          <button class="btn btn-xs admin-user-role" title="Change role">Role</button>
-          <button class="btn btn-xs admin-user-pw" title="Reset password" ${federated ? 'disabled' : ''}>Password</button>
-          <button class="btn btn-xs admin-user-active">${u.is_active ? 'Disable' : 'Enable'}</button>
+          <button class="btn btn-xs admin-user-edit" title="Edit user">Edit</button>
           <button class="btn btn-xs btn-danger admin-user-del" ${isSelf ? 'disabled' : ''}>Delete</button>
         </td>
       </tr>
@@ -127,7 +124,7 @@ const AdminPage = (() => {
         ${ROLES.map(r => `<option value="${r}" ${r === 'student' ? 'selected' : ''}>${r}</option>`).join('')}
       </select>
       <input id="admin-new-email" class="props-input" placeholder="email">
-      <button id="admin-new-save" class="btn btn-primary btn-sm">Createte</button>
+      <button id="admin-new-save" class="btn btn-primary btn-sm">Create</button>
     `;
     form.hidden = false;
     form.querySelector('#admin-new-save').addEventListener('click', _createUser);
@@ -151,60 +148,58 @@ const AdminPage = (() => {
     }
   }
 
-  function _wireUserActions() {
+  function _wireUserActions(users) {
     _content.querySelectorAll('tr[data-user-id]').forEach(tr => {
       const id = Number(tr.dataset.userId);
       const username = tr.dataset.username;
-      tr.querySelector('.admin-user-role').addEventListener('click', () => _changeRole(id, username, tr.dataset.role));
-      tr.querySelector('.admin-user-pw').addEventListener('click', () => _resetPassword(id, username));
-      tr.querySelector('.admin-user-active').addEventListener('click', () => _toggleActive(id, tr.dataset.active === '1'));
+      const user = users.find(u => u.id === id);
+      tr.querySelector('.admin-user-edit').addEventListener('click', () => _editUser(user));
       tr.querySelector('.admin-user-del').addEventListener('click', () => _deleteUser(id, username));
     });
   }
 
-  async function _changeRole(id, username, currentRole) {
+  async function _editUser(user) {
+    const local = user.backend === 'local_db';
     const body = document.createElement('div');
     body.innerHTML = `
-      <p>User: <strong>${_esc(username)}</strong></p>
-      <select id="admin-edit-role" class="props-input">
-        ${ROLES.map(r => `<option value="${r}" ${r === currentRole ? 'selected' : ''}>${r}</option>`).join('')}
-      </select>
+      <p>User: <strong>${_esc(user.username)}</strong></p>
+      <label>Email
+        <input id="admin-edit-email" class="props-input" type="email" value="${_esc(user.email || '')}" ${local ? '' : 'disabled'}>
+      </label>
+      ${local ? '' : '<p class="admin-muted">Email is managed by the external authentication backend.</p>'}
+      <label>Role
+        <select id="admin-edit-role" class="props-input">
+          ${ROLES.map(r => `<option value="${r}" ${r === user.role ? 'selected' : ''}>${r}</option>`).join('')}
+        </select>
+      </label>
+      <label><input id="admin-edit-active" type="checkbox" ${user.is_active ? 'checked' : ''}> Active</label>
+      ${local ? `<label>New password <span class="admin-muted">(optional)</span>
+        <input id="admin-edit-password" class="props-input" type="password" minlength="8">
+      </label>` : ''}
     `;
-    showModal('Cambia ruolo', body, [
+    showModal('Edit user', body, [
       { label: 'Cancel' },
       { label: 'Save', class: 'btn-primary', action: async () => {
+          const patch = {};
+          const email = body.querySelector('#admin-edit-email').value.trim() || null;
+          const role = body.querySelector('#admin-edit-role').value;
+          const active = body.querySelector('#admin-edit-active').checked;
+          const password = local ? body.querySelector('#admin-edit-password').value : '';
+          if (local && email !== (user.email || null)) patch.email = email;
+          if (role !== user.role) patch.role = role;
+          if (active !== user.is_active) patch.is_active = active;
+          if (password && password.length < 8) {
+            showToast('Password too short', 'warn');
+            return;
+          }
           try {
-            await API.Users.patch(id, { role: body.querySelector('#admin-edit-role').value });
+            if (Object.keys(patch).length) await API.Users.patch(user.id, patch);
+            if (password) await API.Users.resetPassword(user.id, password);
+            showToast('User updated', 'success');
             await _renderUsers();
-          } catch (e) { showToast(_apiErr('Role change failed', e), 'error'); }
+          } catch (e) { showToast(_apiErr('Update failed', e), 'error'); }
         } },
     ]);
-  }
-
-  async function _resetPassword(id, username) {
-    const body = document.createElement('div');
-    body.innerHTML = `
-      <p>Reset password di <strong>${_esc(username)}</strong></p>
-      <input id="admin-reset-pw" class="props-input" type="password" minlength="8">
-    `;
-    showModal('Reset password', body, [
-      { label: 'Cancel' },
-      { label: 'Imposta', class: 'btn-primary', action: async () => {
-          const password = body.querySelector('#admin-reset-pw').value;
-          if (!password || password.length < 8) { showToast('Password too short', 'warn'); return; }
-          try { await API.Users.resetPassword(id, password); showToast('Password updated', 'success'); }
-          catch (e) { showToast(_apiErr('Reset failed', e), 'error'); }
-        } },
-    ]);
-  }
-
-  async function _toggleActive(id, active) {
-    try {
-      await API.Users.patch(id, { is_active: !active });
-      await _renderUsers();
-    } catch (e) {
-      showToast(_apiErr('Operation failed', e), 'error');
-    }
   }
 
   async function _deleteUser(id, username) {
@@ -291,6 +286,7 @@ const AdminPage = (() => {
           ${(cfg.data.workers || []).map(h => _hostRow(h, false)).join('')}
         </tbody>
       </table>
+      ${_hostsInfrastructureBlocks(cfg)}
       ${_persistenceBlock((cfg.data.extra_infrastructure || {}).persistence || {})}
       ${_followRabbitBlock((cfg.data.extra_top_level || {}).follow_the_rabbit || ((cfg.data.extra_top_level || {}).plus || {}).follow_the_rabbit || {})}
       <div class="admin-form-actions">
@@ -353,6 +349,7 @@ const AdminPage = (() => {
           <label>shared marker
             <input class="props-input" id="admin-ceph-marker" value="${_esc(ceph.marker || '.dnlab-cephfs')}">
           </label>
+          <label><input id="admin-ceph-require-marker" type="checkbox" ${ceph.require_shared_marker !== false ? 'checked' : ''}> require shared marker</label>
         </div>
       </section>
     `;
@@ -371,6 +368,59 @@ const AdminPage = (() => {
     `;
   }
 
+  function _hostsInfrastructureBlocks(cfg) {
+    const infra = cfg.data.extra_infrastructure || {};
+    const top = cfg.data.extra_top_level || {};
+    const jh = infra.jumphost_net || {};
+    const web = infra.webui_ports || {};
+    const rn = infra.realnet || {};
+    const mgmt = (top.defaults || {}).mgmt || {};
+    const sync = top.image_sync || {};
+    const cleanup = top.lab_cleanup || {};
+    const lines = value => Array.isArray(value) ? value.join('\n') : '';
+    return `
+      <section class="admin-section"><h3>Distributed underlay</h3><div class="admin-grid">
+        <label>underlay interface<input class="props-input" id="admin-underlay-iface" value="${_esc(infra.underlay_iface || 'eth0')}"></label>
+      </div></section>
+      <section class="admin-section"><h3>Jumphost network</h3><div class="admin-grid">
+        <label>network<input class="props-input" id="admin-jh-network" value="${_esc(jh.network || 'dnlab-jumphost')}"></label>
+        <label>bridge<input class="props-input" id="admin-jh-bridge" value="${_esc(jh.bridge || 'br-dnlab-jh')}"></label>
+        <label>IPv4 subnet<input class="props-input" id="admin-jh-subnet" value="${_esc(jh.ipv4_subnet || '192.168.100.0/24')}"></label>
+        <label>IPv4 gateway<input class="props-input" id="admin-jh-gateway" value="${_esc(jh.ipv4_gw || '192.168.100.1')}"></label>
+        <label>SSH port range<input class="props-input" id="admin-jh-ports" value="${_esc(jh.ssh_port_range || '2200-2299')}"></label>
+        <label>SSH bind IP<input class="props-input" id="admin-jh-bind" value="${_esc(jh.ssh_bind_ip || '0.0.0.0')}"></label>
+      </div></section>
+      <section class="admin-section"><h3>VD Web UI ports</h3><div class="admin-grid">
+        <label>port range<input class="props-input" id="admin-webui-ports" value="${_esc(web.port_range || '8443-8999')}"></label>
+        <label>bind IP<input class="props-input" id="admin-webui-bind" value="${_esc(web.bind_ip || '127.0.0.1')}"></label>
+      </div></section>
+      <section class="admin-section"><h3>RealNet infrastructure</h3><p>Route-reflector BGP settings remain on the dedicated RealNet BGP page.</p><div class="admin-grid">
+        <label>network<input class="props-input" id="admin-rn-network" value="${_esc(rn.network || 'dnlab-realnet')}"></label>
+        <label>bridge<input class="props-input" id="admin-rn-bridge" value="${_esc(rn.bridge || 'br-dnlab-rn')}"></label>
+        <label>IPv4 subnet<input class="props-input" id="admin-rn-subnet" value="${_esc(rn.ipv4_subnet || '192.168.101.0/24')}"></label>
+        <label>IPv4 gateway<input class="props-input" id="admin-rn-gateway" value="${_esc(rn.ipv4_gw || '192.168.101.1')}"></label>
+        <label>router image<input class="props-input" id="admin-rn-image" value="${_esc(rn.image || '')}"></label>
+        <label>WAN interface<input class="props-input" id="admin-rn-wan-iface" value="${_esc(rn.wan_iface || '')}"></label>
+      </div></section>
+      <section class="admin-section"><h3>Management defaults</h3><div class="admin-grid">
+        <label>IPv4 subnet<input class="props-input" id="admin-mgmt-subnet" value="${_esc(mgmt.ipv4_subnet || '172.20.0.0/24')}"></label>
+        <label>IPv4 gateway<input class="props-input" id="admin-mgmt-gateway" value="${_esc(mgmt.ipv4_gw || '172.20.0.1')}"></label>
+      </div></section>
+      <section class="admin-section"><h3>Image sync</h3><div class="admin-grid">
+        <label><input id="admin-sync-enabled" type="checkbox" ${sync.enabled !== false ? 'checked' : ''}> enabled</label>
+        <label>interval seconds<input class="props-input" id="admin-sync-interval" type="number" min="30" value="${_esc(sync.interval_seconds ?? 300)}"></label>
+        <label>include (one pattern per line)<textarea class="props-input" id="admin-sync-include">${_esc(lines(sync.include || ['*']))}</textarea></label>
+        <label>exclude (one pattern per line)<textarea class="props-input" id="admin-sync-exclude">${_esc(lines(sync.exclude || ['dnlab-jumphost', 'dnlab-dns', 'dnlab-realnet-router', 'dnlab-realnet-rr', 'postgres', '<none>:<none>']))}</textarea></label>
+      </div></section>
+      <section class="admin-section"><h3>Lab cleanup</h3><div class="admin-grid">
+        <label><input id="admin-cleanup-enabled" type="checkbox" ${cleanup.enabled !== false ? 'checked' : ''}> enabled</label>
+        <label><input id="admin-cleanup-dry-run" type="checkbox" ${cleanup.dry_run ? 'checked' : ''}> dry run</label>
+        <label>interval seconds<input class="props-input" id="admin-cleanup-interval" type="number" min="30" value="${_esc(cleanup.interval_seconds ?? 300)}"></label>
+        <label>grace seconds<input class="props-input" id="admin-cleanup-grace" type="number" min="0" value="${_esc(cleanup.grace_seconds ?? 600)}"></label>
+      </div></section>
+    `;
+  }
+
   async function _saveHostsConfig(cfg) {
     const rows = [..._content.querySelectorAll('.admin-host-row')];
     const hosts = rows.map(row => ({
@@ -383,6 +433,39 @@ const AdminPage = (() => {
     cfg.data.master = hosts.find((_, i) => rows[i].dataset.master === '1') || hosts[0];
     cfg.data.workers = hosts.filter((_, i) => rows[i].dataset.master !== '1');
     cfg.data.extra_infrastructure = cfg.data.extra_infrastructure || {};
+    const value = id => _content.querySelector(id)?.value.trim() || '';
+    const lines = id => value(id).split(/\n/).map(v => v.trim()).filter(Boolean);
+    cfg.data.extra_infrastructure.underlay_iface = value('#admin-underlay-iface') || 'eth0';
+    cfg.data.extra_infrastructure.jumphost_net = {
+      network: value('#admin-jh-network'), bridge: value('#admin-jh-bridge'),
+      ipv4_subnet: value('#admin-jh-subnet'), ipv4_gw: value('#admin-jh-gateway'),
+      ssh_port_range: value('#admin-jh-ports'), ssh_bind_ip: value('#admin-jh-bind'),
+    };
+    cfg.data.extra_infrastructure.webui_ports = {
+      port_range: value('#admin-webui-ports'), bind_ip: value('#admin-webui-bind'),
+    };
+    cfg.data.extra_infrastructure.realnet = {
+      ...(cfg.data.extra_infrastructure.realnet || {}),
+      network: value('#admin-rn-network'), bridge: value('#admin-rn-bridge'),
+      ipv4_subnet: value('#admin-rn-subnet'), ipv4_gw: value('#admin-rn-gateway'),
+      ...(value('#admin-rn-image') ? { image: value('#admin-rn-image') } : {}),
+      wan_iface: value('#admin-rn-wan-iface'),
+    };
+    cfg.data.extra_top_level = cfg.data.extra_top_level || {};
+    cfg.data.extra_top_level.defaults = { mgmt: {
+      ipv4_subnet: value('#admin-mgmt-subnet'), ipv4_gw: value('#admin-mgmt-gateway'),
+    }};
+    cfg.data.extra_top_level.image_sync = {
+      enabled: !!_content.querySelector('#admin-sync-enabled')?.checked,
+      include: lines('#admin-sync-include'), exclude: lines('#admin-sync-exclude'),
+      interval_seconds: Number(_content.querySelector('#admin-sync-interval')?.value || 300),
+    };
+    cfg.data.extra_top_level.lab_cleanup = {
+      enabled: !!_content.querySelector('#admin-cleanup-enabled')?.checked,
+      dry_run: !!_content.querySelector('#admin-cleanup-dry-run')?.checked,
+      interval_seconds: Number(_content.querySelector('#admin-cleanup-interval')?.value || 300),
+      grace_seconds: Number(_content.querySelector('#admin-cleanup-grace')?.value || 600),
+    };
     cfg.data.extra_infrastructure.persistence = {
       backend: _content.querySelector('#admin-persist-backend')?.value || 'local-sticky',
       root: _content.querySelector('#admin-persist-root')?.value.trim() || '/var/lib/docker/dnlab-backups',
@@ -391,10 +474,9 @@ const AdminPage = (() => {
         mountpoint: _content.querySelector('#admin-ceph-mount')?.value.trim() || '/var/lib/docker/dnlab-backups',
         expected_fstype: _content.querySelector('#admin-ceph-fstype')?.value.trim() || 'ceph',
         marker: _content.querySelector('#admin-ceph-marker')?.value.trim() || '.dnlab-cephfs',
-        require_shared_marker: true,
+        require_shared_marker: !!_content.querySelector('#admin-ceph-require-marker')?.checked,
       },
     };
-    cfg.data.extra_top_level = cfg.data.extra_top_level || {};
     cfg.data.extra_top_level.follow_the_rabbit = {
       max_sessions: Number(_content.querySelector('#admin-rabbit-max-sessions')?.value || 1),
     };
@@ -1097,6 +1179,7 @@ const AdminPage = (() => {
     }
     if (uploadLabel) uploadLabel.firstChild.textContent = sourceRequired ? 'Upload image\n            ' : 'Source-free build\n            ';
     const globs = selected.image_globs || [];
+    if (upload) upload.accept = sourceRequired && globs.length ? globs.join(",") : "";
     const examples = selected.image_examples || [];
     const parts = [];
     if (!sourceRequired) parts.push('No upload required; built from the managed vrnetlab source');

@@ -21,6 +21,7 @@ from app.views.api.console_routes import router as console_router
 from app.views.api.capture_routes import router as capture_router
 from app.views.api.follow_rabbit_routes import router as follow_rabbit_router
 from app.views.api.log_routes import router as log_router
+from app.views.api.lab_log_routes import router as lab_log_router
 from app.views.api.multinode_routes import router as multinode_router
 from app.views.api.user_routes import router as user_router
 from app.views.api.webui_routes import (
@@ -106,6 +107,7 @@ def create_app() -> FastAPI:
     application.include_router(capture_router)
     application.include_router(follow_rabbit_router)
     application.include_router(log_router)
+    application.include_router(lab_log_router)
     application.include_router(multinode_router)
     application.include_router(user_router)
     application.include_router(webui_router)

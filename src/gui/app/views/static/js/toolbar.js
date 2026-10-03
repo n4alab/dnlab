@@ -18,11 +18,17 @@ const Toolbar = (() => {
     _bind('btn-deploy',       () => _emit('deploy'));
     _bind('btn-destroy',      () => _emit('destroy'));
     _bind('btn-all-consoles', () => _emit('all-consoles'));
+    _bind('btn-all-logs',     () => _emit('all-logs'));
     _bind('btn-delete-topo',  () => _emit('delete-topo'));
     _bind('btn-fit',          () => _emit('fit'));
+    _bind('btn-zoom-in',      () => _emit('zoom-in'));
+    _bind('btn-zoom-out',     () => _emit('zoom-out'));
     _bind('btn-follow-rabbit',() => _emit('follow-rabbit'));
     _bind('btn-delete',       () => _emit('delete-selected'));
     _bind('btn-logout',       () => _emit('logout'));
+    // Labs is navigation, not the File → Open picker.  This restores the
+    // previous shell behavior when returning from the Admin view.
+    _bind('btn-labs',         () => { location.hash = 'labs'; });
 
     _bind('btn-mode-select', () => _setMode('select'));
     _bind('btn-mode-link',   () => _setMode('link'));
@@ -40,6 +46,7 @@ const Toolbar = (() => {
       _setMgmtVisible(initial);
       btnMgmt.addEventListener('click', () => toggleMgmtVisible());
     }
+    _initMenus();
   }
 
   function toggleMgmtVisible() {
@@ -74,6 +81,8 @@ const Toolbar = (() => {
     _currentTopo = name;
     const label = name ? (canWrite ? name : `${name} (read-only)`) : '(noa topology)';
     document.getElementById('topo-name-display').textContent = label;
+    const exportBtn = document.getElementById('btn-export-drawio');
+    if (exportBtn) exportBtn.disabled = !name;
     // Disable write-only buttons when the lab is read-only.
     const writeBtns = ['btn-deploy', 'btn-destroy', 'btn-delete-topo'];
     writeBtns.forEach(id => {
@@ -97,10 +106,47 @@ const Toolbar = (() => {
     if (button) button.disabled = !enabled;
   }
 
+  function setAllLogsEnabled(enabled) {
+    const button = document.getElementById('btn-all-logs');
+    if (button) button.disabled = !enabled;
+  }
+
   // ── Internals ────────────────────────────────────────────────────────
   function _bind(id, handler) {
     const el = document.getElementById(id);
     if (el) el.addEventListener('click', handler);
+  }
+
+  function _initMenus() {
+    const menus = [
+      ['btn-file-menu', 'file-menu'],
+      ['btn-access-menu', 'access-menu'],
+      ['btn-more-menu', 'more-menu'],
+      ['btn-user-menu', 'user-menu'],
+    ];
+    menus.forEach(([triggerId, menuId]) => {
+      const trigger = document.getElementById(triggerId);
+      const menu = document.getElementById(menuId);
+      if (!trigger || !menu) return;
+      trigger.addEventListener('click', e => {
+        e.stopPropagation();
+        const willOpen = menu.hidden;
+        menus.forEach(([, otherId]) => {
+          const other = document.getElementById(otherId);
+          if (other) other.hidden = true;
+        });
+        menu.hidden = !willOpen;
+        trigger.setAttribute('aria-expanded', String(willOpen));
+      });
+    });
+    document.addEventListener('click', () => {
+      menus.forEach(([triggerId, menuId]) => {
+        const trigger = document.getElementById(triggerId);
+        const menu = document.getElementById(menuId);
+        if (menu) menu.hidden = true;
+        if (trigger) trigger.setAttribute('aria-expanded', 'false');
+      });
+    });
   }
 
   function _setMode(m) {
@@ -167,6 +213,7 @@ const Toolbar = (() => {
     setCurrentTopo,
     setLabStatus,
     setAllConsolesEnabled,
+    setAllLogsEnabled,
     toggleMgmtVisible,
     isMgmtVisible,
     on,

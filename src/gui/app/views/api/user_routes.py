@@ -10,7 +10,7 @@ Safety rails enforced on every mutation:
 * The last active admin cannot be deleted, demoted, or deactivated —
   otherwise the install becomes unmanageable without direct DB access.
 * An admin cannot delete or deactivate their own row (self-lockout).
-  Role and password changes to self are allowed.
+  Role, email and password changes to self are allowed.
 
 Every mutation emits an :mod:`app.auth.audit` event so the audit_log
 trail covers the full user lifecycle.
@@ -31,6 +31,7 @@ from app.auth.db import get_session
 from app.auth.deps import require_role
 from app.auth.models import AuthBackend, Role, User
 from app.auth.password import hash_password
+from app.auth.sessions import revoke_all_for_user
 
 log = logging.getLogger(__name__)
 
@@ -50,7 +51,7 @@ class UserRow(BaseModel):
     last_login_at: str | None = None
 
 
-class UserCreatete(BaseModel):
+class UserCreate(BaseModel):
     username: str = Field(min_length=1, max_length=64)
     password: str = Field(min_length=8, max_length=256)
     role: Role = Role.student
@@ -119,7 +120,7 @@ async def _get_or_404(db: AsyncSession, user_id: int) -> User:
 
 
 def _only_local_db(u: User) -> None:
-    """CRUD on password/role is meaningless for federated users."""
+    """Credentials and profile email belong to local_db accounts only."""
     if u.backend != AuthBackend.local_db:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
@@ -141,7 +142,7 @@ async def list_users(
 
 @router.post("/", response_model=UserRow, status_code=status.HTTP_201_CREATED)
 async def create_user(
-    body: UserCreatete,
+    body: UserCreate,
     request: Request,
     admin: Annotated[User, Depends(require_role(Role.admin))],
     db: Annotated[AsyncSession, Depends(get_session)],
@@ -185,6 +186,7 @@ async def patch_user(
     u = await _get_or_404(db, user_id)
 
     changes: dict[str, object] = {}
+    revoke_sessions = False
 
     if body.role is not None and body.role != u.role:
         if body.role == Role.assistant:
@@ -199,10 +201,15 @@ async def patch_user(
                 )
         changes["role"] = (u.role.value, body.role.value)
         u.role = body.role
+        revoke_sessions = True
 
-    if body.email is not None and body.email != u.email:
-        changes["email"] = (u.email, body.email)
-        u.email = body.email
+    # ``None`` clears an email address; model_fields_set distinguishes it from
+    # an omitted PATCH field.
+    if "email" in body.model_fields_set:
+        _only_local_db(u)
+        if body.email != u.email:
+            changes["email"] = (u.email, body.email)
+            u.email = body.email
 
     if body.is_active is not None and body.is_active != u.is_active:
         if u.id == admin.id and body.is_active is False:
@@ -222,13 +229,20 @@ async def patch_user(
                 )
         changes["is_active"] = (u.is_active, body.is_active)
         u.is_active = body.is_active
+        if body.is_active is False:
+            revoke_sessions = True
 
     if changes:
+        revoked = await revoke_all_for_user(db, user_id=u.id) if revoke_sessions else 0
         await db.flush()
         await audit.record(
             db, event="user.update", user=admin, request=request,
             resource=f"user:{u.username}",
-            detail={"target_id": u.id, "changes": {k: list(v) for k, v in changes.items()}},
+            detail={
+                "target_id": u.id,
+                "changes": {k: list(v) for k, v in changes.items()},
+                "sessions_revoked": revoked,
+            },
         )
         await db.commit()
         log.info("user.update by=%s target=%s changes=%s",
@@ -247,11 +261,12 @@ async def reset_password(
     u = await _get_or_404(db, user_id)
     _only_local_db(u)
     u.password_hash = hash_password(body.password)
+    revoked = await revoke_all_for_user(db, user_id=u.id)
     await db.flush()
     await audit.record(
         db, event="user.password_reset", user=admin, request=request,
         resource=f"user:{u.username}",
-        detail={"target_id": u.id},
+        detail={"target_id": u.id, "sessions_revoked": revoked},
     )
     await db.commit()
     log.info("user.password_reset by=%s target=%s", admin.username, u.username)

@@ -22,42 +22,17 @@
     return;
   }
 
-  let autoScroll = true;
-  logEl.addEventListener('scroll', () => {
-    const atBottom = logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 8;
-    autoScroll = atBottom;
+  const session = new LogSession({
+    labId,
+    nodeName,
+    container: logEl,
+    onStatus: (status) => {
+      _setStatus(status === 'connected' ? 'ok' : status === 'connecting' ? '' : 'err', status);
+    },
   });
-
-  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  const wsUrl = `${proto}://${location.host}/ws/logs/${labId}/${encodeURIComponent(nodeName)}`;
-  const ws = new WebSocket(wsUrl);
-
-  ws.onopen = () => _setStatus('ok', 'connected');
-  ws.onmessage = (ev) => {
-    _appendLine(ev.data);
-    if (autoScroll) logEl.scrollTop = logEl.scrollHeight;
-  };
-  ws.onclose = (ev) => {
-    const authFail = ev.code === 4401;
-    _setStatus('err', authFail ? 'unauthorized' : 'closed');
-    _appendLine(
-      authFail
-        ? '[Session expired — reload the page after logging in]'
-        : '[WebSocket closed]',
-      'log-line-warn',
-    );
-  };
-  ws.onerror = () => {
-    _setStatus('err', 'error');
-    _appendLine('[Error WebSocket]', 'log-line-err');
-  };
-
-  function _appendLine(text, extraClass = '') {
-    const line = document.createElement('div');
-    line.className = `log-line ${extraClass}`.trim();
-    line.textContent = String(text).replace(/\r?\n$/, '');
-    logEl.appendChild(line);
-  }
+  session.connect();
+  window.addEventListener('pagehide', () => session.dispose(), { once: true });
+  window.addEventListener('beforeunload', () => session.dispose(), { once: true });
 
   function _setStatus(cls, text) {
     hdrStat.className = `status ${cls || ''}`;

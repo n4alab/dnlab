@@ -1,0 +1,15 @@
+id: 20261003-181212-redesign-the-desktop-lab-workspace
+type: feature
+title: Redesign the desktop lab workspace
+description: Reorganize the canvas UI with floating drawing and view controls, a contextual
+  properties drawer, lab diagnostics tabs, and a safe lab-correlated operational log
+  stream.
+components:
+- gui
+audience:
+- operator
+- user
+visibility: public
+breaking: false
+upgrade_notes: []
+references: []

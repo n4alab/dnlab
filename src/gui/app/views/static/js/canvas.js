@@ -1243,6 +1243,14 @@ const Canvas = (() => {
     cy.fit(undefined, 40);
   }
 
+  // Button-based view controls complement Cytoscape's native mouse-wheel
+  // zoom/pan; they must not disable or replace user wheel interaction.
+  function zoomBy(delta) {
+    if (!cy) return;
+    const next = Math.max(cy.minZoom(), Math.min(cy.maxZoom(), cy.zoom() + delta));
+    cy.zoom({ level: next, renderedPosition: { x: cy.width() / 2, y: cy.height() / 2 } });
+  }
+
   function clear() {
     _clearRabbitDots();
     _stopRabbitPulse();
@@ -2317,7 +2325,7 @@ const Canvas = (() => {
     setLinkStyle, addAnnotation, updateAnnotation, moveAnnotationLayer, deleteAnnotation, setAnnotations, getAnnotations,
     setActiveCaptures, setFollowRabbitSessions,
     setMode, setTheme, setInterfaceResolver, formatInterfaceLabel,
-    fit, clear, on, projectPosition,
+    fit, zoomBy, clear, on, projectPosition,
     setMgmt, clearMgmt, hasMgmt, getMgmtPosition, setMgmtVisible, isMgmtId,
     setRealNetInfoVisible, toggleRealNetInfoVisible, setRealNetRemoteAs,
     setWebUIRuntime, setMgmtRuntime, setPlacementRuntime, setNodeRuntime, setNodeOperation,

@@ -15,9 +15,6 @@ const EventsPanel = (() => {
   let _rootEl = null;
   let _bodyEl = null;
   let _statusEl = null;
-  let _toggleEl = null;
-  let _clearEl = null;
-  let _collapsed = false;
   let _autoScroll = true;
   let _latestPhase = null;
   let _statusListener = null;
@@ -26,43 +23,17 @@ const EventsPanel = (() => {
   let _reconnectTimer = null;
   const _lastSigByKey = new Map();
 
-  function init(rootId = 'events-footer') {
+  function init(rootId = 'inspector-events') {
     _rootEl = document.getElementById(rootId);
     if (!_rootEl) return;
-    _rootEl.innerHTML = `
-      <div class="events-header">
-        <span class="events-title">⚡ Lab events</span>
-        <span class="events-latest" id="events-latest">—</span>
-        <span class="events-spacer"></span>
-        <button class="events-btn" id="events-clear" title="Clear Log">🧹</button>
-        <button class="events-btn" id="events-toggle" title="Expand / Collapse">▾</button>
-      </div>
-      <div class="events-body" id="events-body"></div>
-    `;
-    _bodyEl = _rootEl.querySelector('#events-body');
-    _statusEl = _rootEl.querySelector('#events-latest');
-    _toggleEl = _rootEl.querySelector('#events-toggle');
-    _clearEl = _rootEl.querySelector('#events-clear');
-
-    _toggleEl.addEventListener('click', _toggleCollapsed);
-    _rootEl.querySelector('.events-header').addEventListener('click', (e) => {
-      // Clicking the header (but not the buttons) toggles as well.
-      if (e.target === _toggleEl || e.target === _clearEl) return;
-      _toggleCollapsed();
-    });
-    _clearEl.addEventListener('click', (e) => {
-      e.stopPropagation();
-      _bodyEl.innerHTML = '';
-      _lastSigByKey.clear();
-    });
+    _bodyEl = _rootEl;
+    _statusEl = document.getElementById('inspector-summary');
 
     _bodyEl.addEventListener('scroll', () => {
       const atBottom = _bodyEl.scrollHeight - _bodyEl.scrollTop - _bodyEl.clientHeight < 8;
       _autoScroll = atBottom;
     });
 
-    // Start collapsed until a topology is opened.
-    _setCollapsed(true);
   }
 
   function setLab(labId) {
@@ -71,10 +42,10 @@ const EventsPanel = (() => {
     _lab = labId;
     _lastSigByKey.clear();
     if (!labId) {
-      _setCollapsed(true);
+      LabInspector?.setCollapsed(true);
       return;
     }
-    _setCollapsed(false);
+    LabInspector?.setCollapsed(true);
     _appendLine(`— connection to the lab —`, 'events-sys');
     _intentionalClose = false;
     _openWs(labId);
@@ -147,15 +118,6 @@ const EventsPanel = (() => {
     }
   }
 
-  function _toggleCollapsed() { _setCollapsed(!_collapsed); }
-
-  function _setCollapsed(v) {
-    _collapsed = v;
-    if (!_rootEl) return;
-    _rootEl.classList.toggle('collapsed', v);
-    if (_toggleEl) _toggleEl.textContent = v ? '▴' : '▾';
-  }
-
   function _renderEvent(evt) {
     const cls = _statusClass(evt.status);
     const elapsed = evt.elapsed_ms ? `${(evt.elapsed_ms / 1000).toFixed(1)}s` : '';
@@ -163,12 +125,13 @@ const EventsPanel = (() => {
     const detail = evt.detail ? ` — ${evt.detail}` : '';
     const line = `[${evt.phase}/${evt.status}]${host}${detail}${elapsed ? `  (${elapsed})` : ''}`;
     _appendLine(line, cls);
+    if (['error', 'failed', 'warning'].includes(evt.status)) LabInspector?.open('events');
   }
 
   function _appendLine(text, extraClass = '') {
     if (!_bodyEl) return;
     const el = document.createElement('div');
-    el.className = `events-line ${extraClass}`;
+    el.className = `inspector-line ${extraClass}`;
     el.textContent = text;
     _bodyEl.appendChild(el);
     // Cap buffer to 500 lines to match server-side ring buffer.
@@ -177,10 +140,10 @@ const EventsPanel = (() => {
   }
 
   function _updateLatest(evt) {
-    if (!_statusEl) return;
     const host = evt.host ? `@${evt.host}` : '';
-    _statusEl.textContent = `${evt.phase}/${evt.status} ${host} ${evt.detail || ''}`.trim();
-    _statusEl.className = `events-latest ${_statusClass(evt.status)}`;
+    const text = `${evt.phase}/${evt.status} ${host} ${evt.detail || ''}`.trim();
+    if (_statusEl) _statusEl.textContent = text;
+    LabInspector?.setSummary(text);
   }
 
   function _statusClass(status) {

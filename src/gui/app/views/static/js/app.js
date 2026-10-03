@@ -65,7 +65,9 @@
   Properties.init('props-panel');
   ConsolePanel.init('console-tabs', 'console-term-area');
   LogsPanel.init();
-  EventsPanel.init('events-footer');
+  LabInspector.init();
+  EventsPanel.init('inspector-events');
+  _initWorkspaceDrawer();
   AdminPage.init('admin-view');
   ContextMenu.init();
   MgmtPanel.init('mgmt-panel');
@@ -102,9 +104,11 @@
     if (isDeploy && !isTerminal) {
       Toolbar.setLabStatus('deploying', `${phase} (${status})${evt.detail ? ' — ' + evt.detail : ''}`);
       Toolbar.setAllConsolesEnabled(false);
+      Toolbar.setAllLogsEnabled(false);
     } else if (isDestroy && !isTerminal) {
       Toolbar.setLabStatus('destroying', `${phase} (${status})${evt.detail ? ' — ' + evt.detail : ''}`);
       Toolbar.setAllConsolesEnabled(false);
+      Toolbar.setAllLogsEnabled(false);
     }
   });
 
@@ -195,18 +199,9 @@
 
   // ── Canvas: right-click on node → context menu ────────────────────────
   Canvas.on('node-rightclick', async ({ data, screenX, screenY }) => {
-    if (!lastLiveStatus && currentLabId) {
-      await _refreshLabStatus();
-    }
-    const liveData = _buildPropertiesNodeData(data);
-    const c = _containerForNode(liveData.id);
-    const isNodeRunning = liveData.runtime_state === 'running' || !!(c && c.state === 'running');
-    const isLabRuntimeAvailable = labStatus === 'running'
-      || !!lastLiveStatus?.dnlab_deployed
-      || !!(lastLiveStatus?.nodes && Object.keys(lastLiveStatus.nodes).length);
-    ContextMenu.show(liveData, screenX, screenY, isLabRuntimeAvailable, isNodeRunning);
-
-    if (!lastLab) _refreshLabStatus();
+    // Right-click is the deliberate edit gesture. Left click remains a pure
+    // selection action, so inspecting a dense topology never shifts layout.
+    await _openPropertiesModal(data);
   });
 
   Canvas.on('edge-select', () => {});
@@ -256,7 +251,6 @@
     if (!currentLabId) { showToast('Lab not running', 'warn'); return; }
     if (!port || !port.port) return;
     try {
-      showToast('Opening tunnel WebUI…', 'info');
       const res = await API.Labs.openWebUI(currentLabId, node.id, {
         scheme: port.scheme, port: port.port,
         path:   port.path || '/',
@@ -265,6 +259,11 @@
       const winName = `dnlab-webui-${currentLabId}-${node.id}-${port.port}`;
       WindowManager.open(res.url, winName, { width: 1280, height: 820 });
     } catch (e) {
+      if (String(e.message || '').includes('Device Web UI proxying requires')) {
+        const winName = `dnlab-webui-${currentLabId}-${node.id}-${port.port}`;
+        WindowManager.open('/webui/unavailable', winName, { width: 1280, height: 820 });
+        return;
+      }
       showToast('Opening Web UI failed: ' + e.message, 'error');
     }
   });
@@ -521,6 +520,7 @@
         currentLabCanWrite = true;
         Toolbar.setCurrentTopo(created.name);
         EventsPanel.setLab(created.id);
+        LabLogsPanel.setLab(created.id);
       } catch (e) {
         showToast('Creation lab failed: ' + e.message, 'error');
         return;
@@ -562,9 +562,24 @@
     if (!popup) showToast('Popup blocked: allow popups to open all consoles', 'warn');
   });
 
+  Toolbar.on('all-logs', () => {
+    const labId = currentLabId;
+    if (!labId) { showToast('No topology open', 'warn'); return; }
+    if (!_labHasLiveConsoles(lastLab)) {
+      Toolbar.setAllLogsEnabled(false);
+      showToast('Runtime status is stale or contains no live VD logs', 'warn');
+      return;
+    }
+    // Keep window.open in the direct click call stack so browser popup
+    // protection recognises the explicit user gesture.
+    const popup = LogsPanel.openAll(labId);
+    if (!popup) showToast('Popup blocked: allow popups to open all logs', 'warn');
+  });
+
   async function _executeDeploy() {
     Toolbar.setLabStatus('deploying', 'starting deploy...');
     Toolbar.setAllConsolesEnabled(false);
+    Toolbar.setAllLogsEnabled(false);
     showToast('Deployment in progress…', 'info');
     try {
       const res = await API.Labs.deploy(currentLabId);
@@ -634,11 +649,14 @@
   });
 
   Toolbar.on('fit', () => Canvas.fit());
+  Toolbar.on('zoom-in', () => Canvas.zoomBy(0.2));
+  Toolbar.on('zoom-out', () => Canvas.zoomBy(-0.2));
   Toolbar.on('mgmt-visible', (v) => Canvas.setMgmtVisible(v));
   Canvas.setMgmtVisible(Toolbar.isMgmtVisible());
   Toolbar.on('follow-rabbit', () => {
     if (!currentLabId) { showToast('No topology open', 'warn'); return; }
-    FollowRabbitModal.open(currentLabId, Canvas.getTopologyData().nodes || []);
+    _openWorkspaceDrawer('rabbit');
+    FollowRabbitModal.open(currentLabId, Canvas.getTopologyData().nodes || [], document.getElementById('rabbit-panel'));
   });
   Toolbar.on('delete-selected', async () => {
     if (!currentLabId) return;
@@ -957,6 +975,7 @@
         currentLabCanWrite = true;
         Toolbar.setCurrentTopo(created.name);
         EventsPanel.setLab(created.id);
+        LabLogsPanel.setLab(created.id);
       } catch (e) {
         showToast('Creation lab failed: ' + e.message, 'error');
         return;
@@ -1236,6 +1255,7 @@
       }
       MgmtPanel.setTopology(currentLabName, mgmtCfg);
       EventsPanel.setLab(currentLabId);
+      LabLogsPanel.setLab(currentLabId);
       await _refreshLabStatus();
       showToast(`Aperto: ${currentLabName}`, 'success');
     } catch (e) {
@@ -1259,11 +1279,13 @@
     Toolbar.setCurrentTopo(null);
     Toolbar.setLabStatus('stopped');
     Toolbar.setAllConsolesEnabled(false);
+    Toolbar.setAllLogsEnabled(false);
     Canvas.loadTopology({ name: '', nodes: [], links: [], extra: {} });
     Canvas.clearMgmt();
     MgmtPanel.clear();
     JumphostBox.clear();
     EventsPanel.setLab(null);
+    LabLogsPanel.setLab(null);
     Canvas.setRealNetRemoteAs('');
     Canvas.setActiveCaptures([]);
     Canvas.setFollowRabbitSessions([]);
@@ -1319,6 +1341,7 @@
       lastLab = null;
       Toolbar.setLabStatus('unknown');
       Toolbar.setAllConsolesEnabled(false);
+      Toolbar.setAllLogsEnabled(false);
       Canvas.setMgmtRuntime({});
     }
     try {
@@ -1377,7 +1400,9 @@
   }
 
   function _updateAllConsolesAvailability() {
-    Toolbar.setAllConsolesEnabled(_labHasLiveConsoles(lastLab));
+    const enabled = _labHasLiveConsoles(lastLab);
+    Toolbar.setAllConsolesEnabled(enabled);
+    Toolbar.setAllLogsEnabled(enabled);
   }
 
   function _runtimeMgmtFromContainers(containers) {
@@ -1439,10 +1464,10 @@
 
   async function _openPropertiesModal(nodeData) {
     if (!nodeData) return;
-    const host = document.createElement('div');
-    host.className = 'props-modal-panel';
-    host.dataset.modalSize = 'wide';
-    showModal('Node properties', host, [{ label: 'Close' }]);
+    _openWorkspaceDrawer('properties');
+    const host = document.getElementById('props-panel');
+    if (!host) return;
+    host.replaceChildren();
     Properties.setPanelElement(host);
 
     if (!lastLiveStatus && currentLabId) {
@@ -1466,6 +1491,28 @@
       await _refreshLabStatus();
       _refreshOpenNodeProperties(data.id);
     }
+  }
+
+  function _openWorkspaceDrawer(tab) {
+    const drawer = document.getElementById('workspace-drawer');
+    if (!drawer) return;
+    drawer.hidden = false;
+    drawer.querySelectorAll('[data-drawer-tab]').forEach(button => {
+      const active = button.dataset.drawerTab === tab;
+      button.classList.toggle('active', active);
+      const panel = document.getElementById(active ? `${tab === 'properties' ? 'props' : 'rabbit'}-panel` : `${button.dataset.drawerTab === 'properties' ? 'props' : 'rabbit'}-panel`);
+      if (panel) panel.hidden = !active;
+    });
+  }
+
+  function _initWorkspaceDrawer() {
+    document.querySelectorAll('[data-drawer-tab]').forEach(button => {
+      button.addEventListener('click', () => _openWorkspaceDrawer(button.dataset.drawerTab));
+    });
+    document.getElementById('btn-close-drawer')?.addEventListener('click', () => {
+      FollowRabbitModal.close();
+      document.getElementById('workspace-drawer').hidden = true;
+    });
   }
 
   async function _refreshRealNetConfig() {
@@ -1561,15 +1608,12 @@
 
   function _initViewSwitch(user) {
     const isAdmin = user && user.role === 'admin';
-    const wrap = document.getElementById('view-switch');
-    const labsBtn = document.getElementById('view-labs');
     const adminBtn = document.getElementById('view-admin');
     const labView = document.getElementById('lab-view');
     const adminView = document.getElementById('admin-view');
-    if (!wrap || !labsBtn || !adminBtn || !labView || !adminView) return;
+    if (!adminBtn || !labView || !adminView) return;
 
-    wrap.hidden = !isAdmin;
-    labsBtn.addEventListener('click', () => { location.hash = 'labs'; });
+    adminBtn.hidden = !isAdmin;
     adminBtn.addEventListener('click', () => { location.hash = 'admin'; });
     window.addEventListener('hashchange', applyRoute);
     applyRoute();
@@ -1586,13 +1630,14 @@
       adminView.hidden = !admin;
       labView.classList.toggle('active', !admin);
       adminView.classList.toggle('active', admin);
-      labsBtn.classList.toggle('active', !admin);
-      adminBtn.classList.toggle('active', admin);
+      document.body.classList.toggle('admin-active', admin);
       if (admin) {
         EventsPanel.setLab(null);
+        LabLogsPanel.setLab(null);
         AdminPage.show();
       } else if (currentLabId) {
         EventsPanel.setLab(currentLabId);
+        LabLogsPanel.setLab(currentLabId);
       }
     }
   }

@@ -18,7 +18,8 @@ def test_toolbar_places_all_consoles_next_to_start_stop_and_initially_disables_i
     assert start < stop < consoles < delete
     button = html[consoles : html.index("</button>", consoles)]
     assert "disabled" in button
-    assert "▣ Consoles" in button
+    assert 'use href="#i-terminal"' in button
+    assert "Consoles" in button
 
 
 def test_toolbar_exposes_read_only_safe_all_consoles_action():
