@@ -1,3 +1,4 @@
+import asyncio
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -95,3 +96,16 @@ def test_image_build_kinds_include_globs_and_readme_examples(monkeypatch, tmp_pa
 
     assert by_kind["cisco_n9kv"]["image_globs"] == ["*.qcow2"]
     assert by_kind["cisco_n9kv"]["image_examples"] == ["n9kv-9300-10.5.2.qcow2"]
+
+
+def test_vrnetlab_binding_is_proxied_to_image_build_for_admins(monkeypatch):
+    monkeypatch.setattr(admin_routes.settings, "DNLAB_IMAGE_BUILD_API_URL", "http://image-build:8082")
+
+    async def fake_get(path):
+        assert path == "/vrnetlab/binding"
+        return {"state": "aligned", "current_commit": "a" * 40}
+
+    monkeypatch.setattr(admin_routes, "_image_build_api_get", fake_get)
+    result = asyncio.run(admin_routes.image_build_vrnetlab_binding(None))
+
+    assert result["state"] == "aligned"

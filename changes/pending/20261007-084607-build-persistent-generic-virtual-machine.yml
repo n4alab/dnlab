@@ -1,0 +1,13 @@
+id: 20261007-084607-build-persistent-generic-virtual-machine
+type: feature
+title: Build persistent generic virtual machines from QCOW2 images
+description: Add an administrator wizard for generic QEMU appliances with persistent
+  disks, hardware profiles, and guest port mappings.
+components:
+- image-build
+audience:
+- admin
+visibility: public
+breaking: false
+upgrade_notes: []
+references: []

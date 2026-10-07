@@ -1060,6 +1060,24 @@ const AdminPage = (() => {
             <input id="admin-build-upload" class="props-input" type="file">
           </label>
           <p id="admin-build-format-hint" class="admin-muted"></p>
+          <fieldset id="admin-generic-vm-spec" class="props-fieldset" hidden>
+            <legend>Generic VM profile</legend>
+            <div class="admin-grid">
+              <label>Device ID<input id="generic-id" class="props-input" placeholder="my_router"></label>
+              <label>Version<input id="generic-version" class="props-input" placeholder="1.0.0"></label>
+              <label>Label<input id="generic-label" class="props-input" placeholder="required, e.g. My Router"></label>
+              <label>Vendor<input id="generic-vendor" class="props-input" value="generic"></label>
+              <label>Type<input id="generic-type" class="props-input" value="server"></label>
+              <label>Firmware<select id="generic-firmware" class="props-input"><option value="bios">BIOS</option><option value="uefi">UEFI</option></select></label>
+              <label>NIC model<select id="generic-nic" class="props-input"><option value="virtio">virtio</option><option value="e1000">e1000</option></select></label>
+              <label>vCPU<input id="generic-vcpu" class="props-input" type="number" min="1" max="64" value="1"></label>
+              <label>RAM MiB<input id="generic-ram" class="props-input" type="number" min="256" value="2048"></label>
+              <label>Data ports<input id="generic-ports" class="props-input" type="number" min="1" max="32" value="8"></label>
+              <label>Data name template<input id="generic-template" class="props-input" value="eth{i}" placeholder="Ethernet{n}"></label>
+            </div>
+            <p class="admin-muted">Runtime port 1 is management; set its guest name below. Data ports follow in QEMU order.</p>
+            <div id="generic-port-map"></div>
+          </fieldset>
           <div id="admin-build-progress" class="admin-build-progress" hidden>
             <div class="admin-build-progress-bar"><span id="admin-build-progress-fill"></span></div>
             <span id="admin-build-progress-label" class="admin-muted"></span>
@@ -1081,6 +1099,8 @@ const AdminPage = (() => {
     _buildKindsByName = Object.fromEntries(buildKinds.map(k => [k.kind, k]));
     _content.querySelector('#admin-build-start').addEventListener('click', _startBuild);
     _content.querySelector('#admin-build-kind').addEventListener('change', _updateFormatHint);
+    _content.querySelector('#generic-ports').addEventListener('input', _renderGenericPortMap);
+    _content.querySelector('#generic-template').addEventListener('input', _renderGenericPortMap);
     _content.querySelector('#admin-jobs-refresh').addEventListener('click', _renderJobs);
     _content.querySelector('#admin-jobs-clear').addEventListener('click', _clearJobs);
     _content.querySelector('#admin-sync-reconcile').addEventListener('click', _triggerReconcile);
@@ -1099,6 +1119,7 @@ const AdminPage = (() => {
         vrnetlab_dir: k.vrnetlab_dir || null,
         image_globs: Array.isArray(k.image_globs) ? k.image_globs : [],
         image_examples: Array.isArray(k.image_examples) ? k.image_examples : [],
+        development_warning: typeof k.development_warning === 'string' ? k.development_warning : '',
         source_required: k.source_required !== false,
       })).sort((a, b) => String(a.kind).localeCompare(String(b.kind)));
     }
@@ -1170,6 +1191,10 @@ const AdminPage = (() => {
     const hint = _content?.querySelector('#admin-build-format-hint');
     if (!hint) return;
     const selected = _selectedBuildKind() || {};
+    const generic = selected.kind === 'generic_vm';
+    const genericBox = _content?.querySelector('#admin-generic-vm-spec');
+    if (genericBox) genericBox.hidden = !generic;
+    if (generic) _renderGenericPortMap();
     const upload = _content?.querySelector('#admin-build-upload');
     const uploadLabel = _content?.querySelector('#admin-build-upload-label');
     const sourceRequired = selected.source_required !== false;
@@ -1185,7 +1210,46 @@ const AdminPage = (() => {
     if (!sourceRequired) parts.push('No upload required; built from the managed vrnetlab source');
     if (sourceRequired && globs.length) parts.push(`Expected format: ${globs.join(' ')}`);
     if (examples.length) parts.push(`Example: ${examples.join(', ')}`);
+    if (selected.development_warning) parts.push(selected.development_warning);
     hint.textContent = parts.join(' · ');
+  }
+
+  function _genericFmt(template, n, i) {
+    return String(template || 'eth{i}').replace(/\{n\}/g, String(n)).replace(/\{i\}/g, String(i));
+  }
+
+  function _renderGenericPortMap() {
+    const box = _content?.querySelector('#generic-port-map');
+    if (!box || _content.querySelector('#admin-generic-vm-spec')?.hidden) return;
+    const count = Math.max(1, Math.min(32, Number(_content.querySelector('#generic-ports')?.value || 8) || 8));
+    const template = _content.querySelector('#generic-template')?.value || 'eth{i}';
+    const old = Object.fromEntries([...box.querySelectorAll('[data-port]')].map(el => [el.dataset.port, el.value]));
+    let rows = `<label>Runtime eth0 · management guest name<input class="props-input" data-port="1" value="${_esc(old['1'] || 'mgmt0')}"></label>`;
+    for (let i = 1; i <= count; i++) rows += `<label>Runtime eth${i}<input class="props-input" data-port="${i + 1}" value="${_esc(old[String(i + 1)] || _genericFmt(template, i, i - 1))}"></label>`;
+    box.innerHTML = `<div class="admin-grid">${rows}</div>`;
+  }
+
+  function _genericVmSpec() {
+    const value = id => _content.querySelector(id)?.value.trim() || '';
+    const portNames = Object.fromEntries([..._content.querySelectorAll('#generic-port-map [data-port]')].map(el => [el.dataset.port, el.value.trim()]));
+    return { id: value('#generic-id'), version: value('#generic-version'), label: value('#generic-label'),
+      vendor: value('#generic-vendor'), type: value('#generic-type'), firmware: value('#generic-firmware'),
+      nic_model: value('#generic-nic'), vcpu: Number(value('#generic-vcpu')), ram_mb: Number(value('#generic-ram')),
+      data_ports: Number(value('#generic-ports')), port_template: value('#generic-template'), mgmt_name: portNames['1'], port_names: portNames };
+  }
+
+  function _genericVmSpecError(spec) {
+    const labels = {
+      id: 'Device ID', version: 'Version', label: 'Label', vendor: 'Vendor', type: 'Type',
+      mgmt_name: 'Management guest name', port_template: 'Data name template',
+    };
+    for (const [key, label] of Object.entries(labels)) {
+      if (!String(spec[key] || '').trim()) return `${label} is required`;
+    }
+    for (let port = 1; port <= spec.data_ports + 1; port++) {
+      if (!String(spec.port_names?.[port] || '').trim()) return `Guest name for runtime eth${port - 1} is required`;
+    }
+    return '';
   }
 
   function _matchesGlob(name, globs) {
@@ -1222,6 +1286,12 @@ const AdminPage = (() => {
       return;
     }
     const kind = _content.querySelector('#admin-build-kind').value;
+    const genericSpec = kind === 'generic_vm' ? _genericVmSpec() : null;
+    const genericSpecError = genericSpec ? _genericVmSpecError(genericSpec) : '';
+    if (genericSpecError) {
+      _showBuildError(genericSpecError);
+      return;
+    }
     const globs = selected.image_globs || [];
     if (file && !_matchesGlob(file.name, globs)) {
       _showBuildError(`'${file.name}' non corrisponde al formato atteso (${globs.join(' ')})`);
@@ -1245,7 +1315,7 @@ const AdminPage = (() => {
         else _setUploadProgress(p.percent, `Uploading… ${p.percent}%`);
       });
       _setUploadProgress(-1, 'Building…');
-      await API.Admin.startImageBuild({ kind, source_path: saved.source_path });
+      await API.Admin.startImageBuild({ kind, source_path: saved.source_path, generic_spec: genericSpec });
       showToast('Build started', 'success');
       if (upload) upload.value = '';
       await _renderJobs();

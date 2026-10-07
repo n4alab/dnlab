@@ -68,6 +68,7 @@ class ImageBuildRequest(BaseModel):
     kind: str = Field(min_length=1, max_length=64)
     source_path: str | None = Field(default=None, max_length=4096)
     with_persistence: bool = False
+    generic_spec: dict | None = None
 
 
 class ImageFilenameValidationRequest(BaseModel):
@@ -91,6 +92,7 @@ class ImageBuildJobOut(BaseModel):
     kind: str
     source_path: str | None
     with_persistence: bool
+    generic_spec: dict | None = None
     created_at: str
     started_at: str | None = None
     finished_at: str | None = None
@@ -104,6 +106,7 @@ class _ImageBuildJob:
     kind: str
     source_path: str | None
     with_persistence: bool
+    generic_spec: dict | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     started_at: datetime | None = None
     finished_at: datetime | None = None
@@ -114,6 +117,7 @@ class _ImageBuildJob:
 
 _JOBS: dict[str, _ImageBuildJob] = {}
 _JOB_LOG_LIMIT = 1200
+_PUBLISHED_GENERIC_JOBS: set[str] = set()
 
 
 def _paths_file() -> Path:
@@ -364,6 +368,15 @@ async def image_build_kinds(
     return _local_image_build_kinds()
 
 
+@router.get("/image-build/vrnetlab-binding")
+async def image_build_vrnetlab_binding(
+    _admin: Annotated[User, Depends(require_role(Role.admin))],
+):
+    if settings.DNLAB_IMAGE_BUILD_API_URL:
+        return await _image_build_api_get("/vrnetlab/binding")
+    raise HTTPException(503, "image-build service is not configured")
+
+
 @router.post("/image-build/validate-filename")
 async def validate_image_build_filename(
     body: ImageFilenameValidationRequest,
@@ -405,6 +418,10 @@ async def create_image_build_job(
     _request: Request,
     _admin: Annotated[User, Depends(require_role(Role.admin))],
 ):
+    if body.kind == "generic_vm":
+        _require_config_writable()
+        if isinstance(body.generic_spec, dict):
+            _validate_generic_catalog_fields(body.generic_spec)
     if settings.DNLAB_IMAGE_BUILD_API_URL:
         return await _image_build_api_post("/jobs", body.model_dump())
     root = _image_build_dir()
@@ -425,12 +442,20 @@ async def create_image_build_job(
             raise HTTPException(400, f"source image not found: {source}")
         _validate_local_image_build_source(body.kind, source)
 
+    if body.kind == "generic_vm":
+        try:
+            body.generic_spec = _validate_generic_vm_spec(module, body.generic_spec)
+            _validate_generic_catalog_fields(body.generic_spec)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
+
     with_persistence = _local_image_kind_is_persistent(body.kind)
     job = _ImageBuildJob(
         id=secrets.token_hex(8),
         kind=body.kind,
         source_path=str(source) if source else None,
         with_persistence=with_persistence,
+        generic_spec=body.generic_spec,
     )
     _JOBS[job.id] = job
     asyncio.create_task(_run_image_build_job(job, root, script))
@@ -442,7 +467,13 @@ async def list_image_build_jobs(
     _admin: Annotated[User, Depends(require_role(Role.admin))],
 ) -> list[ImageBuildJobOut]:
     if settings.DNLAB_IMAGE_BUILD_API_URL:
-        return await _image_build_api_get("/jobs")
+        jobs = await _image_build_api_get("/jobs")
+        for job in jobs:
+            if (job.get("status") == "success" and job.get("kind") == "generic_vm"
+                    and isinstance(job.get("generic_spec"), dict) and job.get("id") not in _PUBLISHED_GENERIC_JOBS):
+                _publish_generic_vm_kind(job["generic_spec"])
+                _PUBLISHED_GENERIC_JOBS.add(job["id"])
+        return jobs
     return [_job_out(j) for j in sorted(_JOBS.values(), key=lambda j: j.created_at, reverse=True)]
 
 
@@ -659,16 +690,19 @@ def _local_image_build_kinds() -> dict:
             "source_required": kind not in getattr(module, "SELF_BUILDING_KINDS", ()),
         })
     for kind in sorted(getattr(module, "QCOW_RECIPE_KINDS", ())):
-        by_kind[kind] = {
+        item = {
             "kind": kind,
             "patchable": False,
             "persistent": True,
             "builder": "dnlab-image-build",
             "vrnetlab_dir": None,
-            "image_globs": ["*.zip"],
-            "image_examples": [f"{kind}-<release>.zip"],
+            "image_globs": ["*.qcow2"] if kind == "generic_vm" else ["*.zip"],
+            "image_examples": ["appliance.qcow2"] if kind == "generic_vm" else [f"{kind}-<release>.zip"],
             "source_required": True,
         }
+        if kind == "flinos":
+            item["development_warning"] = "Unsigned FLINOS development bundle — not for production"
+        by_kind[kind] = item
     return {
         "root": str(root),
         "vrnetlab_root": str(_vrnetlab_dir()),
@@ -701,6 +735,10 @@ def _validate_local_image_build_filename(kind: str, filename: str) -> None:
     container_native = getattr(module, "CONTAINER_NATIVE_KINDS", set())
     if kind in container_native:
         return
+    if kind == "generic_vm":
+        if not filename.lower().endswith(".qcow2"):
+            raise HTTPException(400, "kind 'generic_vm' requires a .qcow2 image")
+        return
     if kind in getattr(module, "QCOW_RECIPE_KINDS", set()):
         if not filename.lower().endswith(".zip"):
             raise HTTPException(400, f"kind '{kind}' requires a .zip release bundle")
@@ -722,6 +760,40 @@ def _validate_local_image_build_filename(kind: str, filename: str) -> None:
         detail = _image_name_error(kind, filename, globs, examples)
         detail += " The filename also must let the vrnetlab Makefile extract a version."
         raise HTTPException(400, detail)
+
+
+def _validate_generic_vm_spec(module, spec: dict | None) -> dict:
+    validator = getattr(module, "validate_generic_vm_spec", None)
+    if not callable(validator):
+        raise ValueError("installed image-build does not support generic_vm")
+    return validator(spec)
+
+
+def _publish_generic_vm_kind(spec: dict) -> None:
+    """Update the persistent catalog only after a successful local build."""
+    catalog = device_catalog.catalog()
+    kinds = catalog.setdefault("kinds", {})
+    names = dict(spec["port_names"])
+    kinds[spec["id"]] = {
+        "label": spec["label"], "vendor": spec["vendor"], "type": spec["type"],
+        "deploy_kind": "generic_vm",
+        "image_patterns": [f"vrnetlab/dnlab_{spec['id']}"],
+        "mgmt_iface": names["1"],
+        "env": {"VCPU": str(spec["vcpu"]), "RAM": str(spec["ram_mb"]), "CLAB_MGMT_PASSTHROUGH": "true"},
+        "interfaces": {"linux_fmt": "eth{n-1}", "vendor_fmt": spec["port_template"],
+                       "vendor_names": names, "count": spec["data_ports"] + 1},
+        "resources": {"cpu": {"source": "env", "key": "VCPU", "type": "int"},
+                      "ram_mb": {"source": "env", "key": "RAM", "type": "int", "unit": "mb"}},
+    }
+    device_catalog.write_custom(json.dumps(catalog, indent=2, ensure_ascii=False))
+
+
+def _validate_generic_catalog_fields(spec: dict) -> None:
+    catalog = device_catalog.catalog()
+    if spec["vendor"] not in (catalog.get("vendors") or {}):
+        raise ValueError(f"generic_vm vendor {spec['vendor']!r} is not present in the device catalog")
+    if spec["type"] not in (catalog.get("icons") or {}):
+        raise ValueError(f"generic_vm type {spec['type']!r} is not present in the device catalog")
 
 
 def _image_globs_for_kind_dir(module, work_dir: Path) -> list[str]:
@@ -945,6 +1017,8 @@ async def _run_image_build_job(job: _ImageBuildJob, root: Path, script: Path) ->
     cmd = [sys.executable, str(script), job.kind]
     if job.source_path:
         cmd.append(job.source_path)
+    if job.generic_spec:
+        cmd.extend(["--generic-spec-json", json.dumps(job.generic_spec, separators=(",", ":"))])
     job.log.append("$ " + " ".join(cmd))
     proc: asyncio.subprocess.Process | None = None
     token: int | None = None
@@ -977,6 +1051,9 @@ async def _run_image_build_job(job: _ImageBuildJob, root: Path, script: Path) ->
                 del job.log[: len(job.log) - _JOB_LOG_LIMIT]
         job.returncode = await proc.wait()
         job.status = "success" if job.returncode == 0 else "failed"
+        if job.status == "success" and job.kind == "generic_vm" and job.generic_spec:
+            _publish_generic_vm_kind(job.generic_spec)
+            job.log.append(f"published device catalog kind {job.generic_spec['id']}")
     except asyncio.CancelledError:
         _kill_proc()
         job.log.append("cancelled: service shutdown")
@@ -1000,6 +1077,7 @@ def _job_out(job: _ImageBuildJob) -> ImageBuildJobOut:
         kind=job.kind,
         source_path=job.source_path,
         with_persistence=job.with_persistence,
+        generic_spec=job.generic_spec,
         created_at=job.created_at.isoformat(),
         started_at=job.started_at.isoformat() if job.started_at else None,
         finished_at=job.finished_at.isoformat() if job.finished_at else None,
