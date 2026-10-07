@@ -1,0 +1,18 @@
+id: 20261007-124625-add-persistent-hpe-vsr1000-virtual-devic
+type: new-vd
+title: Add persistent HPE VSR1000 virtual device
+description: Add a persistent HPE VSR1000 image recipe and catalog entry with disk
+  overlay reuse.
+components:
+- gui
+- image-build
+audience:
+- admin
+- user
+visibility: public
+breaking: false
+upgrade_notes: []
+references: []
+vd:
+  vendor: HPE
+  platform: VSR1000

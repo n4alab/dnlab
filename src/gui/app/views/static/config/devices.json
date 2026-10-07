@@ -182,6 +182,10 @@
       "title": "Aruba (HPE)",
       "color": "#ff8300"
     },
+    "hpe": {
+      "title": "HPE",
+      "color": "#ff8300"
+    },
     "sonic": {
       "title": "SONiC",
       "color": "#0097a7"
@@ -1532,6 +1536,48 @@
         }
       ]
     },
+    "hp_vsr1000": {
+      "env": {
+        "VCPU": "1",
+        "RAM": "1024"
+      },
+      "interfaces": {
+        "linux_fmt": "eth{n}",
+        "vendor_fmt": "GigabitEthernet{i}/0",
+        "vendor_names": {
+          "1": "GigabitEthernet1/0",
+          "2": "GigabitEthernet2/0",
+          "3": "GigabitEthernet3/0",
+          "4": "GigabitEthernet4/0",
+          "5": "GigabitEthernet5/0",
+          "6": "GigabitEthernet6/0",
+          "7": "GigabitEthernet7/0",
+          "8": "GigabitEthernet8/0"
+        },
+        "count": 8
+      },
+      "resources": {
+        "cpu": {
+          "source": "env",
+          "key": "VCPU",
+          "type": "int"
+        },
+        "ram_mb": {
+          "source": "env",
+          "key": "RAM",
+          "type": "int",
+          "unit": "mb"
+        }
+      },
+      "label": "VSR1000",
+      "vendor": "hpe",
+      "type": "router",
+      "deploy_kind": "generic_vm",
+      "image_patterns": [
+        "hp_vsr1000"
+      ],
+      "mgmt_iface": "GigabitEthernet1/0"
+    },
     "ipinfusion_ocnos": {
       "env": {
         "RAM": "4096",
@@ -1991,6 +2037,7 @@
       "env": {
         "VCPU": "2",
         "RAM": "4096",
+        "QEMU_NIC_SPEED": "1000",
         "CLAB_MGMT_PASSTHROUGH": "true"
       },
       "interfaces": {
@@ -2019,7 +2066,8 @@
       "type": "switch",
       "deploy_kind": "generic_vm",
       "image_patterns": [
-        "vrnetlab/n4alab_flinos"
+        "vrnetlab/n4alab_flinos",
+        "vrnetlab/n4alab_flinos-dev"
       ],
       "mgmt_iface": "mgmt"
     },
