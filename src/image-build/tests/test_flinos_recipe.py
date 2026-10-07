@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from pathlib import Path
 
 import pytest
+import flinos_bundle
 
 
 ROOT = Path(__file__).parents[1]
@@ -57,7 +58,7 @@ def test_flinos_recipe_builds_from_verified_bundle_without_vrnetlab_directory(tm
         directory.mkdir()
         for name in build_image.REQUIRED_FILES:
             (directory / name).write_bytes(b"artifact")
-        return SimpleNamespace(release="1.2.3", directory=directory)
+        return SimpleNamespace(release="1.2.3", directory=directory, development=False, files=build_image.REQUIRED_FILES)
     monkeypatch.setattr(build_image, "validate_and_extract", verified)
     monkeypatch.setattr(build_image, "_run", lambda command, **kwargs: calls.append((command, kwargs)))
     monkeypatch.setattr(build_image, "_require_built_image", lambda *_args, **_kwargs: None)
@@ -67,6 +68,41 @@ def test_flinos_recipe_builds_from_verified_bundle_without_vrnetlab_directory(tm
     assert result == 0
     assert calls == [(["docker", "build", "--tag", "vrnetlab/n4alab_flinos:1.2.3-dnlab", "."], {"cwd": calls[0][1]["cwd"], "dry": False})]
     assert calls[0][1]["cwd"].name == "context"
+
+
+def test_flinos_development_recipe_uses_an_isolated_tag_and_bundle_files(tmp_path, monkeypatch):
+    bundle = tmp_path / "flinos-dev.zip"
+    bundle.write_bytes(b"zip")
+    calls = []
+
+    def verified(_bundle, directory):
+        directory.mkdir()
+        for name in flinos_bundle.DEVELOPMENT_FILES:
+            (directory / name).write_bytes(b"artifact")
+        return SimpleNamespace(
+            release="1.2.3-alpha-1", directory=directory, development=True,
+            files=flinos_bundle.DEVELOPMENT_FILES,
+        )
+
+    monkeypatch.setattr(build_image, "validate_and_extract", verified)
+    monkeypatch.setattr(build_image, "_run", lambda command, **kwargs: calls.append((command, kwargs)))
+    monkeypatch.setattr(build_image, "_require_built_image", lambda *_args, **_kwargs: None)
+
+    assert build_image._flinos_development_tag("1.2.3-alpha-1") == "vrnetlab/n4alab_flinos-dev:1.2.3-alpha-1-dnlab"
+    assert build_image.cmd_build(argparse.Namespace(kind="flinos", source=str(bundle), plain=False, with_persistence=False, dry_run=False, vrnetlab_root=str(tmp_path / "vrnetlab"))) == 0
+    assert calls[0][0] == ["docker", "build", "--tag", "vrnetlab/n4alab_flinos-dev:1.2.3-alpha-1-dnlab", "."]
+    context = calls[0][1]["cwd"]
+    assert context.name == "context"
+    assert not context.exists()
+
+
+def test_flinos_development_recipe_has_no_secure_boot_artifacts():
+    dockerfile = (ROOT / "recipes" / "flinos-dev" / "Dockerfile").read_text(encoding="utf-8")
+
+    assert "OVMF" not in dockerfile
+    assert "pflash" not in dockerfile
+    assert "entrypoint.sh" not in dockerfile
+    assert 'ENTRYPOINT ["/opt/flinos/launch.sh"]' in dockerfile
 
 
 def test_flinos_launcher_allocates_all_data_slots():

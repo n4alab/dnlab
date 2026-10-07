@@ -51,6 +51,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import json
 from pathlib import Path
 
 from flinos_bundle import FlinosBundleError, REQUIRED_FILES, validate_and_extract
@@ -104,7 +105,7 @@ KIND_VRNETLAB_DIR: dict[str, list[str]] = {
     "sonic-vm":           ["sonic"],
     "openwrt":            ["openwrt_V2"],
     "nvidia_cumulusvx":   ["nvidia/cumulusvx"],
-    "hp_vsr1000":         ["hp/vsr1000"],
+    "hp_vsr1000":         ["hp/vsr1000_V2", "hp/vsr1000"],
     "f5_bigip":           ["f5_bigip"],
     "freebsd":            ["freebsd"],
     "ubuntu":             ["ubuntu"],
@@ -125,7 +126,7 @@ CONTAINER_NATIVE_KINDS = {
     "6wind_vsr", "keysight_ixia-c-one", "spirent_stc",
     "fdio_vpp", "rare", "vyosnetworks_vyos",
     "veesix_osvbng", "arrcus_arcos", "checkpoint_cloudguard",
-    "nokia_srsim", "generic_vm", "linux",
+    "nokia_srsim", "linux",
 }
 
 # These kinds build all required artifacts from their checked-in vrnetlab
@@ -135,8 +136,54 @@ SELF_BUILDING_KINDS = {"dnlab_frr"}
 # Images built from an uploaded qcow2 by a recipe shipped with dNLab, rather
 # than by one of the vendor directories in /opt/vrnetlab.  These recipes own
 # their persistence implementation and always emit a ``-dnlab`` image tag.
-QCOW_RECIPE_KINDS = {"flinos"}
+QCOW_RECIPE_KINDS = {"flinos", "generic_vm"}
 RECIPES_DIR = SCRIPT_DIR / "recipes"
+
+GENERIC_ID_RE = re.compile(r"^[a-z][a-z0-9_-]{0,62}$")
+GENERIC_VERSION_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+
+
+def validate_generic_vm_spec(spec: dict | None) -> dict:
+    """Validate the public generic-VM recipe contract.
+
+    Kept here (rather than in the HTTP API) so the CLI and API cannot diverge.
+    """
+    if not isinstance(spec, dict):
+        raise ValueError("generic_vm requires a generic_spec object")
+    result = dict(spec)
+    device_id = str(result.get("id") or "")
+    version = str(result.get("version") or "")
+    if not GENERIC_ID_RE.fullmatch(device_id):
+        raise ValueError("generic_vm id must be a lowercase slug")
+    if not GENERIC_VERSION_RE.fullmatch(version):
+        raise ValueError("generic_vm version contains unsupported characters")
+    if result.get("firmware") not in {"bios", "uefi"}:
+        raise ValueError("generic_vm firmware must be bios or uefi")
+    if result.get("nic_model") not in {"virtio", "e1000"}:
+        raise ValueError("generic_vm nic_model must be virtio or e1000")
+    for key, low, high in (("data_ports", 1, 32), ("vcpu", 1, 64), ("ram_mb", 256, 1048576)):
+        try:
+            result[key] = int(result[key])
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"generic_vm {key} must be an integer") from exc
+        if not low <= result[key] <= high:
+            raise ValueError(f"generic_vm {key} must be between {low} and {high}")
+    for key in ("label", "vendor", "type", "mgmt_name", "port_template"):
+        result[key] = str(result.get(key) or "").strip()
+        if not result[key]:
+            raise ValueError(f"generic_vm {key} is required")
+    names = result.get("port_names") or {}
+    if not isinstance(names, dict):
+        raise ValueError("generic_vm port_names must be an object")
+    normalized = {str(k): str(v).strip() for k, v in names.items() if str(v).strip()}
+    valid = {str(index) for index in range(1, result["data_ports"] + 2)}
+    if any(key not in valid for key in normalized):
+        raise ValueError("generic_vm port_names contains an invalid port index")
+    normalized.setdefault("1", result["mgmt_name"])
+    if len(set(normalized.values())) != len(normalized):
+        raise ValueError("generic_vm guest port names must be unique")
+    result["port_names"] = normalized
+    return result
 
 
 # ── Utilities ────────────────────────────────────────────────────────
@@ -403,25 +450,57 @@ def _flinos_tag(release: str) -> str:
     return f"vrnetlab/n4alab_flinos:{release}{PERSIST_SUFFIX}"
 
 
+def _flinos_development_tag(release: str) -> str:
+    """Build an isolated tag for an unsigned FLINOS development bundle."""
+    return f"vrnetlab/n4alab_flinos-dev:{release}{PERSIST_SUFFIX}"
+
+
+def generic_vm_tag(spec: dict) -> str:
+    spec = validate_generic_vm_spec(spec)
+    return f"vrnetlab/dnlab_{spec['id']}:{spec['version']}{PERSIST_SUFFIX}"
+
+
+def _build_generic_vm(source: str | None, spec: dict | None, *, dry: bool = False) -> str:
+    if not source:
+        raise SystemExit("error: generic_vm requires a qcow2 source image")
+    source_path = Path(source).expanduser().resolve()
+    if not source_path.is_file() or source_path.suffix.lower() != ".qcow2":
+        raise SystemExit("error: generic_vm requires a .qcow2 source image")
+    try:
+        checked = validate_generic_vm_spec(spec)
+    except ValueError as exc:
+        raise SystemExit(f"error: {exc}") from exc
+    recipe = RECIPES_DIR / "generic_vm"
+    image = generic_vm_tag(checked)
+    with tempfile.TemporaryDirectory(prefix="dnlab-generic-vm-") as temporary:
+        context = Path(temporary) / "context"
+        shutil.copytree(recipe, context)
+        shutil.copy2(source_path, context / "disk.qcow2")
+        (context / "spec.json").write_text(json.dumps(checked, indent=2) + "\n", encoding="utf-8")
+        _run(["docker", "build", "--tag", image, "."], cwd=context, dry=dry)
+    _require_built_image(image, dry=dry)
+    return image
+
+
 def _build_qcow_recipe(kind: str, source: str | None, *, dry: bool = False) -> str:
     if not source:
         raise SystemExit(f"error: kind {kind!r} requires a .zip release bundle")
     bundle_path = Path(source).expanduser().resolve()
     if not bundle_path.is_file() or bundle_path.suffix.lower() != ".zip":
         raise SystemExit(f"error: kind {kind!r} requires a .zip release bundle")
-    recipe = RECIPES_DIR / kind
-    if not (recipe / "Dockerfile").is_file():
-        raise SystemExit(f"error: recipe for kind {kind!r} is missing: {recipe}")
     with tempfile.TemporaryDirectory(prefix=f"dnlab-{kind}-") as temporary:
         temporary_path = Path(temporary)
         try:
             release = validate_and_extract(bundle_path, temporary_path / "verified")
         except FlinosBundleError as exc:
             raise SystemExit(f"error: {exc}") from exc
-        image = _flinos_tag(release.release)
+        recipe = RECIPES_DIR / ("flinos-dev" if release.development else kind)
+        if not (recipe / "Dockerfile").is_file():
+            raise SystemExit(f"error: recipe for kind {kind!r} is missing: {recipe}")
+        image = _flinos_development_tag(release.release) if release.development else _flinos_tag(release.release)
         context = temporary_path / "context"
         shutil.copytree(recipe, context)
-        for name in REQUIRED_FILES:
+        for name in release.files:
             shutil.copy2(release.directory / name, context / name)
         _run(["docker", "build", "--tag", image, "."], cwd=context, dry=dry)
     _require_built_image(image, dry=dry)
@@ -472,7 +551,8 @@ def cmd_build(args: argparse.Namespace) -> int:
                 f"error: kind '{kind}' only has the persistent dNLab recipe; "
                 "--plain is not supported"
             )
-        image = _build_qcow_recipe(kind, source, dry=args.dry_run)
+        image = (_build_generic_vm(source, getattr(args, "generic_spec", None), dry=args.dry_run)
+                 if kind == "generic_vm" else _build_qcow_recipe(kind, source, dry=args.dry_run))
         print(f"done: {image}")
         return 0
 
@@ -690,6 +770,8 @@ def _build_parser() -> argparse.ArgumentParser:
                     help="overwrite a qcow2 already copied into the vrnetlab dir")
     ap.add_argument("--dry-run", action="store_true",
                     help="do not run commands, only print them")
+    ap.add_argument("--generic-spec-json", default=None,
+                    help="JSON profile used only by the generic_vm QCOW2 recipe")
     return ap
 
 
@@ -707,6 +789,13 @@ def main(argv: list[str] | None = None) -> int:
         ap.error("need <kind> [source] or --list-patchable / --check-patch KIND")
     if not args.source and args.kind not in SELF_BUILDING_KINDS:
         ap.error(f"kind '{args.kind}' requires <source>")
+    if args.generic_spec_json:
+        try:
+            args.generic_spec = json.loads(args.generic_spec_json)
+        except json.JSONDecodeError as exc:
+            ap.error(f"invalid --generic-spec-json: {exc}")
+    else:
+        args.generic_spec = None
     return cmd_build(args)
 
 

@@ -1,0 +1,13 @@
+id: 20261005-120222-set-flinos-default-virtual-nic-speed
+type: change
+title: Expose FLiNOS virtual NIC speed setting
+description: New FLiNOS nodes set QEMU_NIC_SPEED to 1000 Mbps by default and
+  can override the value through advanced Containerlab YAML.
+components:
+- gui
+audience:
+- user
+visibility: public
+breaking: false
+upgrade_notes: []
+references: []

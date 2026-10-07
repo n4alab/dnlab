@@ -1,0 +1,13 @@
+id: 20261004-215027-accept-flinos-release-bundles-in-image-b
+type: bugfix
+title: Accept FLINOS release bundles in image-build API
+description: Correct the FLINOS upload filename validation so signed .zip release
+  bundles can start image builds.
+components:
+- image-build
+audience:
+- admin
+visibility: public
+breaking: false
+upgrade_notes: []
+references: []

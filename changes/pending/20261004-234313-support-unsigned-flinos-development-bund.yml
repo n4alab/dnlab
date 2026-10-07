@@ -1,0 +1,14 @@
+id: 20261004-234313-support-unsigned-flinos-development-bund
+type: feature
+title: Support unsigned FLINOS development bundles
+description: Administrators can import validated BIOS development FLINOS bundles into
+  a separately tagged non-production image.
+components:
+- gui
+- image-build
+audience:
+- admin
+visibility: public
+breaking: false
+upgrade_notes: []
+references: []
