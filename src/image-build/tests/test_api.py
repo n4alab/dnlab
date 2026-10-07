@@ -6,6 +6,7 @@ from fastapi import HTTPException
 
 import api
 import build_image
+import vrnetlab_binding
 
 
 def _set_store(monkeypatch, tmp_path: Path) -> None:
@@ -13,7 +14,23 @@ def _set_store(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(api, "JOBS_DIR", tmp_path / "jobs")
     monkeypatch.setattr(api, "LOGS_DIR", tmp_path / "logs")
     monkeypatch.setattr(api, "UPLOADS_DIR", tmp_path / "uploads")
+    monkeypatch.setattr(
+        api,
+        "_binding_status",
+        vrnetlab_binding.BindingStatus("aligned", "repo", "dnlab", "a" * 40, "a" * 40),
+    )
     api._jobs.clear()
+
+
+def test_vrnetlab_binding_status_and_degraded_job_rejection(monkeypatch, tmp_path):
+    status = vrnetlab_binding.BindingStatus("degraded", "repo", "dnlab", "a" * 40, None, "network unavailable")
+    monkeypatch.setattr(api, "_binding_status", status)
+    assert asyncio.run(api.vrnetlab_binding_status()) == status.payload()
+    monkeypatch.setattr(api, "SCRIPT", tmp_path / "build_image.py")
+    api.SCRIPT.write_text("# script\n", encoding="utf-8")
+
+    with pytest.raises(HTTPException, match="binding is degraded"):
+        asyncio.run(api.create_job(api.ImageBuildRequest(kind="cisco_xrv")))
 
 
 class _FakeUpload:
@@ -102,6 +119,7 @@ def test_flinos_recipe_is_persistent_and_requires_bundle(monkeypatch, tmp_path):
     assert flinos["patchable"] is False
     assert flinos["persistent"] is True
     assert flinos["image_globs"] == ["*.zip"]
+    assert flinos["development_warning"] == "Unsigned FLINOS development bundle — not for production"
 
     def fake_create_task(coro):
         coro.close()
@@ -116,6 +134,30 @@ def test_flinos_recipe_is_persistent_and_requires_bundle(monkeypatch, tmp_path):
 
     with pytest.raises(HTTPException, match="requires a .zip"):
         api._validate_image_filename("flinos", "flinos.iso")
+
+    api._validate_image_filename("flinos", "flinos-1.2.zip")
+
+    with pytest.raises(HTTPException, match="requires a .zip"):
+        api._validate_image_filename("flinos", "flinos-1.2.qcow2")
+
+
+def test_generic_vm_requires_qcow2_and_valid_profile(monkeypatch, tmp_path):
+    _set_store(monkeypatch, tmp_path)
+    monkeypatch.setattr(api, "SCRIPT", tmp_path / "build_image.py")
+    api.SCRIPT.write_text("# script\n", encoding="utf-8")
+    source = api.UPLOADS_DIR / "generic" / "router.qcow2"
+    source.parent.mkdir(parents=True)
+    source.write_bytes(b"qcow2")
+    spec = {
+        "id": "router", "version": "1.0", "label": "Router", "vendor": "generic",
+        "type": "server", "firmware": "bios", "nic_model": "virtio", "vcpu": 1,
+        "ram_mb": 2048, "data_ports": 1, "mgmt_name": "mgmt0", "port_template": "eth{i}",
+        "port_names": {"1": "mgmt0", "2": "eth0"},
+    }
+    api._validate_image_format("generic_vm", str(source))
+    with pytest.raises(HTTPException, match="requires a .qcow2"):
+        api._validate_image_filename("generic_vm", "router.img")
+    assert build_image.validate_generic_vm_spec(spec)["id"] == "router"
 
 
 def test_upload_sanitizes_filename_and_returns_source_path(monkeypatch, tmp_path):

@@ -151,17 +151,18 @@ sudo mkdir -p /etc/dnlab /root/dnlab-topologies \
   /var/lib/dnlab-image-build /opt/vrnetlab
 ```
 
-`/opt/vrnetlab` must contain the dNLab vrnetlab tree used by
-the `image-build` service. For a fresh host:
+`/opt/vrnetlab` is the persistent host mount used by the `image-build`
+service. Prepare an empty directory on a fresh host:
 
 ```bash
-if [ ! -d /opt/vrnetlab/.git ]; then
-  sudo git clone --branch dnlab https://github.com/n4alab/vrnetlab.git /opt/vrnetlab
-else
-  git -C /opt/vrnetlab remote -v
-  git -C /opt/vrnetlab branch --show-current
-fi
+sudo mkdir -p /opt/vrnetlab
 ```
+
+Each dNLab release records the compatible immutable vrnetlab commit in
+`vrnetlab.lock.json`. The `image-build` service automatically creates or
+aligns `/opt/vrnetlab` to that commit when it starts. Do not use `git pull` in
+`/opt/vrnetlab`: a dirty checkout is deliberately left unchanged and is
+reported as a degraded binding through the admin API.
 
 The base Compose stack mounts `/etc/dnlab` read/write only into the GUI so administrators can save supported configuration. Runtime services mount it read-only. Add `compose.hardened.yml` to make the GUI mount read-only too and disable Admin configuration writes.
 
@@ -330,8 +331,8 @@ check as a required setup step.
    install, set the single shared dataplane interface in
    `infrastructure.underlay_iface`.
 2. Install or verify the dNLab vrnetlab tree at `/opt/vrnetlab`; it is used by
-   the `image-build` service and should be the `dnlab` branch of
-   `https://github.com/n4alab/vrnetlab.git`.
+   the `image-build` service, which automatically aligns it with the exact
+   commit recorded by the installed dNLab release.
 3. Configure SSH key-based access from the master to every host in
    `hosts.yml`. Generate `/root/.ssh/id_ed25519_dnlab` if needed,
    install its public key in `/root/.ssh/authorized_keys` on the configured
@@ -728,7 +729,16 @@ dNLab application images from the monorepo sources under `/opt/dnlab/src`.
 Build metadata and logs are stored under
 `${DNLAB_IMAGE_BUILD_WORKSPACE:-/var/lib/dnlab-image-build}`.
 Build contexts are read from `${DNLAB_VRNETLAB_DIR:-/opt/vrnetlab}`, which
-must be the `dnlab` branch of `https://github.com/n4alab/vrnetlab.git`.
+is automatically cloned or aligned by `image-build` to the immutable commit
+recorded in the release's `vrnetlab.lock.json`.
+
+FLINOS accepts signed production release bundles and development bundles in
+the Admin image-build area. Development bundles must be created as the single
+`flinos-<release>.zip` output of `make -f build/Makefile qcow-dev`; upload no
+loose QCOW2, JSON, version, or launcher files. A development import displays
+`Unsigned FLINOS development bundle — not for production` and produces the
+separate `vrnetlab/n4alab_flinos-dev:<release>-dnlab` image. It is for testing
+only and is not a Secure Boot release image.
 
 ![Image build admin](images/admin-image-build.png)
 
@@ -740,6 +750,25 @@ images are not built locally during installation; preload them with:
 ```bash
 docker compose -f compose.yml --profile release-images pull
 ```
+
+### Generic persistent VMs
+
+The **Generic VM** entry in Admin → Devices & Images imports an x86 QCOW2 as a
+locally built persistent appliance. The wizard creates an image named
+`vrnetlab/dnlab_<id>:<version>-dnlab` and, after the image build succeeds,
+adds or updates the corresponding device kind in the persistent catalog.
+
+Choose the BIOS/UEFI, NIC model, vCPU, RAM and number of data ports required
+by the appliance. Runtime port order is fixed: the first QEMU NIC is
+management and each later NIC is a data port. The wizard lets you name every
+guest-facing port, including management; dNLab keeps its internal Containerlab
+names (`eth0`, `eth1`, …) only as the stable transport mapping. Management is
+not offered as a topology link endpoint.
+
+The generated image stores its QCOW2 overlay under `/persist`; UEFI images
+also retain their mutable firmware variables there. This preserves disk state
+through stop/start, recreate and supported worker migration, but it does not
+replace an appliance-specific "save configuration" command inside the guest.
 
 Configure the minimal image-sync filter in `/etc/dnlab/hosts.yml` so workers
 receive all `vrnetlab/*` virtual-device images plus the runtime helper images

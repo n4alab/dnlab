@@ -86,7 +86,7 @@ jobs:
             plus_tag: plus
           - name: dnlab-image-build
             image: dnlab-image-build
-            context: src/image-build
+            context: .
             dockerfile: src/image-build/Dockerfile
             plus_tag: ""
     steps:

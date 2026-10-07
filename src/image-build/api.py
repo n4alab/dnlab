@@ -26,6 +26,7 @@ from fastapi import FastAPI, File, HTTPException, UploadFile, WebSocket, WebSock
 from pydantic import BaseModel, Field
 
 import build_image
+import vrnetlab_binding
 
 
 ROOT = Path(__file__).resolve().parent
@@ -38,12 +39,17 @@ VRNETLAB_ROOT = Path(os.getenv("DNLAB_VRNETLAB_DIR", "/opt/vrnetlab"))
 JOBS_DIR = WORKSPACE / "jobs"
 LOGS_DIR = WORKSPACE / "logs"
 UPLOADS_DIR = WORKSPACE / "uploads"
+VRNETLAB_LOCK = ROOT / "vrnetlab.lock.json"
+_binding_status = vrnetlab_binding.BindingStatus(
+    "degraded", None, None, None, None, "vrnetlab binding has not run yet"
+)
 
 
 class ImageBuildRequest(BaseModel):
     kind: str = Field(min_length=1, max_length=64)
     source_path: str | None = Field(default=None, max_length=4096)
     with_persistence: bool = False
+    generic_spec: dict[str, Any] | None = None
 
 
 class ImageFilenameValidationRequest(BaseModel):
@@ -57,6 +63,7 @@ class Job:
     kind: str
     source_path: str | None
     with_persistence: bool
+    generic_spec: dict[str, Any] | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     started_at: datetime | None = None
     finished_at: datetime | None = None
@@ -74,11 +81,25 @@ log = logging.getLogger("dnlab_image_build")
 async def startup() -> None:
     _setup_logging()
     await asyncio.to_thread(_load_jobs)
+    global _binding_status
+    _binding_status = await asyncio.to_thread(
+        vrnetlab_binding.ensure_binding, VRNETLAB_LOCK, VRNETLAB_ROOT
+    )
+    if _binding_status.state == "aligned":
+        log.info("vrnetlab aligned to %s", _binding_status.current_commit)
+    else:
+        log.error("vrnetlab binding degraded: %s", _binding_status.detail)
 
 
 @app.get("/health")
 async def health() -> dict[str, bool]:
     return {"ok": True}
+
+
+@app.get("/vrnetlab/binding")
+async def vrnetlab_binding_status() -> dict[str, str | None]:
+    """Return automatic vrnetlab binding state without exposing a mutator."""
+    return _binding_status.payload()
 
 
 @app.get("/kinds")
@@ -136,6 +157,10 @@ def _validate_image_format(kind: str, source_path: str | None) -> None:
             "source_path must reference an uploaded image "
             f"(under {uploads_root}); got '{source_path}'.",
         )
+    if kind == "generic_vm":
+        if Path(source_path).suffix.lower() != ".qcow2":
+            raise HTTPException(400, "kind 'generic_vm' requires a .qcow2 image")
+        return
     if kind in build_image.QCOW_RECIPE_KINDS:
         if Path(source_path).suffix.lower() != ".zip":
             raise HTTPException(400, f"kind '{kind}' requires a .zip release bundle")
@@ -158,8 +183,12 @@ def _validate_image_filename(
 ) -> None:
     if kind in build_image.CONTAINER_NATIVE_KINDS:
         return
-    if kind in build_image.QCOW_RECIPE_KINDS:
+    if kind == "generic_vm":
         if not filename.lower().endswith(".qcow2"):
+            raise HTTPException(400, "kind 'generic_vm' requires a .qcow2 image")
+        return
+    if kind in build_image.QCOW_RECIPE_KINDS:
+        if not filename.lower().endswith(".zip"):
             raise HTTPException(400, f"kind '{kind}' requires a .zip release bundle")
         return
     if work_dir is None:
@@ -267,7 +296,14 @@ def _image_name_error(kind: str, filename: str, globs: list[str], examples: list
 async def create_job(req: ImageBuildRequest) -> dict[str, Any]:
     if not SCRIPT.exists():
         raise HTTPException(503, f"image-build script not found: {SCRIPT}")
+    if req.kind in build_image.KIND_VRNETLAB_DIR and _binding_status.state != "aligned":
+        raise HTTPException(503, f"vrnetlab binding is degraded: {_binding_status.detail or 'unknown error'}")
     _validate_image_format(req.kind, req.source_path)
+    if req.kind == "generic_vm":
+        try:
+            req.generic_spec = build_image.validate_generic_vm_spec(req.generic_spec)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
     _ensure_store()
     with_persistence = build_image.is_persistent_kind(req.kind)
     job = Job(
@@ -275,6 +311,7 @@ async def create_job(req: ImageBuildRequest) -> dict[str, Any]:
         kind=req.kind,
         source_path=req.source_path,
         with_persistence=with_persistence,
+        generic_spec=req.generic_spec,
     )
     _jobs[job.id] = job
     _save_job(job)
@@ -344,6 +381,8 @@ async def _run_job(job: Job) -> None:
     cmd = ["python", str(SCRIPT), job.kind]
     if job.source_path:
         cmd.append(job.source_path)
+    if job.generic_spec:
+        cmd.extend(["--generic-spec-json", json.dumps(job.generic_spec, separators=(",", ":"))])
     _append_log(job, "$ " + " ".join(cmd))
     proc: asyncio.subprocess.Process | None = None
     try:
@@ -381,6 +420,7 @@ def _job_out(job: Job) -> dict[str, Any]:
         "kind": job.kind,
         "source_path": job.source_path,
         "with_persistence": job.with_persistence,
+        "generic_spec": job.generic_spec,
         "created_at": job.created_at.isoformat(),
         "started_at": job.started_at.isoformat() if job.started_at else None,
         "finished_at": job.finished_at.isoformat() if job.finished_at else None,
@@ -443,16 +483,19 @@ def _kinds_payload() -> dict[str, Any]:
             "source_required": kind not in build_image.SELF_BUILDING_KINDS,
         })
     for kind in sorted(build_image.QCOW_RECIPE_KINDS):
-        by_kind[kind] = {
+        item = {
             "kind": kind,
             "patchable": False,
             "persistent": True,
             "builder": "dnlab-image-build",
             "vrnetlab_dir": None,
-            "image_globs": ["*.zip"],
-            "image_examples": ["flinos-<release>.zip"],
+            "image_globs": ["*.qcow2"] if kind == "generic_vm" else ["*.zip"],
+            "image_examples": ["appliance.qcow2"] if kind == "generic_vm" else ["flinos-<release>.zip"],
             "source_required": True,
         }
+        if kind == "flinos":
+            item["development_warning"] = "Unsigned FLINOS development bundle — not for production"
+        by_kind[kind] = item
     kinds = [by_kind[kind] for kind in sorted(by_kind)]
     return {
         "root": str(ROOT),
@@ -486,6 +529,7 @@ def _save_job(job: Job) -> None:
         "kind": job.kind,
         "source_path": job.source_path,
         "with_persistence": job.with_persistence,
+        "generic_spec": job.generic_spec,
         "created_at": job.created_at.isoformat(),
         "started_at": job.started_at.isoformat() if job.started_at else None,
         "finished_at": job.finished_at.isoformat() if job.finished_at else None,
@@ -524,6 +568,7 @@ def _job_from_payload(payload: dict[str, Any]) -> Job:
         kind=str(payload["kind"]),
         source_path=str(payload["source_path"]) if payload.get("source_path") else None,
         with_persistence=bool(payload.get("with_persistence", False)),
+        generic_spec=payload.get("generic_spec") if isinstance(payload.get("generic_spec"), dict) else None,
         created_at=_parse_dt(payload.get("created_at")) or datetime.now(timezone.utc),
         started_at=_parse_dt(payload.get("started_at")),
         finished_at=_parse_dt(payload.get("finished_at")),

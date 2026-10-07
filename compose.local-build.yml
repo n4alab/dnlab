@@ -21,8 +21,8 @@ services:
 
   image-build:
     build:
-      context: ./src/image-build
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: src/image-build/Dockerfile
 
   release-jumphost-image:
     build:

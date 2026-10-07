@@ -25,7 +25,8 @@ RUN apt-get update \
 
 RUN pip install --no-cache-dir fastapi==0.115.12 uvicorn[standard]==0.34.0 pydantic==2.11.1 python-multipart==0.0.20
 
-COPY . .
+COPY src/image-build/ .
+COPY vrnetlab.lock.json ./vrnetlab.lock.json
 RUN chmod +x /opt/dnlab-image-build/build_image.py /opt/dnlab-image-build/apply.py \
     && mkdir -p /usr/share/doc/dnlab/third-party \
     && printf '%s\n' \

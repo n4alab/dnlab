@@ -46,6 +46,11 @@ Each source archive includes a `SOURCE-MANIFEST.json` file that identifies the
 image, version, source repository, release tag, commit SHA, Dockerfile and build
 context used for the corresponding image.
 
+The `dnlab-image-build` source archive also includes `vrnetlab.lock.json`.
+The matching image uses this release-pinned file to align its mounted
+`/opt/vrnetlab` checkout automatically; the host does not need an independent
+dNLab source checkout to perform that binding.
+
 The changelog, release notes and release manifest assets are generated from the
 structured release source in `docs/releases/X.Y.Z.yml`. `CHANGELOG.md` remains
 the version-controlled aggregate changelog, while the generated assets are the

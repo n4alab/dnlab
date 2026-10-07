@@ -1,0 +1,19 @@
+id: 20261004-232826-pin-vrnetlab-to-each-dnlab-release
+type: change
+title: Pin vrnetlab to each dNLab release
+description: Each dNLab release records and verifies the compatible vrnetlab dnlab-branch
+  commit, and image-build automatically aligns the host checkout to that commit for every
+  supported installation method.
+components:
+- documentation
+- image-build
+- release
+audience:
+- admin
+- operator
+visibility: public
+breaking: false
+upgrade_notes:
+- After upgrading dNLab, image-build automatically aligns the mounted vrnetlab checkout;
+  resolve any reported dirty checkout instead of running git pull manually.
+references: []
