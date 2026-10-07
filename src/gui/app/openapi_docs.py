@@ -129,6 +129,12 @@ OPERATION_DOCS: dict[tuple[str, str], OperationDoc] = {
         "the admin role and should be called before validating or uploading a "
         "source image.",
     ),
+    ("get", "/api/admin/image-build/vrnetlab-binding"): _doc(
+        "Get vrnetlab release binding status",
+        "Return whether image-build has aligned the mounted vrnetlab checkout "
+        "with the immutable commit recorded by the active dNLab release. This "
+        "read-only operation requires the admin role.",
+    ),
     ("post", "/api/admin/image-build/validate-filename"): _doc(
         "Validate an image source filename",
         "Check whether a source filename is safe and compatible with the "

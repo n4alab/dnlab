@@ -77,7 +77,7 @@ const MgmtPanel = (() => {
         </label>
         <label class="props-check">
           <input type="checkbox" name="dhcp" ${dhcp ? 'checked' : ''}>
-          <span>Abilita DHCPv4 + RA/DHCPv6 per tutta la rete mgmt</span>
+          <span>Enable DHCPv4 + RA/DHCPv6 for the entire management network.</span>
         </label>
         <div class="props-actions">
           <button type="submit" class="btn btn-primary btn-sm">Apply</button>

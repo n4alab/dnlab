@@ -1,0 +1,13 @@
+id: 20261004-205849-fix-user-menu-theme-selection-and-show-g
+type: bugfix
+title: Fix user menu theme selection and show GUI version
+description: Keeps the user menu open while selecting a theme and adds a link to the
+  official dNLab repository with the deployed version.
+components:
+- gui
+audience:
+- user
+visibility: public
+breaking: false
+upgrade_notes: []
+references: []

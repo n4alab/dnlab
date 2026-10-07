@@ -1,9 +1,11 @@
 """FastAPI application factory."""
 
 import asyncio
+import html
 import logging
 import logging.handlers
 from fastapi import FastAPI, Response
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -120,6 +122,31 @@ def create_app() -> FastAPI:
         return Response(
             content=device_catalog.catalog_json(),
             media_type="application/json",
+            headers={"Cache-Control": "no-store"},
+        )
+
+    @application.get("/config/version.json", include_in_schema=False)
+    async def product_version() -> JSONResponse:
+        """Expose the deployment version injected from the Compose .env file."""
+        return JSONResponse(
+            {"version": settings.DNLAB_VERSION},
+            headers={"Cache-Control": "no-store"},
+        )
+
+    @application.get("/config/version.svg", include_in_schema=False)
+    async def product_version_badge() -> Response:
+        """Render the deployment version as the small footer badge image."""
+        version = html.escape(settings.DNLAB_VERSION, quote=True)
+        width = max(28, 8 + len(settings.DNLAB_VERSION) * 7)
+        svg = (
+            f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="22" '
+            f'viewBox="0 0 {width} 22"><text x="4" y="15" fill="#64748B" '
+            'font-family="system-ui, sans-serif" font-size="12">'
+            f'{version}</text></svg>'
+        )
+        return Response(
+            content=svg,
+            media_type="image/svg+xml",
             headers={"Cache-Control": "no-store"},
         )
 

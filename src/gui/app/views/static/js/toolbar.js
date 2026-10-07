@@ -139,7 +139,10 @@ const Toolbar = (() => {
         trigger.setAttribute('aria-expanded', String(willOpen));
       });
     });
-    document.addEventListener('click', () => {
+    document.addEventListener('click', e => {
+      // Native <select> controls emit their click after opening their option
+      // list. Do not treat that click as one outside the menu.
+      if (e.target instanceof Element && e.target.closest('.theme-menu-label')) return;
       menus.forEach(([triggerId, menuId]) => {
         const trigger = document.getElementById(triggerId);
         const menu = document.getElementById(menuId);

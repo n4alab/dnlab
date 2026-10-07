@@ -30,19 +30,6 @@
 .toolbar-sep { width: 1px; height: 28px; background: var(--border); margin: 0 4px; }
 .toolbar-spacer { flex: 1; }
 
-.theme-select {
-  padding: 4px 8px;
-  background: var(--bg-card);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  font-size: 12px;
-  cursor: pointer;
-  outline: none;
-}
-.theme-select:focus { border-color: var(--accent); }
-.theme-select option { background: var(--bg-panel); color: var(--text); }
-
 .btn {
   display: inline-flex;
   align-items: center;

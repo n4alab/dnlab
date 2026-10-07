@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>dNLab — distributed Network Labs</title>
   <link rel="icon" type="image/svg+xml" href="/img/brand/09-favicon-64.svg">
-  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/style.css?v=menu-theme-footer-20261004">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css">
 </head>
 <body>
@@ -28,7 +28,7 @@
   <div class="toolbar-menu canvas-only"><button id="btn-access-menu" class="app-menu-trigger" type="button">Access <svg class="icon"><use href="#i-chevron-down"/></svg></button><div id="access-menu" class="app-menu-popover access-popover" hidden><span id="jumphost-box" class="jumphost-box"></span><p class="access-empty">Start the lab to access its bastion.</p></div></div>
   <div class="toolbar-menu canvas-only"><button id="btn-more-menu" class="icon-btn" type="button" title="More lab actions"><svg class="icon"><use href="#i-more"/></svg></button><div id="more-menu" class="app-menu-popover" hidden><button id="btn-delete-topo" class="menu-danger" type="button"><svg class="icon"><use href="#i-trash"/></svg>Delete lab</button></div></div>
   <div class="toolbar-spacer"></div>
-  <div class="toolbar-menu"><button id="btn-user-menu" class="user-badge" type="button" title="Current user"><svg class="icon"><use href="#i-user"/></svg><span id="user-badge"></span></button><div id="user-menu" class="app-menu-popover user-menu" hidden><button id="btn-labs" type="button">Labs</button><button id="view-admin" type="button" hidden>Admin</button><label class="theme-menu-label">Theme <select id="theme-select" class="theme-select"><option value="dark">Dark</option><option value="light">Light</option></select></label><button id="btn-logout" type="button">Logout</button></div></div>
+  <div class="toolbar-menu"><button id="btn-user-menu" class="user-badge" type="button" title="Current user"><svg class="icon"><use href="#i-user"/></svg><span id="user-badge"></span></button><div id="user-menu" class="app-menu-popover user-menu" hidden><button id="btn-labs" type="button">Labs</button><button id="view-admin" type="button" hidden>Admin</button><div class="theme-menu-label"><span>Theme</span><button id="theme-switch" class="theme-switch" type="button" role="switch" aria-label="Light theme" aria-checked="false"></button></div><button id="btn-logout" type="button">Logout</button><a class="user-menu-brand" href="https://github.com/n4alab/dnlab" target="_blank" rel="noopener noreferrer" title="Open the official dNLab repository"><img id="user-menu-brand-light" src="/img/brand/05-mark-light.svg" alt="dNLab" width="22" height="22" hidden><img id="user-menu-brand-dark" src="/img/brand/06-mark-dark.svg" alt="dNLab" width="22" height="22" hidden><img id="dnlab-version" src="/config/version.svg" alt="dNLab version"></a></div></div>
 </div>
 
 <div id="lab-view" class="app-view active">
@@ -152,14 +152,21 @@
 
   // Theme switcher
   (() => {
-    const sel = document.getElementById('theme-select');
+    const themeSwitch = document.getElementById('theme-switch');
+    const lightBrand = document.getElementById('user-menu-brand-light');
+    const darkBrand = document.getElementById('user-menu-brand-dark');
     const saved = localStorage.getItem('dnlab-theme') || 'dark';
     document.documentElement.setAttribute('data-theme', saved);
-    sel.value = saved;
-    sel.addEventListener('change', () => {
-      const theme = sel.value;
+    themeSwitch.setAttribute('aria-checked', String(saved === 'light'));
+    lightBrand.hidden = saved !== 'light';
+    darkBrand.hidden = saved !== 'dark';
+    themeSwitch.addEventListener('click', () => {
+      const theme = themeSwitch.getAttribute('aria-checked') === 'true' ? 'dark' : 'light';
       document.documentElement.setAttribute('data-theme', theme);
       localStorage.setItem('dnlab-theme', theme);
+      themeSwitch.setAttribute('aria-checked', String(theme === 'light'));
+      lightBrand.hidden = theme !== 'light';
+      darkBrand.hidden = theme !== 'dark';
       if (typeof Canvas !== 'undefined') Canvas.setTheme(theme);
     });
   })();

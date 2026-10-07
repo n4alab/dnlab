@@ -50,6 +50,10 @@ def test_flinos_catalog_exposes_n4alab_switch_profile():
         "vendor_names": {"1": "mgmt"},
         "count": 9,
     }
+    assert devices["kinds"]["flinos"]["image_patterns"] == [
+        "vrnetlab/n4alab_flinos",
+        "vrnetlab/n4alab_flinos-dev",
+    ]
 
 
 def test_console_open_uses_a_fresh_browser_window():

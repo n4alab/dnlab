@@ -197,11 +197,21 @@
     if (!lastLab) _refreshLabStatus();
   });
 
-  // ── Canvas: right-click on node → context menu ────────────────────────
+  // ── Canvas: right-click on node → full VD context menu ───────────────
   Canvas.on('node-rightclick', async ({ data, screenX, screenY }) => {
-    // Right-click is the deliberate edit gesture. Left click remains a pure
-    // selection action, so inspecting a dense topology never shifts layout.
-    await _openPropertiesModal(data);
+    if (!lastLiveStatus && currentLabId) {
+      await _refreshLabStatus();
+    }
+    const liveData = _buildPropertiesNodeData(data);
+    const container = _containerForNode(liveData.id);
+    const isNodeRunning = liveData.runtime_state === 'running'
+      || !!(container && container.state === 'running');
+    const isLabRuntimeAvailable = labStatus === 'running'
+      || !!lastLiveStatus?.dnlab_deployed
+      || !!(lastLiveStatus?.nodes && Object.keys(lastLiveStatus.nodes).length);
+    ContextMenu.show(liveData, screenX, screenY, isLabRuntimeAvailable, isNodeRunning);
+
+    if (!lastLab) _refreshLabStatus();
   });
 
   Canvas.on('edge-select', () => {});
@@ -1842,10 +1852,10 @@
         </label>
         <label class="props-check">
           <input id="mgmt-modal-dhcp" type="checkbox" ${dhcp ? 'checked' : ''} ${readOnly ? 'disabled' : ''}>
-          <span>Abilita DHCPv4 + RA/DHCPv6 per tutta la rete mgmt</span>
+          <span>Enable DHCPv4 + RA/DHCPv6 for the entire management network.</span>
         </label>
-        <p class="mgmt-hint">I gateway sono derivati dagli ultimi indirizzi delle subnet.
-        IPv6 è derivata da IPv4 se lasciata vuota.</p>
+        <p class="mgmt-hint">The gateways are derived from the last addresses of the subnets.
+                 IPv6 is derived from IPv4 if left blank.</p>
         ${readOnly
           ? '<p class="mgmt-modal-readonly">Lab running — mgmt can only be edited while the lab is stopped.</p>'
           : ''}

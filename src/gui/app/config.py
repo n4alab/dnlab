@@ -35,6 +35,10 @@ def _resolve_gui_ssh_key() -> str:
 
 
 class Settings:
+    # Product version injected by Compose from the deployment .env file.
+    # It is displayed in the GUI only; image selection remains a Compose task.
+    DNLAB_VERSION: str = os.getenv("DNLAB_VERSION", "unknown")
+
     # ── Network binding ──────────────────────────────────────────────
     # Default: bind to loopback only. For remote access put a reverse
     # proxy (nginx/traefik/caddy) or an SSH tunnel in front, and set

@@ -26,9 +26,10 @@ def test_selection_and_properties_use_distinct_mouse_gestures() -> None:
     app = _read("js/app.js")
     canvas = _read("js/canvas.js")
     assert "Canvas.on('node-rightclick'" in app
-    assert "await _openPropertiesModal(data);" in app
+    assert "ContextMenu.show(liveData, screenX, screenY" in app
+    assert "ContextMenu.on('properties'" in app
     assert "_emit('node-select', node.data());" in canvas
-    assert 'id="workspace-drawer"' in _read("index.html")
+    assert 'data-action="properties"' in _read("js/context_menu.js")
 
 
 def test_inspector_and_correlated_log_websocket_are_present() -> None:
@@ -37,6 +38,13 @@ def test_inspector_and_correlated_log_websocket_are_present() -> None:
     assert 'id="lab-inspector"' in html
     assert 'data-inspector-tab="trace"' in html
     assert "/ws/lab-logs/${encodeURIComponent(labId)}" in logs
+
+
+def test_follow_the_rabbit_is_only_entered_from_its_canvas_control() -> None:
+    app = _read("js/app.js")
+    menu = _read("js/context_menu.js")
+    assert "Toolbar.on('follow-rabbit'" in app
+    assert "follow-rabbit" not in menu
 
 
 def test_lab_log_filter_does_not_match_unrelated_records(tmp_path) -> None:
