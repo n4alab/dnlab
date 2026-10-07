@@ -6,6 +6,93 @@ This changelog is generated from the structured release sources in
 `docs/releases/`. Internal bug-tracking references stay in the private
 operational repository and are not published here.
 
+## 0.2.6 - 2026-10-07
+
+Feature release for persistent virtual appliances, release-pinned vrnetlab, and
+improved administration.
+
+### Added
+
+- Add aggregated live VD logs view: Add a read-only toolbar action that opens
+  eager live log streams for every running virtual device in tabbed browser
+  view.
+- Allow administrators to edit user accounts: Administrators can edit local
+  account email addresses, roles, active state and passwords from the Users tab.
+  Role changes, deactivation and password resets revoke active sessions.
+- Build persistent generic virtual machines from QCOW2 images: Add an
+  administrator wizard for generic QEMU appliances with persistent disks,
+  hardware profiles, and guest port mappings.
+- Redesign the desktop lab workspace: Reorganize the canvas UI with floating
+  drawing and view controls, a contextual properties drawer, lab diagnostics
+  tabs, and a safe lab-correlated operational log stream.
+- Support unsigned FLINOS development bundles: Administrators can import
+  validated BIOS development FLINOS bundles into a separately tagged
+  non-production image.
+
+### New Virtual Devices
+
+- Add persistent HPE VSR1000 virtual device: Add a persistent HPE VSR1000 image
+  recipe and catalog entry with disk overlay reuse.
+
+### Changed
+
+- Expose FLiNOS virtual NIC speed setting: New FLiNOS nodes set QEMU_NIC_SPEED
+  to 1000 Mbps by default and can override the value through advanced
+  Containerlab YAML.
+- Pin vrnetlab to each dNLab release: Each dNLab release records and verifies
+  the compatible vrnetlab dnlab-branch commit, and image-build automatically
+  aligns the host checkout to that commit for every supported installation
+  method.
+- Require wildcard hostname configuration for device Web UI: The dNLab GUI
+  remains available through an IP address, while device Web UI proxying opens an
+  explanatory browser page for its FQDN, wildcard DNS and TLS requirements.
+- Validate and document the complete dNLab YAML inventory: Add canonical
+  installation templates for hosts.yml and paths.yml, expose supported inventory
+  settings in Admin, and reject ignored configuration keys.
+
+### Fixed
+
+- Accept FLINOS release bundles in image-build API: Correct the FLINOS upload
+  filename validation so signed .zip release bundles can start image builds.
+- Fix user menu theme selection and show GUI version: Keeps the user menu open
+  while selecting a theme and adds a link to the official dNLab repository with
+  the deployed version.
+- Install Scrapli in custom dNLab vrnetlab images: Fix OPNsense and FRR image
+  rebuilds by installing the runtime dependency required by the shared vrnetlab
+  launcher.
+- Prevent OPNsense bootstrap from holding the serial console: Avoid a blocking
+  Scrapli serial read during first boot so OPNsense can complete management
+  configuration and release its console.
+
+### Security
+
+- Harden FLINOS signed release bundle builds: Build FLINOS virtual-device images
+  only from validated signed release bundles with Secure Boot firmware and
+  fail-closed runtime checks.
+
+### Breaking Changes
+
+- Validate and document the complete dNLab YAML inventory: Add canonical
+  installation templates for hosts.yml and paths.yml, expose supported inventory
+  settings in Admin, and reject ignored configuration keys.
+
+### Upgrade Notes
+
+- After upgrading dNLab, image-build automatically aligns the mounted vrnetlab
+  checkout; resolve any reported dirty checkout instead of running git pull
+  manually.
+- Replace per-host master.interface or workers.*.interface entries with
+  infrastructure.underlay_iface before upgrading.
+
+### Artifacts
+
+- Source archives: *-0.2.6-source.tar.gz (GitHub Release)
+- Source checksums: SHA256SUMS (GitHub Release)
+- Proxmox LXC template: dnlab-lxc-proxmox-0.2.6-amd64.tar.zst (GHCR and GitHub
+  Release mirror)
+- Proxmox LXC release notes: LXC-RELEASE-NOTES-0.2.6.md (GHCR and GitHub Release
+  mirror)
+
 ## 0.2.5 - 2026-09-30
 
 Feature release for Flinos, dual-stack management DHCP, Cumulus VX breakout

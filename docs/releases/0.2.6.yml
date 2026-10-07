@@ -1,0 +1,193 @@
+version: 0.2.6
+date: '2026-10-07'
+tag: v0.2.6
+summary: Feature release for persistent virtual appliances, release-pinned vrnetlab,
+  and improved administration.
+entries:
+- category: Added
+  title: Add aggregated live VD logs view
+  body: Add a read-only toolbar action that opens eager live log streams for every
+    running virtual device in tabbed browser view.
+  change_id: 20261003-174129-add-aggregated-live-vd-logs-view
+  components:
+  - gui
+  audience:
+  - operator
+  - user
+- category: Added
+  title: Allow administrators to edit user accounts
+  body: Administrators can edit local account email addresses, roles, active state
+    and passwords from the Users tab. Role changes, deactivation and password resets
+    revoke active sessions.
+  change_id: 20261003-141125-allow-administrators-to-edit-user-accoun
+  components:
+  - gui
+  audience:
+  - admin
+- category: Added
+  title: Build persistent generic virtual machines from QCOW2 images
+  body: Add an administrator wizard for generic QEMU appliances with persistent disks,
+    hardware profiles, and guest port mappings.
+  change_id: 20261007-084607-build-persistent-generic-virtual-machine
+  components:
+  - image-build
+  audience:
+  - admin
+- category: Added
+  title: Redesign the desktop lab workspace
+  body: Reorganize the canvas UI with floating drawing and view controls, a contextual
+    properties drawer, lab diagnostics tabs, and a safe lab-correlated operational
+    log stream.
+  change_id: 20261003-181212-redesign-the-desktop-lab-workspace
+  components:
+  - gui
+  audience:
+  - operator
+  - user
+- category: Added
+  title: Support unsigned FLINOS development bundles
+  body: Administrators can import validated BIOS development FLINOS bundles into a
+    separately tagged non-production image.
+  change_id: 20261004-234313-support-unsigned-flinos-development-bund
+  components:
+  - gui
+  - image-build
+  audience:
+  - admin
+- category: New Virtual Devices
+  title: Add persistent HPE VSR1000 virtual device
+  body: Add a persistent HPE VSR1000 image recipe and catalog entry with disk overlay
+    reuse.
+  change_id: 20261007-124625-add-persistent-hpe-vsr1000-virtual-devic
+  components:
+  - gui
+  - image-build
+  audience:
+  - admin
+  - user
+  vd:
+    vendor: HPE
+    platform: VSR1000
+- category: Changed
+  title: Expose FLiNOS virtual NIC speed setting
+  body: New FLiNOS nodes set QEMU_NIC_SPEED to 1000 Mbps by default and can override
+    the value through advanced Containerlab YAML.
+  change_id: 20261005-120222-set-flinos-default-virtual-nic-speed
+  components:
+  - gui
+  audience:
+  - user
+- category: Changed
+  title: Pin vrnetlab to each dNLab release
+  body: Each dNLab release records and verifies the compatible vrnetlab dnlab-branch
+    commit, and image-build automatically aligns the host checkout to that commit
+    for every supported installation method.
+  change_id: 20261004-232826-pin-vrnetlab-to-each-dnlab-release
+  components:
+  - documentation
+  - image-build
+  - release
+  audience:
+  - admin
+  - operator
+- category: Changed
+  title: Require wildcard hostname configuration for device Web UI
+  body: The dNLab GUI remains available through an IP address, while device Web UI
+    proxying opens an explanatory browser page for its FQDN, wildcard DNS and TLS
+    requirements.
+  change_id: 20261003-111532-require-wildcard-hostname-configuration
+  components:
+  - gui
+  audience:
+  - admin
+  - operator
+- category: Changed
+  title: Validate and document the complete dNLab YAML inventory
+  body: Add canonical installation templates for hosts.yml and paths.yml, expose supported
+    inventory settings in Admin, and reject ignored configuration keys.
+  change_id: 20261002-104930-validate-and-manage-the-complete-hosts-y
+  components:
+  - gui
+  - multinode
+  audience:
+  - admin
+  - operator
+- category: Fixed
+  title: Accept FLINOS release bundles in image-build API
+  body: Correct the FLINOS upload filename validation so signed .zip release bundles
+    can start image builds.
+  change_id: 20261004-215027-accept-flinos-release-bundles-in-image-b
+  components:
+  - image-build
+  audience:
+  - admin
+- category: Fixed
+  title: Fix user menu theme selection and show GUI version
+  body: Keeps the user menu open while selecting a theme and adds a link to the official
+    dNLab repository with the deployed version.
+  change_id: 20261004-205849-fix-user-menu-theme-selection-and-show-g
+  components:
+  - gui
+  audience:
+  - user
+- category: Fixed
+  title: Install Scrapli in custom dNLab vrnetlab images
+  body: Fix OPNsense and FRR image rebuilds by installing the runtime dependency required
+    by the shared vrnetlab launcher.
+  change_id: 20261003-150650-install-scrapli-in-custom-dnlab-vrnetlab
+  components:
+  - image-build
+  audience:
+  - admin
+- category: Fixed
+  title: Prevent OPNsense bootstrap from holding the serial console
+  body: Avoid a blocking Scrapli serial read during first boot so OPNsense can complete
+    management configuration and release its console.
+  change_id: 20261003-161940-prevent-opnsense-bootstrap-from-holding
+  components:
+  - image-build
+  audience:
+  - admin
+- category: Security
+  title: Harden FLINOS signed release bundle builds
+  body: Build FLINOS virtual-device images only from validated signed release bundles
+    with Secure Boot firmware and fail-closed runtime checks.
+  change_id: 20260930-133700-harden-flinos-signed-release-bundle-buil
+  components:
+  - image-build
+  audience:
+  - admin
+breaking_changes:
+- title: Validate and document the complete dNLab YAML inventory
+  body: Add canonical installation templates for hosts.yml and paths.yml, expose supported
+    inventory settings in Admin, and reject ignored configuration keys.
+upgrade_notes:
+- After upgrading dNLab, image-build automatically aligns the mounted vrnetlab checkout;
+  resolve any reported dirty checkout instead of running git pull manually.
+- Replace per-host master.interface or workers.*.interface entries with infrastructure.underlay_iface
+  before upgrading.
+artifacts:
+- name: Source archives
+  type: github-release
+  path: '*-0.2.6-source.tar.gz'
+  channel: GitHub Release
+  notes: Corresponding source archives for the published GHCR images.
+- name: Source checksums
+  type: github-release
+  path: SHA256SUMS
+  channel: GitHub Release
+  notes: Checksums for downloadable release assets.
+- name: Proxmox LXC template
+  type: lxc-proxmox
+  path: dnlab-lxc-proxmox-0.2.6-amd64.tar.zst
+  channel: GHCR and GitHub Release mirror
+  notes: Canonical OCI artifact ghcr.io/n4alab/dnlab-lxc-proxmox:0.2.6.
+- name: Proxmox LXC release notes
+  type: lxc-proxmox
+  path: LXC-RELEASE-NOTES-0.2.6.md
+  channel: GHCR and GitHub Release mirror
+  notes: Browser-friendly release note mirror for the LXC artifact.
+source_notes:
+- CHANGELOG.md
+- changes/archive/0.2.6/
+internal_refs: []
