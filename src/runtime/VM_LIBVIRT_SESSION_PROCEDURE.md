@@ -418,6 +418,15 @@ by packaging the recipe.
 
 ### Current package policy: selected installed packages, Debian dependencies
 
+A separate current-observation recipe has been prepared from repository and
+saved artifacts only. It keeps the original installation/journal references,
+binds the context from the last saved observation, and selects the new package
+policy. The earlier complete observation passes a pure offline assessment under
+that policy; it does not prove current resource state. Execution requires a
+separate one-shot readonly consent. No qualification record, directory recovery,
+configuration revision, libvirt connection or daemon activation is authorized
+by this preparation. Raw global dpkg deltas remain diagnostic.
+
 The user superseded the proposed replacement global dpkg baseline. For new
 post-boot qualifications use `package_policy='installed-packages-v1'`: check
 presence, version, architecture and `install ok installed` for the original

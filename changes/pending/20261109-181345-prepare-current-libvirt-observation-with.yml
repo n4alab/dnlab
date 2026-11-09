@@ -1,0 +1,16 @@
+id: 20261109-181345-prepare-current-libvirt-observation-with
+type: none
+title: Prepare current libvirt observation with selected package policy
+description: Freeze an unexecuted readonly observation recipe from saved context and
+  original installation evidence. Verify the prior archived observation offline under
+  the selected-package policy; retain global dpkg deltas as diagnostics only.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
+reason: Recipe preparation and documentation only; no new host observation, qualification
+  metadata or installed resource changed.
