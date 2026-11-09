@@ -284,7 +284,7 @@ post-boot qualification contract is needed before another operational attempt;
 the mismatch does not authorize adoption or recreation of persistent/volatile
 resources or reuse of historical process identities in the new context.
 
-### Separate post-boot qualification prototype (verification incomplete)
+### Separate post-boot qualification prototype (synthetic verification only)
 
 The agreed contract preserves the original installed record and records a new
 qualification intent bound to the same host and an explicitly different boot.
@@ -302,13 +302,21 @@ component neither recreates volatile resources nor supplies a new effective
 installation to the existing revision/activation paths. Those guards remain
 unchanged. Current-boot volatile recovery and its integration are still needed.
 
-The initial synthetic run has one pass and one failure before the remaining
+The initial synthetic run had one pass and one failure before the remaining
 tests: the fixture denies all Python `os.open` calls, including acquisition of
 its own temporary journal execution lock. The failure precedes historical
-reads. Proposed test-only correction is to acquire the original fixture gate
-before enabling the no-open mock; runtime and lock validation stay unchanged.
-Verification is stopped pending user input. No new host collection, original
-journal access, native prepare, resource recreation or service operation occurred.
+reads. The separately authorized test-only correction acquires the original
+fixture gate before enabling the no-open mock. All fourteen post-boot tests now
+pass, including readonly historical account evidence, immutable replay, rejected
+source/context changes, incomplete historical chains and stale volatile proofs.
+The history-reader test uses SQLite query_only and denies new Python file/pidfd
+opens during the read; it does not claim an OS sandbox. Runtime and lock
+validation are unchanged. The initial failed evidence remains preserved.
+
+No new host collection, original host journal access, native prepare, resource
+recreation or service operation occurred. Concrete current-boot observation,
+volatile recovery and integration remain pending; this persistent-only receipt
+cannot bypass the original boot guard or authorize the next operational step.
 
 `ServiceGenerationObserver` prepares typed validation of an already acknowledged
 daemon generation. It binds the original activation nonce and command completion

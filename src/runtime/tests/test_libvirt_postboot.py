@@ -81,15 +81,19 @@ def test_separate_persistent_qualification_preserves_source_and_blocks_revision(
 
 def test_historical_account_receipt_never_observes_a_current_process(postboot,monkeypatch):
     driver,value,_,history,_,_=postboot
-    monkeypatch.setattr(os,'pidfd_open',lambda *a:pytest.fail('history cannot adopt current PID'))
-    monkeypatch.setattr(os,'open',lambda *a,**kw:pytest.fail('history cannot open procfs or host files'))
-    driver.journal.db.execute('PRAGMA query_only=ON')
-    before=driver.journal.db.total_changes
-    result=history(value['installation']['items'][1])
-    assert result['kind']=='historical-account-creation-v1'
-    assert result['creation_context_sha256']==fingerprint(value['installation']['context'])
-    assert result['creation_context_sha256']!=fingerprint(value['context'])
-    assert driver.journal.db.total_changes==before
+    # Acquire this fixture's original journal gate before forbidding new opens.
+    # The reader then reenters that same gate without opening another lock FD.
+    with driver.journal.execution_lock:
+        with monkeypatch.context() as patch:
+            patch.setattr(os,'pidfd_open',lambda *a:pytest.fail('history cannot adopt current PID'))
+            patch.setattr(os,'open',lambda *a,**kw:pytest.fail('history cannot open procfs or host files'))
+            driver.journal.db.execute('PRAGMA query_only=ON')
+            before=driver.journal.db.total_changes
+            result=history(value['installation']['items'][1])
+            assert result['kind']=='historical-account-creation-v1'
+            assert result['creation_context_sha256']==fingerprint(value['installation']['context'])
+            assert result['creation_context_sha256']!=fingerprint(value['context'])
+            assert driver.journal.db.total_changes==before
 
 
 @pytest.mark.parametrize('fault',['persistent','static','context','volatile-reuse','active-service','missing-volatile'])
