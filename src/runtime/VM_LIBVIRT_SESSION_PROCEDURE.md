@@ -272,6 +272,18 @@ and the agreed window without changes to accounts, libvirt/runtime configuration
 packages or reboot. Guests can remain stable. This prepares neither a service
 activation nor a VM gate; apply/recovery authorization remains separate.
 
+### Native prepare attempt refused before journal/account/service observation
+
+The single authorized prepare attempt stopped at its initial context check:
+the observed boot ID differs from the original installation context, while the
+namespace observations match. The failed attempt retained its private intent
+and error report. It did not open the original journal, perform systemctl/NSS
+queries, prepare a revision, stage/replace a file or activate a daemon. No retry
+was executed. Historical input and guard criteria remain unchanged. A separate
+post-boot qualification contract is needed before another operational attempt;
+the mismatch does not authorize adoption or recreation of persistent/volatile
+resources or reuse of historical process identities in the new context.
+
 `ServiceGenerationObserver` prepares typed validation of an already acknowledged
 daemon generation. It binds the original activation nonce and command completion
 to the installed unit/configuration, systemd invocation ID, nonroot process

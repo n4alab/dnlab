@@ -1,0 +1,16 @@
+id: 20261109-094611-record-native-configuration-prepare-cont
+type: none
+title: Record native configuration prepare context refusal
+description: Document the single failed operational prepare at the initial boot-context
+  guard, before original journal, service or account observation. Preserve evidence
+  and stop without retry or implicit post-boot adoption.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
+reason: Documentation and experimental evidence only; no runtime behavior, installed
+  configuration or service changed.
