@@ -416,6 +416,25 @@ updates or host reboot; stable guests can continue running. No prepare/apply,
 resource recovery/recreation, libvirt connection or daemon start is authorized
 by packaging the recipe.
 
+### First readonly post-boot collection completed; prerequisite delta unresolved
+
+The single authorized master collection completed in0.885s (exit0), with two
+stable passes and eight successful fixed readonly systemctl queries. All17
+persistent targets matched, historical creation/current identity for both account
+and group matched, services were inactive with zero jobs and no dedicated-UID
+processes. Both runtime directories were absent and remain unqualified. Original
+journal hash/record and the explicitly expected context passed before/after
+checks; no original journal mutation, qualification, prepare, recovery, resource
+creation or daemon operation was performed.
+
+The report remains qualified=False and contains exactly one prerequisite delta:
+the global dpkg status file hash. The captured facts for17 declared packages and
+all other compared prerequisite fields match. Those observations do not identify
+which global database entry changed or establish that it is irrelevant. The
+collection is preserved as successful readonly evidence; operational qualification
+remains blocked on this discrepancy. No retry or guard relaxation occurred.
+Further diagnosis or a changed qualification criterion needs a separate decision.
+
 `ServiceGenerationObserver` prepares typed validation of an already acknowledged
 daemon generation. It binds the original activation nonce and command completion
 to the installed unit/configuration, systemd invocation ID, nonroot process

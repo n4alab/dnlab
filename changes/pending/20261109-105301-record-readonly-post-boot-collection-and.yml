@@ -1,0 +1,17 @@
+id: 20261109-105301-record-readonly-post-boot-collection-and
+type: none
+title: Record readonly post-boot collection and dpkg prerequisite delta
+description: 'Preserve the successful single readonly collection: persistent/account
+  evidence matches and volatile directories are absent. One global dpkg status digest
+  differs while17 declared package facts match; cause remains unresolved and no qualification
+  or retry performed.'
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
+reason: Experimental observation and documentation only; no runtime behavior, original
+  journal or installed resource changed.
