@@ -418,6 +418,21 @@ by packaging the recipe.
 
 ### Current package policy: selected installed packages, Debian dependencies
 
+The single separately authorized current observation completed in0.821s with
+eight successful readonly queries,17 matching persistents and two historical
+account records. Both runtime directories are absent. Selected installed-package
+facts match; the global dpkg digest remains diagnostic as agreed.
+
+The selected-policy assessment refuses one independent prerequisite delta:
+the /run parent device changed from57 to58 across the recorded boot contexts.
+Its inode1, UID/GID0 and mode0755 match the original parent; other parent fields
+and independent prerequisites match. This observation does not establish the
+mount type or qualify a current volatile parent. No qualification metadata,
+runtime directory recovery, configuration revision or service action occurred.
+The result is collected but qualified=false. A separate explicit current-boot
+parent contract is required before recovery; no general device/inode relaxation
+has been implemented.
+
 A separate current-observation recipe has been prepared from repository and
 saved artifacts only. It keeps the original installation/journal references,
 binds the context from the last saved observation, and selects the new package

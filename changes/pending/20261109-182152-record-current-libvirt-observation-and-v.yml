@@ -1,0 +1,17 @@
+id: 20261109-182152-record-current-libvirt-observation-and-v
+type: none
+title: Record current libvirt observation and volatile parent device delta
+description: One readonly collection completed with matching selected package facts,
+  persistent identities and historical accounts. Selected-policy assessment stops
+  on the changed /run parent device; no qualification, recovery or service action
+  occurred.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
+reason: Experimental readonly evidence and documentation only; original installation,
+  resources and acceptance guards unchanged.
