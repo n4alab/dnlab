@@ -1,0 +1,14 @@
+id: 20261109-220431-preserve-post-boot-prepare-delivery-acro
+type: internal
+title: Preserve post-boot prepare delivery across lost responses
+description: Deliver metadata-only post-boot prepare references into a qualified private
+  directory, requiring explicit resume of the original intent and preserving incomplete
+  or conflicting artifacts.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

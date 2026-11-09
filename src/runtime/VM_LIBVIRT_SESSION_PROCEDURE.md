@@ -434,9 +434,22 @@ daemon_ready=false. It cannot change units or start libvirt/QEMU.
 
 Fifteen synthetic composition tests pass, including metadata replay, reopening,
 lost commit/create responses and refusals before the first directory write.
-Native operational transport and its durable output/reference handling remain
-to be prepared and qualified separately. No live journal prepare, recovery,
-runtime directory, account operation or daemon/VM action occurred.
+`PrepareDelivery` now supplies metadata-only output/reference handling for an
+already constructed session and qualified private directory FD. It saves the
+intent before prepare, creates artifacts exclusively, and fsyncs files and the
+directory. Explicit resume checks the original intent and reference, confirms
+durability of complete original artifacts without rewriting them, and preserves
+incomplete/conflicting files. A started directory recovery cannot be resumed
+through this prepare entry. Nine synthetic tests pass, including lost journal
+and artifact responses, fsync failure, conflict preservation and replay.
+
+The first test run had eight passes and one incorrect expected exception for a
+second prepare without resume. Only that expectation was corrected to Conflict,
+with preservation checks on journal changes, artifact bytes and inodes. The
+runtime refusal stayed unchanged. Native journal opening, observer assembly,
+frozen recipe and operational qualification remain separate work. No live
+journal prepare, recovery, runtime directory, account operation or daemon/VM
+action occurred.
 
 ### Current-boot /run parent: explicit dependency binding, synthetic verification
 
