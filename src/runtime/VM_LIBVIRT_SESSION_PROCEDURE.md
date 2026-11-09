@@ -372,6 +372,28 @@ post-boot revision. Further boot/revision generations, native collection and
 operational recipes remain unqualified; this does not qualify a running libvirt
 session, VM lifecycle, catalog, distributed recovery or cutover.
 
+### Readonly post-boot collector prototype (verification incomplete)
+
+`SessionInstaller(readonly=True)` reads only the existing original table and
+refuses prepare/apply/save before mutation callbacks. `PostBootObserver` composes
+the original readonly file/identity/dependency readers with the current snapshot;
+volatile paths are statted without following leaf symlinks and remain unqualified.
+It retains stage/target diagnostics. Twenty-four observer/installer tests pass.
+
+`PostBootCollection` compares two complete observations and historical account
+reads, returning only a non-qualifying report with prerequisite differences and
+pending volatile targets. Its native entry uses a frozen source/input manifest,
+explicit expected context, readonly/immutable SQLite and fixed readonly queries;
+there is no journal writer or prepare/apply/recovery API in that entry.
+
+The new collector suite stopped after ten passes and one failure. Its synthetic
+native-wiring fixture omits `prerequisites.profile_sha256`, so the existing
+profile/context guard rejects it before output creation or native callbacks.
+The archived installed manifest contains the correct matching field. Proposed
+correction is fixture-only; no guard relaxation or new host observation is
+authorized. Remaining collector cases were not executed. No concrete native
+collection recipe or master collection has been run by this prototype.
+
 `ServiceGenerationObserver` prepares typed validation of an already acknowledged
 daemon generation. It binds the original activation nonce and command completion
 to the installed unit/configuration, systemd invocation ID, nonroot process

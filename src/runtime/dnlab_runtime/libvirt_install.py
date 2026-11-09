@@ -37,8 +37,13 @@ def proof(value, item, operation_id):
 
 
 class SessionInstaller:
-    def __init__(self, journal, adapter):
-        self.journal, self.adapter = journal, adapter
+    def __init__(self, journal, adapter, *, readonly=False):
+        if type(readonly) is not bool:raise Conflict('explicit installation reader mode required')
+        self.journal, self.adapter, self.readonly = journal, adapter, readonly
+        if readonly:
+            if journal.db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='libvirt_install_intents'").fetchone() is None:
+                raise Conflict('original installation journal table missing')
+            return
         with journal.transaction():
             journal.db.execute('CREATE TABLE IF NOT EXISTS libvirt_install_intents '
                 '(id TEXT PRIMARY KEY,host TEXT NOT NULL UNIQUE,payload TEXT NOT NULL,fingerprint TEXT NOT NULL)')
@@ -68,6 +73,7 @@ class SessionInstaller:
         return value
 
     def _save(self, value):
+        if self.readonly:raise Conflict('readonly installation reader cannot save')
         self.journal.db.execute('UPDATE libvirt_install_intents SET payload=?,fingerprint=? WHERE id=?',
             (canonical(value), fingerprint(value), value['id']))
 
@@ -91,6 +97,7 @@ class SessionInstaller:
         return observed
 
     def prepare(self, operation_id, request, *, context, prerequisites, existing_directories=None):
+        if self.readonly:raise Conflict('readonly installation reader cannot prepare')
         identifier(operation_id, 'installation operation_id')
         profile = render_profile(**request)
         require_installable(profile)
@@ -126,6 +133,7 @@ class SessionInstaller:
 
     def apply(self, operation_id):
         """Resume committed creates; reconcile uncertain creates read-only first."""
+        if self.readonly:raise Conflict('readonly installation reader cannot apply')
         with self.journal.execution_lock:
             value = self.read(operation_id)
             require_installable(value['profile'])
