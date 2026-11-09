@@ -431,6 +431,12 @@ executed, no host operation occurred and the collector is not qualified. The
 failed run is retained pending a fixture-only correction; the original
 prerequisite guard remains unchanged.
 
+The fixture was subsequently renamed to `collection_request`, with no collector
+or guard changes. The targeted collector/diagnosis run passes34 tests, including
+the native file transport redirected entirely into temporary fixture files.
+That verification covers protocol and refusal cases, not the real package delta.
+No host collection has been performed by this diagnostic component.
+
 `tools/libvirt_dpkg_diagnosis.py` accepts supplied bytes and explicit SHA256
 references only. It has no filesystem/command transport or host mode. It checks
 the observed artifact against its saved digest, compares the original four-field

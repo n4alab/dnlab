@@ -13,7 +13,7 @@ from test_libvirt_dpkg_diagnosis import BASE, FACTS, digest, status
 
 
 @pytest.fixture
-def request():
+def collection_request():
     return dict(context=dict(host_id='synthetic', boot_id='synthetic-boot', namespaces={}),
                 expected_sha256=digest(BASE), observed_sha256=digest(BASE + status('other')),
                 expected_packages=deepcopy(FACTS), nonce='a' * 32)
@@ -25,24 +25,24 @@ def reader(current, old=BASE):
 
 
 @pytest.mark.parametrize('old', [None, BASE, status('older')])
-def test_candidate_requires_original_digest_and_never_qualifies(request, old):
+def test_candidate_requires_original_digest_and_never_qualifies(collection_request, old):
     saved = {}
-    result = entry.collect(request, read=reader(BASE + status('other'), old),
-        context=lambda: deepcopy(request['context']), persist=lambda name, raw: saved.setdefault(name, raw))
+    result = entry.collect(collection_request, read=reader(BASE + status('other'), old),
+        context=lambda: deepcopy(collection_request['context']), persist=lambda name, raw: saved.setdefault(name, raw))
     assert result['qualified'] is False and result['passes'] == 2
     assert result['baseline_available'] is (old == BASE)
     assert result['changes'] is None if old != BASE else result['changes'][0]['change'] == 'added'
     assert saved['pass1-status.raw'] == saved['pass2-status.raw'] == BASE + status('other')
 
 
-def test_context_conflict_prevents_status_reads(request):
+def test_context_conflict_prevents_status_reads(collection_request):
     with pytest.raises(ValueError, match='context differs'):
-        entry.collect(request, read=lambda path: pytest.fail('unexpected read'),
+        entry.collect(collection_request, read=lambda path: pytest.fail('unexpected read'),
                       context=lambda: {}, persist=lambda *args: pytest.fail('unexpected write'))
 
 
 @pytest.mark.parametrize('fault', ['current', 'old', 'context'])
-def test_between_pass_changes_preserve_captured_evidence(request, fault):
+def test_between_pass_changes_preserve_captured_evidence(collection_request, fault):
     calls = []; saved = {}
     def read(path):
         calls.append(path)
@@ -53,16 +53,16 @@ def test_between_pass_changes_preserve_captured_evidence(request, fault):
     spaces = []
     def context():
         spaces.append(1)
-        return {} if fault == 'context' and len(spaces) == 4 else deepcopy(request['context'])
+        return {} if fault == 'context' and len(spaces) == 4 else deepcopy(collection_request['context'])
     with pytest.raises(ValueError, match='changed'):
-        entry.collect(request, read=read, context=context, persist=lambda name, raw: saved.setdefault(name, raw))
+        entry.collect(collection_request, read=read, context=context, persist=lambda name, raw: saved.setdefault(name, raw))
     assert 'pass1-proof.json' in saved and 'pass2-proof.json' in saved
 
 
-def test_unexpected_current_digest_preserves_both_raw_passes(request):
+def test_unexpected_current_digest_preserves_both_raw_passes(collection_request):
     saved = {}
     with pytest.raises(ValueError, match='observed artifact digest differs'):
-        entry.collect(request, read=reader(BASE), context=lambda: request['context'],
+        entry.collect(collection_request, read=reader(BASE), context=lambda: collection_request['context'],
                       persist=lambda name, raw: saved.setdefault(name, raw))
     assert saved['pass1-status.raw'] == saved['pass2-status.raw'] == BASE
 
@@ -94,7 +94,7 @@ def test_source_or_input_drift_refused(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize('fault', [None, 'symlink', 'writable'])
-def test_native_transport_on_temporary_files_only(request, tmp_path, monkeypatch, capsys, fault):
+def test_native_transport_on_temporary_files_only(collection_request, tmp_path, monkeypatch, capsys, fault):
     import os
     import tools.libvirt_configuration_prepare as shared
     root = tmp_path / 'root'; directory = root / 'var/lib/dpkg'; directory.mkdir(parents=True)
@@ -106,8 +106,8 @@ def test_native_transport_on_temporary_files_only(request, tmp_path, monkeypatch
         (directory / 'status').chmod(0o666)
     output = tmp_path / 'output'; output.mkdir(mode=0o700)
     monkeypatch.setattr(entry, 'OUTPUT_PARENT', output)
-    monkeypatch.setattr(entry, 'verify_recipe', lambda folder: (json.dumps(request).encode(), deepcopy(request)))
-    monkeypatch.setattr(shared, 'context', lambda value: deepcopy(request['context']))
+    monkeypatch.setattr(entry, 'verify_recipe', lambda folder: (json.dumps(collection_request).encode(), deepcopy(collection_request)))
+    monkeypatch.setattr(shared, 'context', lambda value: deepcopy(collection_request['context']))
     original_open = os.open
     def guarded_open(path, *args, **kwargs):
         if path == '/':
@@ -119,7 +119,7 @@ def test_native_transport_on_temporary_files_only(request, tmp_path, monkeypatch
     assert entry.run(tmp_path / 'fake-recipe') == (0 if fault is None else 1)
     result = json.loads(capsys.readouterr().out)
     assert result['qualified'] is False
-    folder = output / ('libvirt-dpkg-readonly-' + request['nonce'][:12])
+    folder = output / ('libvirt-dpkg-readonly-' + collection_request['nonce'][:12])
     assert (folder / 'intent.json').is_file() and (folder / 'result.json').is_file()
     if fault is None:
         assert (folder / 'pass1-status.raw').read_bytes() == current

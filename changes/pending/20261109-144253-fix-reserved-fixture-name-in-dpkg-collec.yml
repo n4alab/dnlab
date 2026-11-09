@@ -1,0 +1,16 @@
+id: 20261109-144253-fix-reserved-fixture-name-in-dpkg-collec
+type: none
+title: Fix reserved fixture name in dpkg collector tests
+description: Rename the synthetic request fixture and verify the collector plus offline
+  diagnosis with 34 passing targeted tests. Collector, original guards and host state
+  remain unchanged.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
+reason: Synthetic test correction and evidence documentation only; no host collection
+  or product acceptance rule changed.
