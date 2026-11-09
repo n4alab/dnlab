@@ -418,6 +418,14 @@ by packaging the recipe.
 
 ### Offline dpkg diagnosis prepared; host diagnosis still pending
 
+One separately authorized native attempt was refused on the initial context
+comparison before either status file was read. It exited1 and saved only intent
+and failure result; no raw status artifact was produced. The observed context
+was not retained, so neither the changed field nor its cause is established.
+The attempt remains failed, with no retry, qualification or guard change.
+Further work requires preserving expected/observed context before refusal;
+this has not yet been implemented or authorized for another host observation.
+
 The subsequent `libvirt_dpkg_collect.py` draft limits a future observation to
 two passes of status/status-old and expected boot/namespaces. A candidate can
 serve as a baseline only if its digest equals the historical digest. Raw passes

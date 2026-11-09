@@ -1,0 +1,16 @@
+id: 20261109-174012-record-refused-readonly-dpkg-collection
+type: none
+title: Record refused readonly dpkg collection context
+description: Preserve the single authorized readonly diagnostic refused before status
+  reads because context differs. Observed context was not retained; cause remains
+  unresolved. No retry or acceptance change.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
+reason: Experimental failed observation evidence and documentation only; no installed
+  resource, package or prerequisite guard changed.
