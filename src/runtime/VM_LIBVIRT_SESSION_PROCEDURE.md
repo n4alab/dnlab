@@ -548,7 +548,26 @@ are outside this composition. Seven synthetic tests pass for apply/replay,
 reopening after a lost create response, reference conflicts, scoped mutation
 refusals and changed current service state. All directory mutations in these
 tests are simulated. No operational directory apply or recovery has occurred;
-the native transport and frozen action recipe remain separate work.
+the native transport and frozen action recipe are prepared separately below.
+
+`libvirt_postboot_directory_host.py` provides mutually exclusive `--apply-host`
+and `--recover-host` entries. Its nine frozen inputs include the successful
+prepare's original reference and physical journal binding. It cannot retain a
+new journal binding or prepare another operation. Apply and recovery have
+separate private outputs; explicit resume requires the original invocation.
+Readonly systemctl queries use the pinned binary, fixed argv and five-second
+timeout. The effective derived source is saved only after qualified directory
+observation and remains `session-directories-only`, `daemon_ready=false`.
+
+Five synthetic host-transport tests pass with temporary SQLite and simulated
+context/NSS/query/directory leaves. They cover explicit action selection,
+apply/completed replay, lost-create response followed by explicit recovery,
+foreign prepared references and context refusal before queries/mutations.
+The initial run had one pass and four setup errors because the new fixture used
+the inherited fixture's journal path. Only its temporary path was changed with
+user approval; no runtime guard changed. The frozen native recipe still requires
+separate authorization. No operational directory action, unit change or service
+activation has occurred.
 
 ### Current-boot /run parent: explicit dependency binding, synthetic verification
 

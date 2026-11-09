@@ -1,0 +1,14 @@
+id: 20261109-233831-add-explicit-transport-for-original-post
+type: internal
+title: Add explicit transport for original post-boot directory actions
+description: Add separate apply/recover host flags with frozen original prepared reference
+  and journal binding, readonly prerequisite queries, private per-attempt diagnostics
+  and scoped effective directory results.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
