@@ -1,0 +1,16 @@
+id: 20261109-232011-record-the-current-context-libvirt-reado
+type: none
+title: Record the current-context libvirt readonly observation
+description: Record the successful separate readonly observation of the original installation,
+  absent runtime directories and inactive services, with a new metadata-only preparation
+  proposal from archived facts.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
+reason: Experimental operational evidence and procedure update only; no runtime or
+  service change.

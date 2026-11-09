@@ -515,6 +515,17 @@ journal opening or metadata prepare followed. No retry was made. A separate
 current-context readonly observation is required before proposing another
 prepare; the previous installation/qualification evidence remains immutable.
 
+The separately authorized current-context readonly observation then completed
+with stable before/after checks: 17 persistent resources and two historical
+account proofs matched, both runtime directories were absent, and eight fixed
+readonly queries exited successfully with the selected services inactive. The
+sole raw prerequisite delta was the global dpkg database digest, diagnostic under
+the selected-package policy; selected installed component facts matched. /run
+was root-owned0755 with device57/inode1 in the newly recorded context. This is
+an observation, not a prepared journal record or daemon readiness. A separate
+metadata-only recipe is derived from those archived facts; it requires its own
+operational authorization and must recheck them before writing metadata.
+
 ### Current-boot /run parent: explicit dependency binding, synthetic verification
 
 New post-boot requests may explicitly supply `run_parent=bind_run_parent(...)`.
