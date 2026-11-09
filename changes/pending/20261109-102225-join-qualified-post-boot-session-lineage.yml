@@ -1,0 +1,16 @@
+id: 20261109-102225-join-qualified-post-boot-session-lineage
+type: internal
+title: Join qualified post-boot session lineage with unit revision
+description: Add explicit current-session views with per-resource creators and complete
+  fresh preflight, preserving the original installation and legacy boot guard. Integrate
+  prepared-reference unit revision through current-boot directory births. Verify7
+  synthetic cases and one full temporary-filesystem flow with simulated account evidence;
+  native operational recipes and further generations remain pending.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

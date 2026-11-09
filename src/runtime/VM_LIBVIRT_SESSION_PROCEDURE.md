@@ -342,6 +342,36 @@ used reviewed escalation solely for fixture UID1001/GID1002 ownership; account,
 service and host context remained simulated. No installed directory, master
 inventory, operational prepare, account command, daemon or VM was touched.
 
+`CurrentSessionView` joins the original persistent qualification and completed
+current-boot directory recovery into an explicit `postboot-session-view-v1`
+descriptor. It preserves the original stored installation and records every
+resource's creator; new directory proofs retain the recovery ID and nonce.
+The descriptor is journal lineage, with `observation_required=True`, not live
+readiness. It cannot be derived from a directory name or an incomplete recovery.
+
+`CurrentSessionPreflight` reuses the complete unchanged-target and inactive-service
+checks with fresh context/prerequisite snapshots. Accounts require their original
+historical creation evidence plus current identity; filesystem resources are
+observed through their explicitly bound per-item creators. Only the unit being
+revised is delegated to the existing independent staging/exchange observer.
+This lets the historical source descriptor remain stable after a tracked unit
+exchange, while all other resources continue to be checked.
+
+`CurrentConfigurationSession` is a separate explicit post-boot assembly. It reuses
+the original prepared-reference/apply/recovery protocol without modifying or
+falling back from the legacy boot guard. Seven synthetic source/creator/conflict
+cases pass. One complete temporary-filesystem case separately passes in32.05s:
+initial simulated-account installation, changed fixture boot, fresh runtime
+directory births, qualified source view, unit exchange and immutable replay.
+Escalation was limited to fixture UID/GID ownership. NSS, worker execution and
+historical account evidence were simulated in that integration case; the
+historical SQL chain has its separate tests. No daemon or master operation ran.
+
+The evidence covers the initial inactive installation and this one tracked
+post-boot revision. Further boot/revision generations, native collection and
+operational recipes remain unqualified; this does not qualify a running libvirt
+session, VM lifecycle, catalog, distributed recovery or cutover.
+
 `ServiceGenerationObserver` prepares typed validation of an already acknowledged
 daemon generation. It binds the original activation nonce and command completion
 to the installed unit/configuration, systemd invocation ID, nonroot process
