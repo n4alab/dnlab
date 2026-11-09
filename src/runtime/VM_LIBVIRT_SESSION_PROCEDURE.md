@@ -538,6 +538,18 @@ hash is historical after these metadata writes and must not be reused as a
 fresh whole-database acceptance criterion. Directory recovery and activation
 still require their distinct qualified entry and operational authorization.
 
+`PostBootDirectoryAssembly` now supplies the directory-capable composition from
+that original prepared reference. It first checks the reference through the
+readonly assembly, then creates a separate `PreparedDirectoryFiles` capability
+restricted to the two original /run directory specs, nonces and recovery ID.
+Its apply/recover methods never prepare a replacement operation. Prerequisite
+observers remain readonly; unit files, account commands and service activation
+are outside this composition. Seven synthetic tests pass for apply/replay,
+reopening after a lost create response, reference conflicts, scoped mutation
+refusals and changed current service state. All directory mutations in these
+tests are simulated. No operational directory apply or recovery has occurred;
+the native transport and frozen action recipe remain separate work.
+
 ### Current-boot /run parent: explicit dependency binding, synthetic verification
 
 New post-boot requests may explicitly supply `run_parent=bind_run_parent(...)`.

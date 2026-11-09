@@ -1,0 +1,14 @@
+id: 20261109-232903-assemble-original-reference-post-boot-di
+type: internal
+title: Assemble original-reference post-boot directory recovery
+description: Add a directory-only assembly with readonly prerequisite observers and
+  a mutator restricted to the original two prepared specs, nonces and recovery ID,
+  without implicit prepare or service actions.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
