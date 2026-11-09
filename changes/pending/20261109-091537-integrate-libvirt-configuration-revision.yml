@@ -1,0 +1,16 @@
+id: 20261109-091537-integrate-libvirt-configuration-revision
+type: internal
+title: Integrate libvirt configuration revision recovery with file transitions
+description: Compose tracked candidate staging and atomic exchange with the original
+  revision journal, explicit recovery and qualified effective-unit observation. Preserve
+  immutable installation and per-file creators; verify lost responses on temporary
+  files with simulated session prerequisites. Native session qualification and operational
+  activation remain pending.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

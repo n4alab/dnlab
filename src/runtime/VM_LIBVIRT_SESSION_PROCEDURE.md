@@ -181,6 +181,29 @@ with the revision/activation controllers and a separately authorized operational
 update are still required. No installed file or daemon was changed.
 Rename semantics reference: [Linux renameat2 manual](https://man7.org/linux/man-pages/man2/renameat2.2.html).
 
+`ConfigurationFileAdapter` composes staging and exchange with the outer revision
+journal. It normalizes only lifecycle bookkeeping for the same original request;
+source, target, nonce, window and paths remain bound. `ConfigurationRevision.recover`
+accepts only a previously requested replacement and invokes its original adapter.
+It can recover a recorded candidate birth and perform the first exchange, or
+recover an already requested exchange/backup. It cannot create a missing birth,
+start a prepared revision, repeat an uncertain rename or skip independent final
+observation. Lost outer completion commits reuse the completed original swap.
+
+The adapter validates the unchanged installation and inactive services through a
+mandatory provider before and after observations and at mutation boundaries.
+That provider remains injected; there is no native full-session provider or host
+entrypoint yet. A revised unit can be observed through its transition receipt,
+while the other six files retain their original creators. The integration test
+uses all seven real temporary files with the existing service-file reader;
+accounts, directory ownership and service state remain simulated. This is a
+pre-activation file view, not qualification of reads after daemon activation.
+
+Ten adapter integration cases and the combined 117-test suite pass, including
+lost candidate/rename/outer-commit responses, changed unrelated files and closed
+windows. No installed file, service, VM or lab was modified. The native provider,
+operational revision and empty-session activation are still pending.
+
 `ServiceGenerationObserver` prepares typed validation of an already acknowledged
 daemon generation. It binds the original activation nonce and command completion
 to the installed unit/configuration, systemd invocation ID, nonroot process

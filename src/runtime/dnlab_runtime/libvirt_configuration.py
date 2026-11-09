@@ -142,6 +142,22 @@ class ConfigurationRevision:
             with self.journal.transaction():self._save(value)
             return self.effective(operation)
 
+    def recover(self,operation):
+        """Resume only a recorded replacement through its qualified adapter."""
+        with self.journal.execution_lock:
+            value=self.read(operation)
+            if value['phase']=='completed':return self.effective(operation)
+            recover=getattr(self.adapter,'recover',None)
+            if value['phase']!='replace_requested' or not callable(recover):
+                raise Conflict('original requested replacement and recovery adapter required')
+            item=dict(spec=value['plan']['target_spec'])
+            self.window.verify(item,value['id'],value['window_sha256'])
+            current=self._receipt(value,recover(deepcopy(value)))
+            if self._observe(value)!=current:raise Conflict('recovered replacement not independently observed')
+            value.update(phase='completed',proof=current)
+            with self.journal.transaction():self._save(value)
+            return self.effective(operation)
+
     def effective(self,operation):
         value=self.read(operation)
         if value['phase']!='completed':raise Conflict('configuration revision remains pending')
