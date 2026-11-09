@@ -418,6 +418,15 @@ by packaging the recipe.
 
 ### Offline dpkg diagnosis prepared; host diagnosis still pending
 
+Following explicit preparation-only approval, recipe03 is bound to the context
+saved by the failed recipe02 observation. Only the expected context and nonce
+change; both dpkg digests and all17 original selected package facts remain
+identical. The runtime source inventory is unchanged. Previous recipes, context
+expectations and failed observations remain immutable. This is a separate
+diagnostic request, not installation qualification, process/resource adoption
+or permission to execute the collector. Verification reads only repository and
+archived artifacts; no additional host observation has been performed.
+
 The single separately authorized recipe02 attempt saved the initial comparison
 and refused before status/status-old reads. The expected boot ID differs from
 the observed boot ID; mount, network and PID namespace inode numbers also

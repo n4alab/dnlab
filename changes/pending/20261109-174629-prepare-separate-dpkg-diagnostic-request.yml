@@ -1,0 +1,16 @@
+id: 20261109-174629-prepare-separate-dpkg-diagnostic-request
+type: none
+title: Prepare separate dpkg diagnostic request for saved current context
+description: Bind a separate unexecuted diagnostic recipe to the previously captured
+  context. Preserve both package digests, all selected package facts, runtime source
+  inventory and historical evidence unchanged.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
+reason: Experimental recipe preparation and documentation only; no host observation,
+  installed resource or acceptance guard changed.
