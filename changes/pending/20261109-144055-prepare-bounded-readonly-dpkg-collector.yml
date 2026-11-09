@@ -1,0 +1,16 @@
+id: 20261109-144055-prepare-bounded-readonly-dpkg-collector
+type: none
+title: Prepare bounded readonly dpkg collector draft
+description: Draft a two-pass fixed-path diagnostic for status and status-old. Synthetic
+  verification stopped during pytest collection because a fixture uses the reserved
+  name request; no host collection or guard change occurred.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
+reason: Unqualified experimental diagnostic draft and retained failed synthetic evidence
+  only; no installed behavior or host resource changed.

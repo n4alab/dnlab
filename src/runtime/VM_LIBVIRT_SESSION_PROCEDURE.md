@@ -418,6 +418,19 @@ by packaging the recipe.
 
 ### Offline dpkg diagnosis prepared; host diagnosis still pending
 
+The subsequent `libvirt_dpkg_collect.py` draft limits a future observation to
+two passes of status/status-old and expected boot/namespaces. A candidate can
+serve as a baseline only if its digest equals the historical digest. Raw passes
+and metadata precede comparison, and the report remains unqualified. The user
+reports no known package changes; this does not establish the cause of the
+global digest delta.
+
+Verification of this collector draft stopped during pytest collection: a new
+fixture is named `request`, which pytest reserves. No test bodies in that run
+executed, no host operation occurred and the collector is not qualified. The
+failed run is retained pending a fixture-only correction; the original
+prerequisite guard remains unchanged.
+
 `tools/libvirt_dpkg_diagnosis.py` accepts supplied bytes and explicit SHA256
 references only. It has no filesystem/command transport or host mode. It checks
 the observed artifact against its saved digest, compares the original four-field
