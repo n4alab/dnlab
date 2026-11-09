@@ -1,0 +1,15 @@
+id: 20261107-150039-introduce-typed-workload-references-for
+type: internal
+title: Introduce typed workload references for the dual-backend runtime
+description: Add backend and kind to observed workload references while preserving
+  Docker inspection fields and generation checks. Validate optional references in
+  the multinode client; direct VM execution remains disabled pending the libvirt adapter
+  and template qualification.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

@@ -1,0 +1,15 @@
+id: 20261021-213056-diagnose-early-journal-rejection-surfaci
+type: internal
+title: Diagnose early journal rejection surfacing as a broken Unix HTTP send
+description: A full runtime suite and a large inert-body Unix socket reproduction
+  show journal mismatch is rejected before request parsing but the client leaks BrokenPipeError
+  during body transmission. Verify zero operation and Docker mutations; retain a failing
+  regression pending transport contract approval.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

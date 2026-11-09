@@ -1,0 +1,18 @@
+id: 20261014-090443-qualify-image-runtime-against-shared-man
+type: internal
+title: Qualify image runtime against shared management authority
+description: Extend the isolated management and data-link gate to run the Unix API
+  daemon from an immutable local runtime image. Verify installed module hashes, shared
+  journal authority, image restart with active data traffic, host-to-image execution
+  locking and queued lifecycle progress, then cleanup the owned daemon and workloads.
+  Management handoff and endpoint race injection remain controlled by the native fixture;
+  this qualifies the image consuming shared authority through data-link and lifecycle
+  APIs, not a production management move API or complete image handoff qualification.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

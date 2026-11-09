@@ -1,0 +1,17 @@
+id: 20261027-084457-block-live-runtime-fixtures-until-deploy
+type: none
+title: Block live runtime fixtures until deployed cleanup protection is qualified
+description: Add an early read-only cleanup compatibility check to local management
+  and relay qualification fixtures. Block live allocation while the deployed cleanup
+  contract remains unqualified, including when local daemon discovery is empty or
+  incomplete.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
+reason: Experimental qualification tooling only; no installed daemon or lab behavior
+  is changed.

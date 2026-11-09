@@ -1,0 +1,16 @@
+id: 20261108-203052-prepare-non-mutating-account-worker-boot
+type: internal
+title: Prepare non-mutating account worker bootstrap canary
+description: Share the inherited-FD bootstrap argv with a one-shot worker qualification
+  recipe that sends only the initial frame and EOF, never release. Cleanup preserves
+  the primary error and closes owned resources independently. One hundred and two
+  synthetic tests pass; one authorized live bootstrap probe verified the original
+  worker and expected EOF refusal without executing the account target.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

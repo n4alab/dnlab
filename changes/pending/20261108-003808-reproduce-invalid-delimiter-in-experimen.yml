@@ -1,0 +1,16 @@
+id: 20261108-003808-reproduce-invalid-delimiter-in-experimen
+type: internal
+title: Use versioned safe markers in experimental account comments
+description: Generate dnlab-v1 markers from the original intent and nonce hash,
+  avoiding passwd field delimiters. Refuse incompatible saved requests before
+  helper inspection without rewriting the journal. The targeted synthetic and
+  temporary-filesystem run passes 73 tests; no account command or provisioning
+  is performed.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

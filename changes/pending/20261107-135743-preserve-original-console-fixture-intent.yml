@@ -1,0 +1,14 @@
+id: 20261107-135743-preserve-original-console-fixture-intent
+type: internal
+title: Preserve original console fixture intent on reopen
+description: Reuse the original console workload nonce and start request after validating
+  immutable inputs. Reject conflicts without rewriting the fixture journal and allow
+  optional gate context only before workload creation.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

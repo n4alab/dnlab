@@ -1,0 +1,17 @@
+id: 20261009-144432-declare-candidate-helper-interpreters-an
+type: internal
+title: Declare candidate helper interpreters and image healthchecks
+description: Experimental runtime candidate builds require an explicit system or offline
+  uv Python profile. Bootstrap and NOS probes use that profile and the configured
+  exec-form image healthcheck; V2 candidates are rebuilt from pinned source contexts.
+  NOS fixtures pass the V2 launcher connection-mode argument explicitly and validate
+  matching QEMU NIC/backend identifiers. Boot-only probes accept loader/ROMMON as
+  process boot and record the guest stage separately from NOS readiness.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

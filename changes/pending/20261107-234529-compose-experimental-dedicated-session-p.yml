@@ -1,0 +1,16 @@
+id: 20261107-234529-compose-experimental-dedicated-session-p
+type: internal
+title: Compose experimental dedicated session provisioning adapter
+description: Connect original window, full prerequisite snapshot, directory dependencies
+  and installation primitives. All six composition cases pass across separate
+  temporary-filesystem and simulated-account runs, including original-operation
+  recovery after a lost helper response. The earlier sandbox UID mapping failure
+  remains recorded; actual account execution and operational provisioning are pending.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

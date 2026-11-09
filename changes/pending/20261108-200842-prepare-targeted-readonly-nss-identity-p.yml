@@ -1,0 +1,14 @@
+id: 20261108-200842-prepare-targeted-readonly-nss-identity-p
+type: internal
+title: Prepare targeted readonly NSS identity probe
+description: Add explicit-opt-in name and numeric NSS diagnostics with positive controls
+  and repeated observations. Twelve synthetic tests pass; negative results never authorize
+  provisioning and no real NSS query was executed.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

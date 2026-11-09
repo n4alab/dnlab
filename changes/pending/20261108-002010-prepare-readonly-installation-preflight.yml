@@ -1,0 +1,17 @@
+id: 20261108-002010-prepare-readonly-installation-preflight
+type: internal
+title: Prepare readonly installation preflight collector
+description: Add a bounded two-snapshot installation preflight collector. Ten isolated
+  synthetic tests pass without warnings. One authorized readonly master collection
+  matches expected packages, daemon hashes and mask links, with no local candidate
+  identity conflict. Existing shared configuration parent remains a dependency
+  candidate; NSS, live services and device access are unqualified. No provisioning
+  or old-artifact cleanup is performed.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

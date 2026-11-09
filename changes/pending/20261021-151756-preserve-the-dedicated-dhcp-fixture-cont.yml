@@ -1,0 +1,15 @@
+id: 20261021-151756-preserve-the-dedicated-dhcp-fixture-cont
+type: internal
+title: Preserve the dedicated DHCP fixture container identity while preparing assets
+description: Separate the container name from asset loop variables and verify the
+  exact nonce-derived drsp-dhbirth name before inspecting or creating the fixture.
+  Retain qualified cleanup and cover the original regression plus rejected pre-create
+  identities. Runtime asset journals remain unchanged.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

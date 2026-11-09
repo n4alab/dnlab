@@ -1,0 +1,16 @@
+id: 20261012-130712-probe-vxlan-worker-packaging-against-hos
+type: internal
+title: Probe VXLAN worker packaging against host execution
+description: Run pinned-image fixture workers with runtime source digest verification
+  and owned container teardown. With readonly authoritative host boot identity, the
+  local shared-journal gate passes image create/delete and all 24 crash/recovery cases;
+  50 dedicated containers are removed. Distributed hosts and complete runtime integration
+  remain unqualified.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

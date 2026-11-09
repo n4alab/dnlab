@@ -1,0 +1,16 @@
+id: 20261009-163320-qualify-v2-nos-handoff-on-isolated-dnlab
+type: internal
+title: Qualify V2 NOS handoff on isolated dnlab-vrf networks
+description: Extend the vIOS V2 fixture to borrowed owned dnlab-vrf networks, live
+  native capability checks, manually configured guest IP/default gateway, client namespace
+  traffic, unchanged NIC/process identities and container-loopback console. Resolve
+  diagnostic uplinks by endpoint peer identity and preserve host-published console
+  checks on the stock bridge path only. No NOS production API support is enabled.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

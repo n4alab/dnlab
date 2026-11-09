@@ -1,0 +1,17 @@
+id: 20261108-224633-bind-libvirt-apply-to-its-original-prepa
+type: internal
+title: Bind libvirt apply to its original prepared journal and intent
+description: Add an explicit apply entry checking original journal identity, request
+  and item nonces before mutations. Nineteen targeted synthetic cases and one temporary-filesystem
+  positive case pass. The separate host recipe now uses the correct apply_host
+  argument and preserves refusal stdout, stderr and exit code; the corrected recipe
+  rejects execution without its explicit host flag. Original intent inputs and the
+  partial recipe are preserved. No real apply or account command was executed.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

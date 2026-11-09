@@ -1,0 +1,15 @@
+id: 20261012-134954-gate-local-vxlan-api-on-isolated-native
+type: internal
+title: Gate local VXLAN API on isolated native workload
+description: Add an opt-in image API probe using two real Linux workloads, dedicated
+  underlay veth and remote namespace peer, with operation deduplication, daemon restart,
+  stop guard, spawn in an active lab, ICMP and ownership-checked cleanup. This does not qualify real SSH,
+  cross-host operation or NOS.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

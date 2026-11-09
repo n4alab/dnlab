@@ -1,0 +1,14 @@
+id: 20261012-131652-use-authoritative-host-boot-identity-in
+type: internal
+title: Use authoritative host boot identity in the experimental runtime image
+description: Read boot identity from a trusted configured absolute file, fail on missing
+  or invalid content, and mount the dNLab host boot ID readonly in the opt-in runtime
+  image and fixture workers so namespace/boot guards stay consistent on LXC hosts.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

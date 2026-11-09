@@ -1,0 +1,16 @@
+id: 20261012-074429-verify-vios-v2-guest-port-mapping-by-har
+type: internal
+title: Verify vIOS V2 guest port mapping by hardware MAC
+description: Observe every guest interface hardware MAC on a newly spawned vIOS V2
+  and compare it with the immutable candidate QEMU NIC/backend inventory before qualifying
+  management port selection. Reject absent, ambiguous or mismatched mappings; preserve
+  existing guest traffic and cleanup checks. Query one interface at a time with a
+  bounded timeout and checkpoint successful responses and partial output on failure.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

@@ -1,0 +1,15 @@
+id: 20261109-085717-prototype-immutable-libvirt-configuratio
+type: internal
+title: Prototype immutable libvirt configuration revisions
+description: Record a separate prerequisite-policy transition with original backup
+  and replacement receipts, uncertainty recovery without repeated replacement, and
+  per-file creator verification. Native replacement remains unimplemented; synthetic
+  qualification only.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

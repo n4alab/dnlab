@@ -1,0 +1,15 @@
+id: 20261108-210854-verify-account-identity-in-synthetic-ins
+type: internal
+title: Verify account identity in synthetic installer chain
+description: Exercise the real installer, provisioning adapter, tracked helper and
+  local/NSS identity reader with temporary account files and simulated worker/file
+  resources. Eighty-one targeted tests pass, including explicit lost-response recovery
+  without reexecution. No host account, shadow or service was used.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

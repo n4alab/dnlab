@@ -1,0 +1,15 @@
+id: 20261021-132618-capture-dhcp-absence-evidence-before-dia
+type: internal
+title: Capture DHCP absence evidence before diagnostic fixture cleanup
+description: Add a read-only diagnostic mode capturing PID file identity and contents,
+  original service proof, namespace-scoped process inventory and exact guard mapping
+  counts before cleanup. Skip structural main writes in diagnostic mode and preserve
+  unchanged absence checks.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

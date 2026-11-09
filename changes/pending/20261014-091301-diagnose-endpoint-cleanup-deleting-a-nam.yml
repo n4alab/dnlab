@@ -1,0 +1,21 @@
+id: 20261014-091301-diagnose-endpoint-cleanup-deleting-a-nam
+type: internal
+title: Bind endpoint deletion to the qualified kernel identity and namespace
+description: Replace name-resolved endpoint deletion with a bounded namespace-local
+  helper issuing an index-only RTM_DELLINK request. Verify boot and namespace identity,
+  name, ifindex, owner alias, MAC, peer and veth kind before mutation; validate the
+  kernel acknowledgement and preserve identity conflicts. A foreign name replacement
+  remains intact across retries, retaining lifecycle state for recovery. Runtime
+  regressions and isolated kernel and image gates cover replacement, disappearance,
+  namespace refusal and stop with the VD namespace pinned. Helper normalization for
+  named peers in the same namespace matches the existing backend. No changes to
+  scheduler, placement or API contracts; broader NOS/distributed qualification remains
+  pending.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

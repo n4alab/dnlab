@@ -1,0 +1,16 @@
+# Isolated opt-in prototype. This file is not included by the distribution stack.
+services:
+  runtime:
+    build: .
+    image: dnlab-runtime-spike:local
+    network_mode: host
+    pid: host
+    privileged: true
+    environment:
+      DNLAB_RUNTIME_HOST_BOOT_ID_FILE: /run/dnlab-runtime/host-boot-id
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /proc/sys/kernel/random/boot_id:/run/dnlab-runtime/host-boot-id:ro
+      - ${DNLAB_RUNTIME_SPIKE_STATE:?set an isolated absolute state path}:/var/lib/dnlab-runtime
+      - ${DNLAB_RUNTIME_SPIKE_RUN:?set an isolated absolute socket path}:/run/dnlab-runtime

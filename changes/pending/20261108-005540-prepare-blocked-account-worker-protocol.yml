@@ -1,0 +1,15 @@
+id: 20261108-005540-prepare-blocked-account-worker-protocol
+type: internal
+title: Prepare blocked account worker protocol for session provisioning
+description: Validate fixed account commands, environment and pinned binary descriptor
+  before readiness and again before an exact token-bound release. Fifty-one targeted
+  tests pass with memory streams and mocked exec; no account binary or process is
+  launched and host runner qualification remains pending.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

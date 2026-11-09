@@ -1,0 +1,14 @@
+id: 20261012-221030-qualify-custom-bridge-recovery-in-dedica
+type: internal
+title: Qualify custom bridge recovery in dedicated runtime image workers
+description: Add isolated real SIGKILL probes before and after each bridge create/delete
+  mutation and recovery from another process, with pinned image core digests, namespace
+  affinity and owned worker cleanup. API, NOS and distributed integration remain unqualified.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

@@ -1,0 +1,14 @@
+id: 20261009-131628-add-isolated-nos-move-diagnostics
+type: internal
+title: Add isolated NOS move diagnostics
+description: Capture guest and namespace snapshots plus header-only traffic on owned
+  fixture interfaces. Add a scoped ARP destination-MAC control to diagnose management
+  handoff without changing runtime datapath or production lab state.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

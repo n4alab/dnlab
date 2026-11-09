@@ -1,0 +1,16 @@
+id: 20261108-225346-qualify-dedicated-libvirt-session-instal
+type: internal
+title: Qualify dedicated libvirt session installation without daemon startup
+description: Complete one authorized master apply of the original version2 intent.
+  Verify the nonroot account/group, nine directories, seven files and original dependency
+  using journal integrity and birth proofs. Both account workers exited zero; the
+  result is installed_not_started. No daemon reload/start, VM, libvirt connection
+  or package change was performed; operational capability qualification remains pending.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

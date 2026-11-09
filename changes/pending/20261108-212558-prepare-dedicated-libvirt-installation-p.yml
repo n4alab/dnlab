@@ -1,0 +1,15 @@
+id: 20261108-212558-prepare-dedicated-libvirt-installation-p
+type: internal
+title: Prepare dedicated libvirt installation prerequisite observers
+description: Add stable installation prerequisite snapshots and readonly systemctl/proc
+  activity observers with separate target ownership. Fifty-five synthetic tests pass.
+  One authorized readonly observation found the configured units inactive and
+  prerequisites matching; no installer prepare/apply or provisioning was executed.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

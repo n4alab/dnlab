@@ -1,0 +1,15 @@
+id: 20261107-152816-observe-original-libvirt-vm-identities-w
+type: internal
+title: Observe original libvirt VM identities without name adoption
+description: Add an injected read-only libvirt observer that verifies UUID, owner
+  metadata, persistent/live XML and an original process proof around repeated observations.
+  Integrate with synthetic event tracking; no hypervisor connection or VM execution
+  is enabled.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

@@ -1,0 +1,15 @@
+id: 20261021-220054-preserve-early-runtime-rejection-and-cla
+type: internal
+title: Preserve early runtime rejection and classify uncertain delivery without retry
+description: Drain only framed rejected bodies within size and absolute time limits
+  without parsing or mutating runtime state. Recover complete HTTP errors on the original
+  Unix connection after send failure, and raise typed delivery uncertainty for missing
+  or incomplete outcomes without reconnecting or replaying operations.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

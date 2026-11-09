@@ -1,0 +1,15 @@
+id: 20261107-182156-prepare-readonly-host-prerequisite-inven
+type: internal
+title: Prepare readonly host prerequisite inventory for direct VM runtime
+description: Add an opt-in diagnostic collector for QEMU/libvirt file hashes, KVM/TUN
+  metadata, local dedicated-account presence and candidate sockets. Never execute
+  inventoried binaries, open devices or connect to services; report unresolved symlinks
+  and avoid claiming operational qualification. Verify only against synthetic filesystems.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

@@ -1,0 +1,14 @@
+id: 20261021-094901-qualify-dnsmasq-process-birth-before-str
+type: internal
+title: Qualify dnsmasq process birth before structural service operations
+description: Add an isolated image-pinned qualification of stdin configuration preflight,
+  daemon nonce observability and PID-bound graceful termination, with fixture birth
+  and cleanup regressions.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

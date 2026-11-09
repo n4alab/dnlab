@@ -1,0 +1,16 @@
+id: 20261107-184156-prepare-readonly-vm-package-metadata-pre
+type: internal
+title: Prepare readonly VM package metadata preflight
+description: Add an opt-in package collector bound to the original boot/distribution
+  receipt, using bounded dpkg status reads and a fixed apt-cache policy query with
+  persistent caches disabled. Preserve query failures without retries and refuse changed
+  inputs; synthetic mode cannot query the host. No install or operational VM qualification
+  enabled.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

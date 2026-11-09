@@ -1,0 +1,15 @@
+id: 20261107-172506-exclude-container-and-vm-admission-on-th
+type: internal
+title: Exclude container and VM admission on the same logical node
+description: Share backend exclusion through existing journal records and atomic admission
+  transactions. Check native plan/submit and VM prepare/apply, retain reservations
+  through recovery and pending cleanup, and refuse mixed or corrupt ownership without
+  cross-backend compensation.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

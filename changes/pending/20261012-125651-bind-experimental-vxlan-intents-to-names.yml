@@ -1,0 +1,15 @@
+id: 20261012-125651-bind-experimental-vxlan-intents-to-names
+type: internal
+title: Bind experimental VXLAN intents to namespace and underlay identity
+description: Persist namespace and host boot identity and the qualified underlay ifindex
+  in local VXLAN intents, reject replacement or MTU reduction, pin fixture commands
+  to verified namespace file descriptors, and preserve underlay resources during owned
+  tunnel cleanup.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

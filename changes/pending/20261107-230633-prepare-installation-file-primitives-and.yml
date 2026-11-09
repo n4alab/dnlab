@@ -1,0 +1,16 @@
+id: 20261107-230633-prepare-installation-file-primitives-and
+type: internal
+title: Track installation file birth and explicit durability recovery
+description: Experimental file provisioning records original file and parent
+  identities in the existing journal. Readonly observation rejects uncertain
+  durability; explicit recovery verifies and syncs the original resources before
+  committing confirmation. Targeted synthetic and temporary-file tests pass;
+  directory/account provisioning and operational session installation remain pending.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

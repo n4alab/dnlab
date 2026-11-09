@@ -1,0 +1,16 @@
+id: 20261107-180207-persist-complete-original-qemu-records-b
+type: internal
+title: Persist complete original QEMU records before VM CPU resume
+description: Extend experimental boot checkpoints with immutable complete process
+  records bound to original VM birth, session credentials, process reference and event
+  activation. Reconstruct observers from saved records without new process acquisition
+  on retry. Synthetic integration qualification remains pending; no public VM admission
+  or live operation enabled.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

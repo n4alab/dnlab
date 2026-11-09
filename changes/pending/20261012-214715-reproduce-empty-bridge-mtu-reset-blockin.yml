@@ -1,0 +1,16 @@
+id: 20261012-214715-reproduce-empty-bridge-mtu-reset-blockin
+type: internal
+title: Recover owned bridge teardown after empty bridge MTU reset
+description: Persist the final detach intent before mutation and accept the kernel
+  MTU reset to 1500 only for an empty bridge during journalled teardown. Preserve
+  creator, MAC, index, namespace, source and membership checks, with strict MTU for
+  active bridges. Cover crash recovery and invalid ownership, and qualify cleanup
+  in the isolated native bridge gate.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

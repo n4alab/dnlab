@@ -1,0 +1,15 @@
+id: 20261021-151119-diagnose-structural-dhcp-fixture-overwri
+type: internal
+title: Diagnose structural DHCP fixture overwriting its container name
+description: A new regression and independent gate inspection show the three-asset
+  fixture reuses the container-name variable while preparing files and creates options
+  instead of its dedicated prefix. All six write recoveries passed and the owned fixture
+  was removed by verified ID; retain evidence pending fixture-only correction.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

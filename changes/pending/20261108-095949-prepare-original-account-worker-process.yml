@@ -1,0 +1,15 @@
+id: 20261108-095949-prepare-original-account-worker-process
+type: internal
+title: Prepare original account worker process observation
+description: Prepare pidfd, process generation and namespace observation for account
+  workers with durable binding and exit receipts. Eighty-three targeted synthetic
+  tests pass after correcting an internal reader name collision; real process
+  qualification and host provisioning remain disabled.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

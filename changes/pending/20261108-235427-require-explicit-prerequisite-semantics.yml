@@ -1,0 +1,17 @@
+id: 20261108-235427-require-explicit-prerequisite-semantics
+type: internal
+title: Require explicit prerequisite semantics for new libvirt activations
+description: Add opt-in requisite-after-v1 profiles for layout2 and reject activation
+  of profiles without that policy. Preserve historical layout1/layout2 rendering and
+  readable activation intents without conversion. Ninety-two targeted synthetic tests
+  pass, including original profile fingerprints and no-action legacy rejection. Installed
+  units and services were not modified or activated; their qualified update remains
+  separate.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

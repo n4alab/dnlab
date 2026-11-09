@@ -1,0 +1,18 @@
+id: 20261107-221730-reproduce-missing-vm-tap-name-exclusion
+type: internal
+title: Reserve VM TAP names atomically with container interface resources
+description: Experimental VM admission reserves TAP names in the common resource
+  table and verifies original creator and complete inventory on retry and preflight.
+  Synthetic conflicts, concurrency and VM recovery pass. Cleanup assertions include
+  both reservations and definition intents. Extended verification passes 182 tests
+  before sandbox EPERM at the Unix transport bind; the exact test passes separately
+  outside the sandbox without changes to the test or guard.
+  No host networking or VM operations performed.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

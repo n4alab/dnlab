@@ -1,0 +1,15 @@
+id: 20261012-214413-prototype-journalled-local-bridges-in-cu
+type: internal
+title: Prototype journalled local bridges in custom runtime
+description: Add a local bridge primitive with atomic creator MAC, explicit alias,
+  source/context proof, journalled kernel intents, shared resource lock, qualified
+  LLDP/LACP rules and exact firewall ownership. Include failure compensation, per-link
+  recovery and preservation of shared qdiscs; operation API integration remains pending.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

@@ -1,0 +1,15 @@
+id: 20261012-133758-expose-journalled-local-vxlan-operations
+type: internal
+title: Expose journalled local VXLAN operations for committed runtime nodes
+description: Add optional Unix API and CLI routes for VXLAN plan, queued create/delete/recover,
+  status, cancellation and inspection. Requests validate committed node revision and
+  exact endpoint ownership, serialize with node operations, preserve pre-existing
+  links on interrupted retries, and require local link teardown before node stop.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

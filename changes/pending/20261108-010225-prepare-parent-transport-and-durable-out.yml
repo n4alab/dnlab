@@ -1,0 +1,15 @@
+id: 20261108-010225-prepare-parent-transport-and-durable-out
+type: internal
+title: Prepare parent transport and durable outcomes for blocked account workers
+description: Add pinned-descriptor worker transport, durable launch/reference/release
+  tracking and bounded original output/exit handling without signals or respawn. Sixty
+  targeted tests pass using fake processes and local pipes; real process observer
+  qualification and account provisioning remain disabled.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

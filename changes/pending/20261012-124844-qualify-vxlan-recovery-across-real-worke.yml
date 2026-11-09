@@ -1,0 +1,14 @@
+id: 20261012-124844-qualify-vxlan-recovery-across-real-worke
+type: internal
+title: Qualify VXLAN recovery across real worker process crashes
+description: Add an isolated gate that SIGKILLs only dedicated fixture workers before
+  and after kernel mutations, reopens the journal in a separate recovery process,
+  and checks owned cleanup and preservation of the other VXLAN endpoint.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

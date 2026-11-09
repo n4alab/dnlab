@@ -1,0 +1,22 @@
+id: 20261014-084207-capture-incomplete-management-fixture-en
+type: internal
+title: Complete endpoint cleanup when a qualified veth disappears during deletion
+description: Add fixture-only command, exit code, stdout, stderr and per-phase resource
+  snapshots for management cleanup. One diagnostic post-commit crash canary passes
+  functional checks and cleanup without reproducing the earlier error. Snapshots
+  demonstrate asynchronous disappearance of data veths after container stop. A
+  controlled interleaving exposed an error when a qualified veth disappeared between
+  observation and deletion. The backend now rechecks absence after a deletion error,
+  preserving errors for present or replaced ports and failed verification without
+  another destructive attempt. Runtime regressions and a native gate releasing the
+  fixture namespace between read and delete verify the real not-found error, one
+  deletion attempt and complete cleanup. The original host failure cause remains
+  unproven; this change qualifies the asynchronous disappearance case.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

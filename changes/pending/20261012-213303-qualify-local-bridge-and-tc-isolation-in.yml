@@ -1,0 +1,15 @@
+id: 20261012-213303-qualify-local-bridge-and-tc-isolation-in
+type: internal
+title: Qualify local bridge and TC isolation in dedicated namespaces
+description: Add an opt-in gate for two lab bridges with overlapping guest subnets,
+  IPv4 and LLDP/LACP frames, retry, reserved-priority rejection, preservation of unrelated
+  ingress/egress filters and shared qdiscs, and exact namespace cleanup. This qualifies
+  the legacy local bridge path only, not custom bridge API, NOS or RealNet.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

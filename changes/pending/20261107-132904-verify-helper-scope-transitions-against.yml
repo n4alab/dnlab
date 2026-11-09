@@ -1,0 +1,14 @@
+id: 20261107-132904-verify-helper-scope-transitions-against
+type: internal
+title: Verify helper scope transitions against original service receipts
+description: Add experimental read-only DNS, jumphost and relay scope proofs bound
+  to original coordinator or fixture receipts, Docker generation and process identity.
+  Live gate admission remains disabled pending registration and operational qualification.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

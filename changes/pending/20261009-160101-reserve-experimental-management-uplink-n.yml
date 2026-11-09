@@ -1,0 +1,16 @@
+id: 20261009-160101-reserve-experimental-management-uplink-n
+type: internal
+title: Reserve experimental management uplink names through Docker
+description: 'Request dnmu0 through endpoint driver options, gate Docker API support
+  and namespace occupancy before detach, persist the naming policy and verify actual
+  endpoint identity. Native dnlab-vrf qualification remains blocked: the remote driver
+  still returns an eth prefix and ignores the requested endpoint name; the failed
+  fixture was fully cleaned up.'
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

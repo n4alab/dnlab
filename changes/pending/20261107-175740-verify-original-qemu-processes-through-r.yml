@@ -1,0 +1,16 @@
+id: 20261107-175740-verify-original-qemu-processes-through-r
+type: internal
+title: Verify original QEMU processes through read-only pidfd observations
+description: Add a pinned process provider for the original recorded VM generation,
+  with bounded procfs and executable reads, credential, UUID, namespace and process
+  checks before and after observation. Require the caller PID namespace to match and
+  reject pidfd exit or error events. Synthetic only; live creation-proof acquisition
+  and host packaging remain unqualified.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

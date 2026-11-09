@@ -1,0 +1,15 @@
+id: 20261109-090509-prototype-journaled-libvirt-unit-exchang
+type: internal
+title: Prototype journaled libvirt unit exchange and backup
+description: Use atomic exchange and no-replace backup on qualified original file
+  births, retain pending on uncertain outcomes and recover without repeated rename.
+  Add readonly sibling relocation observation. Verified with real syscalls on temporary
+  files and synthetic session preflight; no installed unit or service changed.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

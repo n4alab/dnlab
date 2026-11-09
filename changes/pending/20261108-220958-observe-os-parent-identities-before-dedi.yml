@@ -1,0 +1,15 @@
+id: 20261108-220958-observe-os-parent-identities-before-dedi
+type: internal
+title: Observe OS parent identities before dedicated libvirt provisioning
+description: Add readonly directory dependency proofs to the experimental installation
+  snapshot. Require root-owned 0755 parents, reject replacements, and preserve planned-resource
+  birth checks. Seventy-seven targeted synthetic tests pass; no host collection or
+  provisioning was performed.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

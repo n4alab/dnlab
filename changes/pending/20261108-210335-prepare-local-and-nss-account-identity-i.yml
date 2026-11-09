@@ -1,0 +1,15 @@
+id: 20261108-210335-prepare-local-and-nss-account-identity-i
+type: internal
+title: Prepare local and NSS account identity inspector
+description: Add a readonly target identity callback with local and injected NSS comparisons,
+  scoped lock verification and no adoption without original birth. Share existing
+  NSS parsing with the diagnostic tool. Seventy-four targeted tests pass on temporary
+  files and fake lookups; no host shadow, account command or provisioning was used.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

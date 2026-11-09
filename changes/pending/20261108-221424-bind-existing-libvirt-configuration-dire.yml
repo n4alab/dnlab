@@ -1,0 +1,15 @@
+id: 20261108-221424-bind-existing-libvirt-configuration-dire
+type: internal
+title: Bind existing libvirt configuration directory dependencies
+description: Add an explicit readonly directory dependency reader for the experimental
+  session installer. Bind root-owned directory and ancestor identities without adoption
+  or metadata repair. Forty targeted synthetic tests cover prepare, replay and conflict
+  refusal before account creation; no host provisioning was performed.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

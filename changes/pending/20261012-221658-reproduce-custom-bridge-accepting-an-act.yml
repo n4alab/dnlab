@@ -1,0 +1,15 @@
+id: 20261012-221658-reproduce-custom-bridge-accepting-an-act
+type: internal
+title: Enforce shared endpoint reservations between custom bridges and VXLAN
+description: Derive exclusive endpoint reservations from both primitive journals
+  under their shared resource lock before creation or retry. Keep reservations until
+  verified cleanup, reject conflicts without changing the existing link, and preserve
+  unrelated clsact filters. Transport changes require explicit delete and create.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

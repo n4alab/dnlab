@@ -1,0 +1,16 @@
+id: 20261108-230309-validate-original-dedicated-libvirt-daem
+type: internal
+title: Validate original dedicated libvirt daemon generation proofs
+description: Add a typed observer binding original activation acknowledgement to unit/configuration,
+  nonroot process generation, environment and socket peer proofs. Thirty-one targeted
+  synthetic tests pass with injected data. Native systemd, procfs and socket readers
+  remain to be connected and qualified; no host observation or service activation
+  was performed.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

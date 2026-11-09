@@ -1,0 +1,21 @@
+id: 20261013-233055-diagnose-link-api-rejecting-nodes-after
+type: internal
+title: Preserve current management authority across handoff and data link operations
+description: Persist the current management assignment separately from immutable workload
+  and data endpoint identity. Commit verified handoffs and node revisions atomically,
+  retain reservations until recovery, and serialize lifecycle, data links and moves
+  across local runtime processes. Stop/start retains the current assignment and binds
+  a new container only through its owned lifecycle operation. Optional inspection
+  exposes the assignment without changing existing request contracts. Runtime tests
+  pass, and isolated native Linux gates recover real crashes before, during and after
+  commit, create data links after a move and preserve active data traffic during a
+  second move. Cleanup is verified. NOS, dnlab-vrf integration and production
+  management API qualification remain pending.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

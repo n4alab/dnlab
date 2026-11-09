@@ -1,0 +1,19 @@
+id: 20261014-091011-qualify-management-handoff-execution-ins
+type: internal
+title: Qualify management handoff execution inside the runtime image
+description: Add an isolated fixture mode running handoff submit, execution, real
+  process SIGKILL, fresh replay and post-connect failure rollback in bounded Docker
+  exec workers using installed runtime modules. Record worker identities, module hashes
+  and phase receipts; verify two-lab idempotency, foreign operation refusal and stable
+  management/data identities with active data traffic. Initial workload/network setup
+  and endpoint cleanup remain fixture operations. This is a native Linux stock-bridge
+  packaging qualification, not production management API exposure, NOS, dnlab-vrf
+  overlap or distributed qualification.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

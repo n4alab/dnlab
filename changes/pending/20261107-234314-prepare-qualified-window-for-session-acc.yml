@@ -1,0 +1,15 @@
+id: 20261107-234314-prepare-qualified-window-for-session-acc
+type: internal
+title: Prepare qualified window for session account and directory provisioning
+description: Add explicit operation-bound provisioning windows, tracked directory
+  birth and an injected account helper protocol requiring durable original completion.
+  Temporary-filesystem and simulated-account tests pass; no host account commands,
+  provisioning or daemon starts are performed.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

@@ -1,0 +1,14 @@
+id: 20261012-091814-define-experimental-vxlan-altname-owners
+type: internal
+title: Define experimental VXLAN altname ownership contract
+description: Use short deterministic kernel names, complete endpoint altnames and
+  distinct ownership tokens for the isolated runtime VXLAN identity primitive; reject
+  foreign or replaced resources.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

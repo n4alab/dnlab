@@ -1,0 +1,18 @@
+id: 20261108-230846-prepare-readonly-observation-of-installe
+type: internal
+title: Prepare readonly observation of installed libvirt service units
+description: Add bounded readonly unit-property parsing with explicit transport and
+  original file-proof rechecks. Add a noninitializing readonly filesystem observer
+  that refuses mutation. Targeted synthetic suites pass with 43 unit/generation/activation
+  cases and 32 unit/file cases, with overlap. One authorized master observation
+  confirms all three original units loaded and inactive, without jobs or drop-ins,
+  and all seven installed file proofs unchanged. No service reload/start or libvirt
+  connection occurred.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

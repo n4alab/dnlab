@@ -1,0 +1,15 @@
+id: 20261108-005038-prepare-tracked-account-command-helper-f
+type: internal
+title: Prepare tracked account command helper for dedicated libvirt provisioning
+description: Add fixed account command plans and durable arming, worker-reference
+  and release tracking. Recheck preflight and target before the sole release and recover
+  original outcomes without command reexecution. Forty-three targeted tests pass with
+  simulated workers/accounts; no executable host runner or provisioning is enabled.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

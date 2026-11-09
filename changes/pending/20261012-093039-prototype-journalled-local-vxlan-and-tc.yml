@@ -1,0 +1,18 @@
+id: 20261012-093039-prototype-journalled-local-vxlan-and-tc
+type: internal
+title: Prototype journalled local VXLAN and TC lifecycle
+description: Add an isolated VXLAN primitive with creator identity, intent journal,
+  per-link recovery and owned all-frame TC redirects. Fault-injection unit tests pass;
+  fixture and VXLAN bootstrap are verified with atomic creator MAC proof. The
+  isolated local gate passes bidirectional ICMP and LLDP/LACP EtherType frames,
+  idempotency, recreation and owned cleanup after a lost redirect response. TC
+  parsing is covered by recorded kernel JSON and foreign-rule rejection tests;
+  cross-host and NOS qualification remain pending.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

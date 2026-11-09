@@ -1,0 +1,15 @@
+id: 20261009-152909-resolve-runtime-management-uplinks-from
+type: internal
+title: Resolve runtime management uplinks from endpoint peer identity
+description: Replace the experimental handoff eth0 assumption with Docker endpoint
+  membership and reciprocal host/container veth identity. Record observed endpoint
+  and interface identities before binding, preserve the stable management port, and
+  test reconnect, rollback and persisted replay without changing multinode.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

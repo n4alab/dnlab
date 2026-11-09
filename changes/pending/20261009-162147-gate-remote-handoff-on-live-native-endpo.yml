@@ -1,0 +1,16 @@
+id: 20261009-162147-gate-remote-handoff-on-live-native-endpo
+type: internal
+title: Gate remote handoff on live native endpoint naming probes
+description: Require a fresh source and target dnlab-vrf canary before management
+  handoff mutations. Persist canary intents and observations in a separate journal,
+  verify the reserved interface through endpoint/kernel peer identity, recover only
+  owned canaries, and reject handoff if verification or native process cleanup fails.
+  No NOS or production API capability is enabled.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

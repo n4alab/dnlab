@@ -1,0 +1,16 @@
+id: 20261108-222756-reproduce-incomplete-libvirt-account-rel
+type: internal
+title: Reproduce incomplete libvirt account release preflight
+description: Two synthetic regressions show that the new session assembler releases
+  its fake groupadd worker when an existing directory dependency changes or a foreign
+  file appears at the release checkpoint. The outer installer refuses only after the
+  simulated account mutation. Production code is unchanged; real apply remains unexecuted
+  pending agreement on the complete release preflight.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

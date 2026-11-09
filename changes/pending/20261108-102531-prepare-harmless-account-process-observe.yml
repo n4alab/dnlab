@@ -1,0 +1,16 @@
+id: 20261108-102531-prepare-harmless-account-process-observe
+type: internal
+title: Prepare harmless account process observer canary
+description: Add an explicit one-shot observer canary recipe using an isolated Python
+  child that only waits for EOF, with pinned interpreter and durable intent. Seven
+  synthetic recipe tests pass. One authorized harmless live-process canary completed
+  with exit zero and verified original receipts; account commands and host
+  provisioning remain unqualified.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

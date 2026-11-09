@@ -1,0 +1,14 @@
+id: 20261020-221807-diagnose-dhcpv6-range-selection-on-the-p
+type: internal
+title: Diagnose DHCPv6 range selection on the pinned jumphost image
+description: Add an isolated wire comparison of the current renderer, a tag-only control
+  and an explicit-prefix control, retaining DHCPv6/RA captures, configuration and
+  cleanup evidence without changing product behavior.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

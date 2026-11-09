@@ -1,0 +1,15 @@
+id: 20261021-132021-retain-uncertain-fixture-creation-until
+type: internal
+title: Retain uncertain fixture creation until cleanup recovery is verified
+description: The DHCP process fixture persists create uncertainty and cleanup_pending
+  instead of treating temporary absence as completion. Qualify late births by original
+  nonce/config and ID, add cleanup-only recovery without new creates, record Docker
+  phase durations, and cover late replies, conflicts and lost remove acknowledgements.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

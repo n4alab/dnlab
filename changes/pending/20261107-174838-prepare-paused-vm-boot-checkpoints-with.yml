@@ -1,0 +1,15 @@
+id: 20261107-174838-prepare-paused-vm-boot-checkpoints-with
+type: internal
+title: Prepare paused VM boot checkpoints with original event and process proofs
+description: Add an experimental injected-provider VM boot driver with paused CPU
+  startup, durable original process receipts and event activation before resume. Uncertain
+  start responses never repeat startup. Synthetic qualification is incomplete; no
+  public VM admission or live hypervisor provider is enabled.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

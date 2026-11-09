@@ -1,0 +1,15 @@
+id: 20261107-183615-prepare-dedicated-libvirt-session-instal
+type: internal
+title: Prepare dedicated libvirt session installation procedure
+description: Document the proposed private session layout, daemon supervision, connection
+  autostart prevention and qualified package/account/service installation sequence.
+  Keep logging and locking persistent until dependent VM exit is verified, and leave
+  package selection and operational rollout unapproved.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

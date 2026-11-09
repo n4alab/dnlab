@@ -1,0 +1,21 @@
+id: 20261014-083303-diagnose-management-handoff-request-id-c
+type: internal
+title: Scope management handoff idempotency to each lab
+description: Separate lab-scoped request keys from opaque management operation IDs.
+  Commit the request mapping, move intent and node reservation atomically. Check lab,
+  VD, birth identity and stable-port owner before reading, executing or recovering
+  an operation, including terminal records. Reuse across labs is independent, while
+  conflicting content or another VD in one lab is rejected. Probe callers now use
+  returned operation IDs or explicit scoped request lookup. Preserve unqualified
+  legacy records without implicit adoption. Runtime regressions and isolated native
+  two-lab gates verify deduplication, foreign-operation refusal and crash recovery;
+  production management API, NOS and native overlapping-subnet qualification remain
+  pending.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

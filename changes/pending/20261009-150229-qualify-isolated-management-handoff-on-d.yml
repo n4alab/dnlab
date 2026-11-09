@@ -1,0 +1,15 @@
+id: 20261009-150229-qualify-isolated-management-handoff-on-d
+type: internal
+title: Qualify isolated management handoff on dnlab-vrf
+description: Add a local opt-in native probe using the installed dnlab-vrf driver
+  and IPAM, dedicated VRFs and bridges, reciprocal management routing, overlapping
+  isolated lab subnets, stable endpoint move and injected failure rollback, with ownership-checked
+  cleanup and plugin state restoration.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

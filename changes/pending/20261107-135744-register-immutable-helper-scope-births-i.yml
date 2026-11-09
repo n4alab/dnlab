@@ -1,0 +1,15 @@
+id: 20261107-135744-register-immutable-helper-scope-births-i
+type: internal
+title: Register immutable helper scope births in the coordinator ledger
+description: Persist helper scope births in the existing operation ledger, verify
+  original proofs on retry and recover a lost commit response without recapturing
+  or overwriting the original record. Experimental gate integration and operational
+  qualification remain pending.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

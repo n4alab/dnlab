@@ -1,0 +1,15 @@
+id: 20261107-173548-fence-vm-definitions-with-original-lab-g
+type: internal
+title: Fence VM definitions with original lab generation and management barriers
+description: Reuse existing runtime closure and offline-management guards for VM definition
+  preparation, apply and replay. Persist the original lab epoch, recheck around checkpoints
+  and acknowledgement commit, and retain intents and inactive domains on late conflicts
+  without automatic cleanup or epoch adoption.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

@@ -1,0 +1,16 @@
+id: 20261108-222038-prepare-libvirt-installation-intent-from
+type: internal
+title: Prepare libvirt installation intent from original collected evidence
+description: Add a prepare-only entry that binds the original profile and inventory,
+  derives only explicitly selected directory dependencies, and refuses every account
+  worker action. Twenty-seven targeted synthetic tests pass, including intent reopen
+  and changed-dependency rejection. No real prepare, account command or service action
+  was executed.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

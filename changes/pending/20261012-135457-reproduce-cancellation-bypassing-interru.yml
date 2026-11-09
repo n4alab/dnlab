@@ -1,0 +1,15 @@
+id: 20261012-135457-reproduce-cancellation-bypassing-interru
+type: internal
+title: Reconcile interrupted VXLAN operations before cancellation
+description: Reconcile interrupted link operations before recording cancellation,
+  cleaning partial creation, completing started teardown and verifying a preexisting
+  active link before preserving it. Failed replay requires explicit recovery. Cover
+  crash and cancellation at creation and delete boundaries and with active retries.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

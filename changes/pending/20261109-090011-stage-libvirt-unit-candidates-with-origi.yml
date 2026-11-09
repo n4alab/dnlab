@@ -1,0 +1,15 @@
+id: 20261109-090011-stage-libvirt-unit-candidates-with-origi
+type: internal
+title: Stage libvirt unit candidates with original birth recovery
+description: Prepare a private candidate through tracked filesystem creation and complete
+  injected session preflight. Persist uncertainty, reject foreign files and recover
+  only the original candidate without repeated creation. Verified on temporary files;
+  installed unit replacement and native session qualification remain pending.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

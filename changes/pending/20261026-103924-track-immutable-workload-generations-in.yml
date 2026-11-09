@@ -1,0 +1,34 @@
+id: 20261026-103924-track-immutable-workload-generations-in
+type: none
+title: Track immutable workload generations in lifecycle qualification fixtures
+description: Add fixture-only public restart and stop journaling, preserving each
+  birth and original request across lost publication responses and cleanup retries.
+  Connect an opt-in management service stage through the canonical coordinator
+  ledger, preserving the original fixture defaults and dependency-safe teardown.
+  Keep console input open until nonce output, then require verified client exit
+  without changing product EOF behavior.
+  Track detached jumphost CLI exec identity and uncertain delivery without
+  automatically repeating create or start.
+  Freeze a bounded CLI program with original output-file identity and verified
+  direct-child exit, including parent-death handling.
+  Bind candidate namespace, non-root account and nonce-tagged output assets;
+  capture complete CLI evidence before helper teardown and wire before/after
+  restart probes into the opt-in service runner.
+  Reopen the original stage relay and publication intents without rewriting
+  generation, credentials or port during retry and recovery.
+  Persist CLI slot nonces before execution and require a complete read-only
+  census of original CLI journals before dependent teardown after reopening.
+  Cross-check lifecycle, native management pins and full CLI journals with an
+  independent post-teardown verifier and record original helper processes.
+  Route public lifecycle fixture CLI calls through the checkout module while
+  preserving the diagnostic transport for helper guards and original stdin.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
+reason: Qualification tooling only; no deployed runtime behavior or installed image
+  changes.

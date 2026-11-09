@@ -1,0 +1,16 @@
+id: 20261108-221721-assemble-dedicated-libvirt-session-provi
+type: internal
+title: Assemble dedicated libvirt session provisioning components
+description: Compose the original snapshot, explicit provisioning window, directory
+  dependencies, account identity/helper and file adapter around one journal. Keep
+  prepare and apply separate, with no default host worker or NSS provider. Four synthetic
+  prepare/conflict cases and one temporary-filesystem apply/replay case pass without
+  real account commands or daemon activation.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

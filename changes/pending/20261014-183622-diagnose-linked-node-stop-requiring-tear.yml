@@ -1,0 +1,21 @@
+id: 20261014-183622-diagnose-linked-node-stop-requiring-tear
+type: internal
+title: Prototype coordinated stop with persistent TC action ownership
+description: Add opt-in coordinated stop with complete local preflight, footprint
+  reservations, verified process exit, explicitly requested tracked link cleanup
+  and finalization. Persist stage requests in the existing coordinator operation
+  store and recover matching operations after lost acknowledgements. Qualify TC
+  actions with per-attempt cookies, original endpoint identities and kernel action
+  readback before accepting a vanished redirect target during cleanup. Refuse
+  changed, incomplete or shared action proofs and preserve recovery state. Runtime
+  regressions and isolated native bridge and VXLAN gates pass with full cleanup.
+  Preserve explicit force and the legacy stop guard; production controller,
+  cross-host and NOS adoption remain unqualified.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

@@ -1,0 +1,17 @@
+id: 20261108-223348-recheck-complete-libvirt-targets-at-acco
+type: internal
+title: Recheck complete libvirt targets at account command boundaries
+description: Add nonrecursive complete session preflight and readonly committed worker
+  completion evidence to the experimental assembler. One hundred and three targeted
+  synthetic tests pass, covering durable checkpoints, retry, lost responses and
+  conflicts during recovery. The unchanged runtime also passed the separate
+  temporary-filesystem positive apply/replay case. No real apply or account command
+  was executed.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

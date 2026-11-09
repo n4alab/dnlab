@@ -1,0 +1,14 @@
+id: 20261020-223708-diagnose-addressless-dhcpv4-probe-recept
+type: internal
+title: Diagnose addressless DHCPv4 probe reception
+description: Compare AF_PACKET and UDP on the same isolated addressless client, preserving
+  routes, sysctls, kernel counters, captures and cleanup evidence without changing
+  renderer or plugin behavior.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

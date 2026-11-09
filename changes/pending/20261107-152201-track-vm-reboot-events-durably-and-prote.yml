@@ -1,0 +1,15 @@
+id: 20261107-152201-track-vm-reboot-events-durably-and-prote
+type: internal
+title: Track VM reboot events durably and protect pending VM inventory
+description: Add offline VM event reduction in the runtime journal with original domain/process
+  checks, idempotent event receipts and recovery on gaps or collector changes. Protect
+  VM event owners from local finalization; no hypervisor callback, restart or VM execution
+  is enabled.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

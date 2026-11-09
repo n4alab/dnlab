@@ -1,0 +1,15 @@
+id: 20261107-151333-prepare-filesystem-vm-templates-and-libv
+type: internal
+title: Prepare filesystem VM templates and libvirt domain XML offline
+description: Add the experimental single-VM template contract, read-only manifest/asset
+  verification and deterministic libvirt XML planning with explicit overlays, PCI/NIC
+  bindings, unmanaged TAPs and Unix console. Preserve guest reboot policy without
+  enabling VM execution; hypervisor, NOS and event-tracking qualification remain pending.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

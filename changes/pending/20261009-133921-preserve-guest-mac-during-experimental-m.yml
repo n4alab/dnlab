@@ -1,0 +1,14 @@
+id: 20261009-133921-preserve-guest-mac-during-experimental-m
+type: internal
+title: Preserve guest MAC during experimental management handoff
+description: Request the stable guest MAC on Docker connect and rollback, verify Docker/kernel
+  MAC consistency, and direct the internal bridge FDB toward the stable peer. Test
+  live guest traffic without host ARP overrides.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

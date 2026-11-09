@@ -1,0 +1,16 @@
+id: 20261108-225822-prototype-journaled-activation-of-an-emp
+type: internal
+title: Prototype journaled activation of an empty dedicated libvirt session
+description: Add a separate activation intent bound to the completed installation,
+  with ordered reload/start steps and no resend on uncertain outcomes. Ten targeted
+  synthetic tests cover original completion recovery, generation conflicts and empty-inventory
+  retry. The native service/process/socket adapter and real activation remain unqualified;
+  no host service or VM was started.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

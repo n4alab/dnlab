@@ -1,0 +1,14 @@
+id: 20261012-210913-define-complete-lab-bridge-identity-in-c
+type: internal
+title: Define complete-lab bridge identity in custom runtime
+description: Add bridge identity matching multinode names with full ownership alias,
+  deterministic MAC and kernel kind/index validation. Reject unmarked, foreign, duplicate
+  or replaced bridges. Primitive mutation and lifecycle integration remain pending.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

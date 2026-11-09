@@ -1,0 +1,16 @@
+id: 20261108-213845-identify-nonroot-libvirt-driver-layout-d
+type: internal
+title: Separate nonroot libvirt driver state from administrative config
+description: Add explicit service layout version2 with root-controlled native qemu.conf
+  parents and a dedicated-user writable driver subtree. Preserve version1 rendering
+  and intents as readonly history, refusing mutation or implicit migration. One
+  hundred and eleven targeted tests and six temporary-filesystem composition tests
+  pass; no host account, installation or daemon activation was performed.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

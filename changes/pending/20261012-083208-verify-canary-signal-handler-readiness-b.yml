@@ -1,0 +1,15 @@
+id: 20261012-083208-verify-canary-signal-handler-readiness-b
+type: internal
+title: Verify canary signal handler readiness before cleanup
+description: Wait for an atomic nonce and init-boot acknowledgment after the native
+  canary installs SIGTERM handling. Bound readiness checks, preserve probe and cleanup
+  errors with the failing step and observed state, and qualify delayed startup before
+  selected-slot NOS boot. Keep safe stop without implicit force.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

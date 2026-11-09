@@ -1,0 +1,14 @@
+id: 20261012-164510-use-structured-docker-absence-in-fixture
+type: internal
+title: Use structured Docker absence in fixture cleanup
+description: Recognize removed replay workers via Docker inspect HTTP 404, propagate
+  other errors and enforce container identity, name, image and label ownership before
+  signalling or removal. Add absence and foreign ownership regression coverage.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

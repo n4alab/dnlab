@@ -1,0 +1,16 @@
+id: 20261009-164317-probe-n9kv-v2-oob-and-data-interface-con
+type: internal
+title: Probe n9kv V2 OOB and data interface continuity
+description: Spawn a new n9kv V2 fixture and verify the QEMU management NIC/tap0 path
+  through stable mgmt0, separate bidirectional warm-data TC paths, link/NIC/MAC continuity
+  and container-loopback console through move and injected rollback on dnlab-vrf.
+  Accept ROMMON for process boot without claiming NX-OS readiness, guest traffic,
+  persistence or safe shutdown.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

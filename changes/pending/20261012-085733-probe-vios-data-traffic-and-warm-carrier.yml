@@ -1,0 +1,15 @@
+id: 20261012-085733-probe-vios-data-traffic-and-warm-carrier
+type: internal
+title: Probe vIOS data traffic and warm carrier across management moves
+description: Add an isolated V2 selected-slot8 probe with native peer endpoints on
+  data slots0/1/15. Verify ICMP loss and recovery with carrier down/up, peer address
+  detach/reattach ordering, and data continuity during management move and rollback.
+  Persist bounded traffic observations without enabling production NOS APIs.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

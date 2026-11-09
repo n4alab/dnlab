@@ -1,0 +1,16 @@
+id: 20261021-133328-qualify-exited-fixture-daemon-independen
+type: internal
+title: Qualify exited fixture daemon independently of its retained PID file
+description: The isolated DHCP writer fixture requires the original pidfd exit, unchanged
+  container, complete namespace process inventory and exact original PID-file identity/content
+  or verified removal. Reject replacements, PID reuse, new or renamed dnsmasq processes
+  and incomplete inspection, preserving the PID file. Runtime service guards remain
+  unchanged.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

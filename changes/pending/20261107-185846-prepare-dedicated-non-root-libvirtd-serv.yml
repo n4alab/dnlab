@@ -1,0 +1,15 @@
+id: 20261107-185846-prepare-dedicated-non-root-libvirtd-serv
+type: internal
+title: Prepare dedicated non-root libvirtd service profiles
+description: Render private monolithic-session units, configurations, ownership requirements
+  and pinned daemon references without host IO. Disable automatic force/restart, retain
+  supervised log/lock dependencies and explicit package boundaries, and document privileged
+  LXC and bare-metal targets. No installer or live qualification is enabled.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

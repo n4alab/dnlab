@@ -1,0 +1,15 @@
+id: 20261018-213201-compare-docker-port-publication-on-bridg
+type: internal
+title: Compare Docker port publication on bridge and dnlab-vrf
+description: Add an opt-in diagnostic using equal pinned-image Docker publication
+  requests, durable fixture birth evidence, process readiness, IPv4/IPv6 HTTP observations
+  and ordinary guarded cleanup. Collect driver differences without implementing a
+  publisher or modifying the installed plugin.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

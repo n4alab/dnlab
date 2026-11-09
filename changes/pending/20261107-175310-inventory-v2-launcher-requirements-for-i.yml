@@ -1,0 +1,15 @@
+id: 20261107-175310-inventory-v2-launcher-requirements-for-i
+type: internal
+title: Inventory V2 launcher requirements for initial direct VM templates
+description: Document n9kv and vIOS V2 source hardware, firmware, NIC mapping, resource
+  translation and remaining bundle qualification work. Distinguish launcher capacity
+  from realized ports and preserve explicit lifecycle policy without transferring
+  container qualification.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

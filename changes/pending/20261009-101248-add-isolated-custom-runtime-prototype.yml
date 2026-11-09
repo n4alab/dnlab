@@ -1,0 +1,14 @@
+id: 20261009-101248-add-isolated-custom-runtime-prototype
+type: internal
+title: Add isolated custom runtime prototype
+description: Add an opt-in local runtime with native Linux lifecycle, durable operation
+  recovery, ownership-checked endpoints and Unix socket transport. The distribution
+  backend remains unchanged.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

@@ -1,0 +1,15 @@
+id: 20261107-224712-prepare-persistent-dedicated-libvirt-ses
+type: internal
+title: Prepare persistent dedicated libvirt session installation coordinator
+description: Add an experimental create-only coordinator with durable intents, complete
+  injected preflight, original resource proofs and recovery without repeating uncertain
+  creates. Synthetic profile and coordinator tests pass; concrete host adapter and
+  session installation remain pending.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

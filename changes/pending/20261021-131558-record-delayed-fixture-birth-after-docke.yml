@@ -1,0 +1,16 @@
+id: 20261021-131558-record-delayed-fixture-birth-after-docke
+type: internal
+title: Record delayed fixture birth after Docker create timeout
+description: The network-isolated DHCP main-file canary timed out before its service
+  phase. Independent inspection found the original stopped container created after
+  the fixture had declared cleanup complete; ownership was qualified and removal by
+  ID verified. Preserve evidence and require a decision on uncertain-create cleanup
+  before repeating the gate.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

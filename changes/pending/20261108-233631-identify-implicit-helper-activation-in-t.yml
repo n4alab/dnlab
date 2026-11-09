@@ -1,0 +1,16 @@
+id: 20261108-233631-identify-implicit-helper-activation-in-t
+type: internal
+title: Identify implicit helper activation in the dedicated libvirt unit profile
+description: Static review of the original installed profile and systemd 257.13 documentation
+  confirms that Requires can start helper units outside individual activation steps.
+  Proposed explicit prerequisite semantics await user decision, preserving installed
+  files and historical profiles. The new regression did not run because of a test
+  placement indentation error, retained for correction; no service action occurred.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

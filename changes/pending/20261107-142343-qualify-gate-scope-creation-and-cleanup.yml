@@ -1,0 +1,15 @@
+id: 20261107-142343-qualify-gate-scope-creation-and-cleanup
+type: internal
+title: Qualify gate scope creation and cleanup against one baseline
+description: Accept scopes created and cleaned after the immutable gate baseline only
+  with original registered birth and qualified cleanup/absence proofs. Preserve baseline
+  scope removal checks, parent identity and rejection of unrelated scheduled-source
+  changes.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

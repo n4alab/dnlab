@@ -1,0 +1,14 @@
+id: 20261020-224438-qualify-addressless-dhcpv4-replies-throu
+type: internal
+title: Qualify addressless DHCPv4 replies through packet reception
+description: Receive isolated DHCPv4 OFFER and ACK frames through AF_PACKET with server
+  and transaction checks, bounded packet parsing and explicit checksum offload metadata;
+  preserve UDP transmission and system reverse-path controls.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

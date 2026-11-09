@@ -1,0 +1,15 @@
+id: 20261107-172505-prepare-one-shot-vm-definitions-for-dedi
+type: internal
+title: Prepare one-shot VM definitions for dedicated libvirt sessions
+description: Add experimental dedicated-session evidence checks and durable one-shot
+  VM definition intents with qualified absence/preflight, acknowledgement replay and
+  no automatic define retry after uncertainty. No host session installation, VM boot
+  or public VM execution is enabled.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
