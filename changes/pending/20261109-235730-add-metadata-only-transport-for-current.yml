@@ -1,0 +1,14 @@
+id: 20261109-235730-add-metadata-only-transport-for-current
+type: internal
+title: Add metadata-only transport for current unit preparation
+description: Add an explicit frozen-recipe current-session unit prepare entry with
+  original journal/effective-source binding, a separate revision window, durable reference
+  delivery and no directory or service actions.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

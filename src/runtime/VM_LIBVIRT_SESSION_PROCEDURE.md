@@ -590,7 +590,19 @@ replay without staging, unchanged historical source, foreign effective source,
 closed revision window and active-service refusal. Filesystem reads use a private
 fixture tree and resource observations are simulated. No native unit preparation,
 candidate/backup creation, unit replacement, reload or daemon activation occurred.
-The operational transport and frozen revision-prepare recipe remain to be prepared.
+`libvirt_postboot_unit_prepare_host.py` supplies the explicit metadata-only
+transport with eleven frozen inputs, including the original effective source
+and a distinct unit revision window. The directory window stays closed; no
+directory apply/recovery is invoked. It reuses the retained physical journal
+binding, permits only fixed readonly systemctl show queries with five-second
+timeouts, and durably saves the original unit reference. Resume requires the
+same output/invocation and cannot replace an existing reference. Five synthetic
+transport tests pass for flag gating, prepare/replay without staging, lost
+response, foreign effective source and saved context refusal before queries.
+Temporary SQLite and simulated context/NSS/query/resource leaves are used.
+The frozen native recipe is prepared separately from archived facts; no native
+unit prepare, candidate/backup creation, unit replacement or service action has
+yet been authorized or performed through this entry.
 
 ### Current-boot /run parent: explicit dependency binding, synthetic verification
 
