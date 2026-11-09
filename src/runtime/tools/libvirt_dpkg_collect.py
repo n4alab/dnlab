@@ -26,9 +26,17 @@ def collect(request, *, read, context, persist):
 
     expected = request['context']
     snapshots = []
+
+    def check_context(index, phase, error):
+        observed = context()
+        persist(f'pass{index + 1}-context-{phase}.json', json.dumps(dict(
+            expected=expected, observed=observed, matches=observed == expected,
+            pass_number=index + 1, phase=phase), sort_keys=True).encode())
+        if observed != expected:
+            raise ValueError(error)
+
     for index in range(2):
-        if context() != expected:
-            raise ValueError('expected collection context differs')
+        check_context(index, 'before', 'expected collection context differs')
         snapshot = {}
         for path in PATHS:
             value = read(path)
@@ -47,8 +55,7 @@ def collect(request, *, read, context, persist):
         persist(f'pass{index + 1}-proof.json', json.dumps({path: None if value is None else
             dict(sha256=sha(value['raw']), metadata=value['metadata'], bytes=len(value['raw']))
             for path, value in snapshot.items()}, sort_keys=True).encode())
-        if context() != expected:
-            raise ValueError('collection context changed')
+        check_context(index, 'after', 'collection context changed')
     if snapshots[0] != snapshots[1]:
         raise ValueError('dpkg inputs changed between passes')
     current = snapshots[0][PATHS[0]]['raw']

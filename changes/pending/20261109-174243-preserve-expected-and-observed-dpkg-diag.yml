@@ -1,0 +1,16 @@
+id: 20261109-174243-preserve-expected-and-observed-dpkg-diag
+type: none
+title: Preserve expected and observed dpkg diagnostic context
+description: Save context comparisons before unchanged refusal checks at the original
+  observation boundaries. Forty targeted synthetic tests pass; no additional host
+  observation or package acceptance change.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
+reason: Experimental diagnostic artifacts and synthetic verification only; installed
+  runtime and prerequisite acceptance rules remain unchanged.

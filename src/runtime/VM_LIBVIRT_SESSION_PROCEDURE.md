@@ -418,6 +418,20 @@ by packaging the recipe.
 
 ### Offline dpkg diagnosis prepared; host diagnosis still pending
 
+Context diagnostics are now implemented and pass40 targeted synthetic tests.
+Each of the original four observations is saved as expected/observed/matches,
+with pass and before/after phase, before applying the unchanged comparison.
+Refusal messages and observation counts remain unchanged. A diagnostic write
+failure stops before further status reads. The temporary-file transport test
+confirms the context artifact survives an initial refusal with no raw status.
+No further native observation has been executed. The previous frozen recipe
+is stale after this source change and must not be reused.
+
+The user subsequently reported installing bubblewrap with apt. This is a
+possible explanation for the database digest change, not authenticated package
+delta evidence, and does not explain the separate context refusal. No package
+facts or acceptance rules have been changed based on that report.
+
 One separately authorized native attempt was refused on the initial context
 comparison before either status file was read. It exited1 and saved only intent
 and failure result; no raw status artifact was produced. The observed context
