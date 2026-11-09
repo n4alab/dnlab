@@ -12,6 +12,13 @@ lab_cleanup_state: /var/lib/dnlab-lab-cleanup/state.json
 # Host paths mounted into the dNLab services.
 persist_root: /var/lib/docker/dnlab-backups
 topologies_dir: /root/dnlab-topologies
+# Optional coordinator VNI registry override; default is <topologies_dir>/.realnet-vni.
+# Keep this directory on the shared persistent topology mount.
+# realnet_vni_dir: /root/dnlab-topologies/.realnet-vni
+# Private custom-runtime intent ledger; default is <state_dir>/.runtime-operations.
+# runtime_operations_dir: /root/dnlab-topologies/.runtime-operations
+# Host-local relay birth/recovery journals; private, persistent, never under /tmp.
+# relay_journal_dir: /var/lib/dnlab/runtime-relay
 gui_dir: /opt/dnlab-gui
 multinode_dir: /opt/dnlab-multinode
 image_build_dir: /opt/dnlab-image-build
@@ -27,3 +34,14 @@ gui_ssh_key: /root/.ssh/dnlab-gui.key
 # Host integration endpoints.
 containerlab_bin: /usr/bin/containerlab
 docker_socket: unix:///var/run/docker.sock
+
+# Root-local durable jumphost birth and attachment records on the master.
+jumphost_journal_dir: /var/lib/dnlab/jumphost
+jumphost_network_journal_dir: /var/lib/dnlab/jumphost-network
+
+# Durable, root-only management infrastructure journals on each host.
+management_journal_dir: /var/lib/dnlab/management
+management_probe_journal_dir: /var/lib/dnlab/management-probes
+
+# Root-local DNS generation, reload and cleanup journal.
+dns_journal_dir: /var/lib/dnlab/dns

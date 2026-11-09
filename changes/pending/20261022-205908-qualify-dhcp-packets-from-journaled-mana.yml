@@ -1,0 +1,14 @@
+id: 20261022-205908-qualify-dhcp-packets-from-journaled-mana
+type: internal
+title: Qualify DHCP packets from journaled management probes
+description: Bind addressless DHCPv4 and DHCPv6 RA probes to original network and
+  service identities, persist packet receipts before sequential cleanup, and keep
+  workloads fenced until full management readiness is qualified.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

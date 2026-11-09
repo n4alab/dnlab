@@ -17,6 +17,7 @@ class MgmtState:
     network: str = ""
     network_driver: str = ""
     ipam_driver: str = ""
+    infrastructure: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -33,6 +34,7 @@ class JumphostState:
     # old state file, or the feature disabled for the lab.
     ssh_port: int = 0
     ssh_bind_ip: str = ""
+    generation: str = ""  # durable coordinator identity before jumphost allocation
 
 
 @dataclass
@@ -43,6 +45,7 @@ class DnsState:
     upstream: list[str] = field(default_factory=list)
     hosts_file: str = ""  # path on master of the merged hosts file
     entries: int = 0      # number of DNS records served
+    generation: str = ""  # journal-qualified DNS generation
 
 
 @dataclass
@@ -53,6 +56,8 @@ class RuntimeRelayState:
     port: int
     api_key: str = ""
     allowed: list[str] = field(default_factory=list)
+    generation: str = ""
+    container_id: str = ""
 
 
 @dataclass
@@ -86,6 +91,8 @@ class NodeRuntimeState:
     last_error: str = ""
     warm_ports: int = 0
     hot_links_status: str = "unsupported"
+    runtime_binding: dict = field(default_factory=dict)
+    runtime_status: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -114,6 +121,9 @@ class RuntimeLinkState:
     state: str = "down"
     last_error: str = ""
     validation_error: bool = False
+    lab_name: str = ""
+    bridge_name: str = ""
+    resource_identities: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -150,6 +160,10 @@ class RealNetState:
     bgp: bool = False
     bgp_as: int = 0
     bgp_router_ip: str = ""
+    vxlan_ifaces: dict[str, list[str]] = field(default_factory=dict)
+    router_veth: str = ""
+    resource_identities: dict = field(default_factory=dict)
+    vxlan_ids: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass
@@ -166,6 +180,7 @@ class DeploymentState:
     # can therefore grow while the shared lab infrastructure stays online.
     # An empty/legacy value is deliberately conservative for old state files.
     runtime_mode: str = ""
+    retired_native_nodes: dict[str, NodeRuntimeState] = field(default_factory=dict)
     vrf_table_id: int = 0
     mgmt: MgmtState | None = None
     jumphost: JumphostState | None = None
@@ -192,6 +207,8 @@ class DeploymentState:
     realnets: list[RealNetState] = field(default_factory=list)
     # Track completed phases for rollback
     phases_completed: list[str] = field(default_factory=list)
+    # Opt-in segment definitions/ledgers, appended for positional compatibility.
+    management_plan: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         import dataclasses
@@ -233,6 +250,8 @@ class DeploymentState:
             state.vxlan_dataplane.append(VxlanLinkState(**v))
         for host, anchor in (d.get("mgmt_anchors") or {}).items():
             state.mgmt_anchors[host] = MgmtAnchorState(**anchor)
+        for node, runtime in (d.get("retired_native_nodes") or {}).items():
+            state.retired_native_nodes[node] = NodeRuntimeState(**runtime)
         for node, runtime in (d.get("node_runtime") or {}).items():
             state.node_runtime[node] = NodeRuntimeState(**runtime)
         for link in d.get("runtime_links", []):
@@ -240,6 +259,7 @@ class DeploymentState:
         for node, allocs in (d.get("webui_allocations") or {}).items():
             state.webui_allocations[node] = [WebUIAllocation(**a) for a in allocs]
         state.mgmt_ip_reservations = dict(d.get("mgmt_ip_reservations") or {})
+        state.management_plan = dict(d.get("management_plan") or {})
         state.mgmt_ipv6_reservations = dict(d.get("mgmt_ipv6_reservations") or {})
         state.mgmt_mac_reservations = dict(d.get("mgmt_mac_reservations") or {})
         state.mgmt_duid_reservations = dict(d.get("mgmt_duid_reservations") or {})
@@ -250,7 +270,10 @@ class DeploymentState:
                 rn["bgp"] = bool(rn.pop("ospf"))
             rn.pop("ospf_area", None)
             state.realnets.append(RealNetState(**rn))
-        if not state.node_runtime:
+        # Older Containerlab state files only recorded placement. A custom (or
+        # unknown) backend must retain its saved workload inventory: placement
+        # is not proof of a running container or of native ownership.
+        if not state.node_runtime and state.runtime_mode in ("", "legacy", "per-vd"):
             state._populate_legacy_node_runtime()
         if not state.runtime_mode and state.node_runtime:
             prefix = f"clab-dnlab-{state.lab_name}-"
@@ -258,7 +281,10 @@ class DeploymentState:
                 state.runtime_mode = "per-vd"
             else:
                 state.runtime_mode = "legacy"
-        if not state.mgmt_ip_reservations:
+        # Backfill only the older Containerlab contract. Native reservations
+        # and the segmented management ledger are persisted intent: loading a
+        # VD must not silently create a second IPv4 assignment map.
+        if not state.mgmt_ip_reservations and state.runtime_mode in ("", "legacy", "per-vd"):
             state.mgmt_ip_reservations = {
                 node: runtime.mgmt_ipv4
                 for node, runtime in state.node_runtime.items()

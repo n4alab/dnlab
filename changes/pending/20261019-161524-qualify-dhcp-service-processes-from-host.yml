@@ -1,0 +1,14 @@
+id: 20261019-161524-qualify-dhcp-service-processes-from-host
+type: bugfix
+title: Qualify DHCP service processes from host namespaces
+description: Bind DHCP service inspection and pidfd signalling to the original container,
+  host process, namespaces, executable and credentials; verify non-root PID files
+  and preserve recovery state on identity conflicts.
+components:
+- multinode
+audience:
+- operator
+visibility: public
+breaking: false
+upgrade_notes: []
+references: []

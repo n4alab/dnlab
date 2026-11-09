@@ -1,0 +1,16 @@
+id: 20261024-000747-publish-qualified-custom-management-serv
+type: internal
+title: Publish qualified custom management service inventory
+description: Add an opt-in publication step for original DNS and jumphost descriptors
+  after network-service release. Reobserve all-host infrastructure and original helper
+  generations before checkpoint, retain exact access metadata and generation-qualified
+  DNS assets, reject conflicting public state, and retry uncertain saves without allocation
+  or replacement.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

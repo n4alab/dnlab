@@ -1,0 +1,21 @@
+id: 20261013-094806-reproduce-realnet-bootstrap-moving-an-ex
+type: internal
+title: Protect host interfaces during experimental RealNet router bootstrap
+description: Replace the semicolon veth recipe with an owned journalled bootstrap.
+  Create the LAN peer directly in the helper's pinned namespace with creator MACs,
+  reciprocal peer checks, complete infrastructure preflight and root-owned intent
+  records before allocation. Refuse unqualified infrastructure and existing foreign
+  resources; active retry preserves the helper and endpoint. Unit tests pass and
+  the native isolated gate passes ordinary bootstrap plus fourteen real SIGKILL
+  recovery cases while preserving foreign host eth1 and the helper on retry. Preserve complete retry
+  snapshots while excluding only the elapsed forward_delay_timer on an unchanged
+  veth bridge port; negative regressions retain identity, peer, configuration and
+  helper-start checks. Runtime ownership checks remain unchanged.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

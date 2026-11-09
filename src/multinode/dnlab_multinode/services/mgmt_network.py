@@ -7,6 +7,7 @@ import ipaddress
 import json
 import logging
 import shlex
+from dataclasses import asdict
 from pathlib import Path
 
 from dnlab_multinode.models.topology import DistributedTopology
@@ -172,12 +173,25 @@ def _expected_network(topo: DistributedTopology, host_name: str = "master") -> d
             reservations.anchor,
             reservations.dns,
             reservations.jumphost,
+            str(ipaddress.IPv4Address(topo.mgmt.ipv4_gw or reservations.jumphost)),
         }),
         "labels": {
             MANAGED_LABEL: "mgmt-vrf",
             LAB_LABEL: topo.name,
         },
     }
+    model=(topo.raw or {}).get('dnlab_management_plan')
+    if isinstance(model,dict) and 'probes' in model:
+        from .management_probe_identity import validate
+        validate(model)
+        if model['lab']!=topo.name:raise MgmtNetworkError('foreign infrastructure probe model')
+        segments=[key for key,cfg in model['networks'].items() if cfg['network']==topo.mgmt.network]
+        if len(segments)!=1:raise MgmtNetworkError('original probe management network required')
+        if model['networks'][segments[0]]!=asdict(topo.mgmt):
+            raise MgmtNetworkError('probe network configuration differs from original model')
+        probe=model['probes'].get(segments[0])
+        if probe and probe['ipv6']:
+            expected['reserved']=sorted(set(expected['reserved'])|{probe['ipv6']})
     if topo.mgmt.ipv6_subnet:
         expected["ipv6_subnet"] = str(ipaddress.ip_network(topo.mgmt.ipv6_subnet, strict=False))
     if topo.mgmt.ipv6_gw:
@@ -295,44 +309,39 @@ def _create_network_command(expected: dict) -> str:
     return " ".join(parts)
 
 
-def ensure_mgmt_network(topo: DistributedTopology, client: SSHClient) -> None:
-    """Ensure the exact per-lab Docker management network exists on a host."""
-    ensure_vrf_plugin(client)
-    expected = _expected_network(topo, client.name)
-    actual = _inspect_network(client, expected["network"])
-    if actual is not None:
-        mismatches = _network_mismatches(actual, expected)
-        if mismatches:
-            raise MgmtNetworkError(
-                f"management network {expected['network']!r} on {client.name} has unexpected "
-                f"configuration: {', '.join(mismatches)}"
-            )
-        return
-    client.run(_create_network_command(expected), timeout=60)
-    actual = _inspect_network(client, expected["network"])
-    if actual is None:
-        raise MgmtNetworkError(
-            f"management network {expected['network']!r} was not created on {client.name}"
-        )
-    mismatches = _network_mismatches(actual, expected)
-    if mismatches:
-        raise MgmtNetworkError(
-            f"management network {expected['network']!r} on {client.name} was created with "
-            f"unexpected configuration: {', '.join(mismatches)}"
-        )
+def _qualified_context(topo, client, state, clients):
+    from . import netsetup
+    if state is None or state.lab_name != topo.name:
+        raise MgmtNetworkError('durable management coordinator context required; legacy adoption refused')
+    participants = clients if clients is not None else {client.name:client}
+    metadata = netsetup.checked(state,participants)
+    expected = _expected_network(topo,client.name)
+    if metadata.get('networks',{}).get(client.name,{}).get('default') != expected:
+        raise MgmtNetworkError('qualified management network definition differs')
+    return participants
 
 
-def destroy_mgmt_network(topo: DistributedTopology, client: SSHClient) -> None:
-    """Remove only a dNLab-owned management Docker network, best effort."""
-    expected = _expected_network(topo, client.name)
-    actual = _inspect_network(client, expected["network"])
-    if actual is None:
-        return
-    mismatches = _network_mismatches(actual, expected)
-    if mismatches:
-        log.warning(
-            "[%s] refusing to remove unexpected management network %s: %s",
-            client.name, expected["network"], ", ".join(mismatches),
-        )
-        return
-    client.run(f"docker network rm {_quote(expected['network'])}", check=False, timeout=30)
+def ensure_mgmt_network(topo: DistributedTopology, client: SSHClient, *, state=None, clients=None,
+                        checkpoint=lambda:None, mark_used=False) -> None:
+    """Ensure the original generation, optionally reserve use before attachment."""
+    from . import netsetup
+    participants = _qualified_context(topo,client,state,clients)
+    try:
+        netsetup.network_action(state,participants,'ensure',host=client.name,checkpoint=checkpoint)
+        if mark_used:netsetup.network_action(state,participants,'mark-used',host=client.name,checkpoint=checkpoint)
+    except Exception as exc:raise MgmtNetworkError(str(exc)) from exc
+
+
+def destroy_mgmt_network(topo: DistributedTopology, client: SSHClient, *, state=None, clients=None,
+                         checkpoint=lambda:None) -> None:
+    """Delete only the generation qualified by the durable coordinator/host journals."""
+    from . import netsetup
+    participants = _qualified_context(topo,client,state,clients)
+    try:netsetup.network_action(state,participants,'cleanup',host=client.name,checkpoint=checkpoint)
+    except Exception as exc:raise MgmtNetworkError(str(exc)) from exc
+
+
+def restore_mgmt_networks(state, clients, *, checkpoint=lambda:None,request_id=None,targets=None):
+    """Explicit infrastructure repair; ordinary VD start never calls this path."""
+    from . import netsetup
+    return netsetup.network_action(state,clients,'restore',checkpoint=checkpoint,operation_id=request_id,targets=targets)

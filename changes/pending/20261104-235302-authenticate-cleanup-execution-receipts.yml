@@ -1,0 +1,14 @@
+id: 20261104-235302-authenticate-cleanup-execution-receipts
+type: internal
+title: Authenticate cleanup execution receipts for custom runtime gates
+description: Verify pinned daemon, multinode and native qualification reports and
+  their execution coverage; retain default denial until current provenance and window
+  observations are supplied.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

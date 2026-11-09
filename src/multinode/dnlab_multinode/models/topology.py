@@ -23,6 +23,8 @@ class VDNode:
     env: dict[str, str] = field(default_factory=dict)
     extra: dict = field(default_factory=dict)
     persist_id: str = ""
+    management_network: str = "default"
+    management_port: str = ""
 
 
 @dataclass
@@ -205,6 +207,9 @@ class DistributedTopology:
     # Strategia di persistenza degli overlay VD. Default locale sticky;
     # CephFS è un plugin esplicito configurato da hosts.yml.
     persistence: PersistenceConfig = field(default_factory=PersistenceConfig)
+    # Experimental native management view; appended for positional compatibility.
+    management_networks: dict[str, MgmtConfig] = field(default_factory=dict)
+    native_management: bool = False
 
     @property
     def all_hosts(self) -> dict[str, InfraHost]:

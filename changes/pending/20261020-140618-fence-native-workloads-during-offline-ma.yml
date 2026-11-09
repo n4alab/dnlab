@@ -1,0 +1,15 @@
+id: 20261020-140618-fence-native-workloads-during-offline-ma
+type: internal
+title: Fence native workloads during offline management preparation
+description: Add persistent coordinator and local runtime barriers with immutable
+  host rosters, qualified stopped inventory, concurrent mutation exclusion and recovery
+  of lost acquire or release acknowledgements. Service provisioning integration remains
+  experimental.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

@@ -1,0 +1,16 @@
+id: 20261009-161104-honor-optional-endpoint-names-in-dnlab-v
+type: internal
+title: Honor optional endpoint names in dnlab-vrf
+description: Persist and validate optional Docker endpoint interface names and return
+  DstName in remote driver Join responses, including restart and retry. Preserve the
+  legacy eth prefix when no name is requested. Qualify the experimental runtime against
+  the updated local driver using dedicated fixtures.
+components:
+- multinode
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

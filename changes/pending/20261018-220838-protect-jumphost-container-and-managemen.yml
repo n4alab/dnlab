@@ -1,0 +1,17 @@
+id: 20261018-220838-protect-jumphost-container-and-managemen
+type: bugfix
+title: Protect jumphost container and management attachment ownership
+description: Jumphost provisioning and cleanup retain durable birth and attachment
+  records, reject unqualified replacements, and require explicit recovery after partial
+  failure.
+components:
+- multinode
+audience:
+- operator
+visibility: public
+breaking: true
+upgrade_notes:
+- Existing jumphost resources without durable birth records are preserved and rejected
+  for automatic reuse or cleanup. Legacy resources require operator resolution after
+  independent ownership verification; this change does not migrate or adopt them.
+references: []

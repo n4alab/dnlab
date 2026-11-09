@@ -1,0 +1,19 @@
+id: 20261014-135258-diagnose-missing-directory-sync-in-deplo
+type: internal
+title: Persist deployment state directory entries before reporting success
+description: Sync the state directory and ancestor chain after file fsync and atomic
+  replace, covering newly created paths and retries after failed directory sync.
+  Propagate persistence errors without declaring success or deleting the published
+  replacement. Regression tests cover syscall ordering, file/replace/directory/ancestor
+  failures, descriptor cleanup and retry. Existing start and stop controllers perform
+  no management, workload or link mutation when the initial state sync fails.
+  This closes a diagnosed durability gap; no host crash or data loss was simulated,
+  and custom controller adoption remains separate.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

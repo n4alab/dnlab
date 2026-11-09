@@ -15,6 +15,8 @@ from dnlab_multinode.models.topology import DistributedTopology
 from dnlab_multinode.services.ssh import SSHClient
 from dnlab_multinode.utils import naming
 from dnlab_multinode.services import warm_links
+from dnlab_multinode.services.bridge_guard import LocalBridgeGuard
+from dnlab_multinode.services.local_tc import LocalTCGuard
 
 log = logging.getLogger(__name__)
 
@@ -35,6 +37,8 @@ def build_runtime_links(topo: DistributedTopology, plan: SchedulePlan) -> list[R
         links.append(RuntimeLinkState(
             id=link_id,
             link_type="same_host",
+            lab_name=topo.name,
+            bridge_name=naming.runtime_bridge_name(topo.name,link_id),
             endpoint_a={"node": link.source, "iface": link.source_iface},
             endpoint_b={"node": link.target, "iface": link.target_iface},
             host_a=host,
@@ -85,7 +89,7 @@ def build_runtime_links(topo: DistributedTopology, plan: SchedulePlan) -> list[R
             host_b=link.host,
             host_endpoint_a=_endpoint_name(
                 topo, link.node, link.iface, link_id,
-                fallback=link.bridge_iface or naming.realnet_bridge_iface(link.node, link.iface),
+                fallback=naming.realnet_bridge_iface(link.node, link.iface, topo.name),
             ),
             host_endpoint_b=bridge,
             container_a=naming.micro_vd_container_name(topo.name, link.node),
@@ -93,6 +97,8 @@ def build_runtime_links(topo: DistributedTopology, plan: SchedulePlan) -> list[R
             state="down",
         ))
 
+    for link in links:
+        link.lab_name=topo.name
     return links
 
 
@@ -128,6 +134,8 @@ def merge_runtime_links(
             link.state = prior.state
             link.last_error = prior.last_error
             link.validation_error = prior.validation_error
+            link.bridge_name = prior.bridge_name or (f"br-rt-{hashlib.sha1(prior.id.encode()).hexdigest()[:8]}" if link.link_type == 'same_host' else '')
+            link.resource_identities = prior.resource_identities.copy()
             continue
 
         prefix = {"same_host": "l", "cross_host": "vx", "real_net": "rn"}.get(
@@ -137,6 +145,8 @@ def merge_runtime_links(
         while f"{prefix}{index}" in used_ids:
             index += 1
         link.id = f"{prefix}{index}"
+        if link.link_type == 'same_host':
+            link.bridge_name = naming.runtime_bridge_name(link.lab_name,link.id)
         used_ids.add(link.id)
         if link.link_type == "cross_host":
             candidate = link.vxlan_id
@@ -293,26 +303,31 @@ def _create_same_host(
 ) -> None:
     client = clients[link.host_a]
     bridge = _runtime_bridge_name(link)
-    client.run(f"ip link show {bridge} >/dev/null 2>&1 || ip link add {bridge} type bridge")
-    client.run(f"ip link set {bridge} up")
-    _ensure_bridge_forwarding(client, bridge)
+    guard=LocalBridgeGuard(client,link,bridge)
+    tc=LocalTCGuard(client,link,guard)
+    tc.preflight()
+    guard.ensure()
     try:
+        guard.inspect()
+        client.run(f"ip link set {bridge} up")
+        _ensure_bridge_forwarding(client, bridge)
         for iface in [link.host_endpoint_a, link.host_endpoint_b]:
+            guard.inspect()
             client.run(f"ip link set {iface} up")
             client.run(f"ip link set {iface} master {bridge}")
-        _ensure_link_local_forwarding(
-            client, link.host_endpoint_a, link.host_endpoint_b,
-        )
+        tc.ensure()
         _set_link_carriers(
             link, clients, "up", check=True, defer=defer_warm_carriers,
         )
     except Exception:
+        # Never delete a bridge that existed before this operation's attempt.
+        if not guard.created:
+            raise
+        guard.inspect()
         _set_link_carriers(link, clients, "down", check=False)
-        _remove_link_local_forwarding(
-            client, link.host_endpoint_a, link.host_endpoint_b,
-        )
+        tc.cleanup()
         _remove_bridge_forwarding(client, bridge)
-        client.run(f"ip link delete {bridge} 2>/dev/null", check=False)
+        guard.delete()
         raise
 
 
@@ -322,16 +337,19 @@ def _delete_same_host(
     *,
     set_carriers: bool,
 ) -> None:
-    if set_carriers:
-        _set_link_carriers(link, clients, "down", check=False)
     client = clients.get(link.host_a)
     if client:
         bridge = _runtime_bridge_name(link)
-        _remove_link_local_forwarding(
-            client, link.host_endpoint_a, link.host_endpoint_b,
-        )
+        guard=LocalBridgeGuard(client,link,bridge)
+        if not guard.inspect():
+            return
+        tc=LocalTCGuard(client,link,guard)
+        tc.preflight(cleanup=True)
+        if set_carriers:
+            _set_link_carriers(link, clients, "down", check=False)
+        tc.cleanup()
         _remove_bridge_forwarding(client, bridge)
-        client.run(f"ip link delete {bridge} 2>/dev/null", check=False)
+        guard.delete()
 
 
 def _create_cross_host(
@@ -388,17 +406,10 @@ def _create_realnet(
     clients: dict[str, SSHClient],
     defer_warm_carriers: bool,
 ) -> None:
-    client = clients[link.host_a]
-    client.run(f"ip link set {link.host_endpoint_a} up")
-    try:
-        client.run(f"ip link set {link.host_endpoint_a} master {link.host_endpoint_b}")
-        _set_link_carriers(
-            link, clients, "up", check=True, defer=defer_warm_carriers,
-        )
-    except Exception:
-        _set_link_carriers(link, clients, "down", check=False)
-        client.run(f"ip link set {link.host_endpoint_a} nomaster 2>/dev/null", check=False)
-        raise
+    from .realnet_attachment import attachment
+    # Carrier changes execute in the guarded worker using immutable VD ID.
+    # No detached background operation can outlive endpoint ownership checks.
+    attachment(link, clients, "create")
 
 
 def _delete_realnet(
@@ -407,11 +418,8 @@ def _delete_realnet(
     *,
     set_carriers: bool,
 ) -> None:
-    if set_carriers:
-        _set_link_carriers(link, clients, "down", check=False)
-    client = clients.get(link.host_a)
-    if client:
-        client.run(f"ip link set {link.host_endpoint_a} nomaster 2>/dev/null", check=False)
+    from .realnet_attachment import attachment
+    attachment(link, clients, "delete", set_carriers=set_carriers)
 
 
 def _nodes_in_link(link: RuntimeLinkState) -> set[str]:
@@ -428,8 +436,13 @@ def _stopped_endpoints(link: RuntimeLinkState, running_nodes: set[str]) -> set[s
 
 
 def _runtime_bridge_name(link: RuntimeLinkState) -> str:
-    digest = hashlib.sha1(link.id.encode()).hexdigest()[:8]
-    return f"br-rt-{digest}"[:15]
+    if link.bridge_name:
+        if not re.fullmatch(r'[A-Za-z][A-Za-z0-9_-]{0,14}',link.bridge_name):
+            raise ValueError('invalid persisted runtime bridge name')
+        return link.bridge_name
+    scope=link.lab_name or '|'.join(sorted((link.container_a,link.container_b,link.host_endpoint_a,link.host_endpoint_b)))
+    link.bridge_name=naming.runtime_bridge_name(scope,link.id)
+    return link.bridge_name
 
 
 def _vxlan_altname(host_endpoint: str) -> str:
@@ -522,36 +535,6 @@ def _ensure_bridge_forwarding(client: SSHClient, bridge: str) -> None:
         f"-m comment --comment '{comment}' -j ACCEPT",
         check=False,
     )
-
-
-def _ensure_link_local_forwarding(client: SSHClient, iface_a: str, iface_b: str) -> None:
-    """Pass link-local L2 control protocols across same-host runtime links.
-
-    Linux bridges intentionally consume reserved 01:80:c2 link-local groups by
-    default. Runtime links should behave like a direct cable for LLDP and LACP,
-    so mirror those ethertypes directly between the two host-side veths.
-    """
-    for iface in (iface_a, iface_b):
-        client.run(f"tc qdisc add dev {iface} clsact 2>/dev/null", check=False)
-    for src, dst in ((iface_a, iface_b), (iface_b, iface_a)):
-        for protocol, pref in _LINK_LOCAL_PROTOCOLS:
-            client.run(
-                f"tc filter replace dev {src} ingress pref {pref} "
-                f"protocol {protocol} flower "
-                f"action mirred egress redirect dev {dst}"
-            )
-
-
-def _remove_link_local_forwarding(client: SSHClient, iface_a: str, iface_b: str) -> None:
-    """Remove LLDP/LACP forwarding hooks installed for a runtime link."""
-    for iface in (iface_a, iface_b):
-        for protocol, pref in _LINK_LOCAL_PROTOCOLS:
-            client.run(
-                f"tc filter del dev {iface} ingress pref {pref} "
-                f"protocol {protocol} 2>/dev/null",
-                check=False,
-            )
-        client.run(f"tc qdisc del dev {iface} clsact 2>/dev/null", check=False)
 
 
 def _remove_bridge_forwarding(client: SSHClient, bridge: str) -> None:

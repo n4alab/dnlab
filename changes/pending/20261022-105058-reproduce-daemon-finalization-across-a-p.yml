@@ -1,0 +1,15 @@
+id: 20261022-105058-reproduce-daemon-finalization-across-a-p
+type: none
+title: Reproduce daemon finalization across a pending management barrier
+description: Add unit regressions for cleanup with no VD bindings while management
+  acquisition or provisioning remains active, including state finalization.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
+reason: Diagnostic coverage only; the daemon implementation remains unchanged pending
+  the requested contract decision.

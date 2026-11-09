@@ -1,0 +1,15 @@
+id: 20261024-001250-qualify-public-management-service-invent
+type: internal
+title: Qualify public management service inventory in the native gate
+description: Extend the isolated management service gate with optional descriptor
+  publication after service-readiness release. Verify original helper receipts, exact
+  SSH access metadata and nonce-qualified DNS assets across coordinator reopen, keeping
+  deployment incomplete and reusing qualified fixture cleanup.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

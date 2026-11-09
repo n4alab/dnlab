@@ -1,0 +1,14 @@
+id: 20261019-165523-guard-shared-jumphost-external-network-b
+type: internal
+title: Guard shared jumphost external network birth and recovery
+description: Replace name-based shared network provisioning with a standalone Docker
+  HTTP guard, durable nonce/ID/configuration and bridge proofs, explicit recovery,
+  complete preflight and no per-lab deletion or implicit adoption.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

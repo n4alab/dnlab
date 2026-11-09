@@ -1,0 +1,16 @@
+id: 20261022-120900-qualify-executable-jumphost-fixture-cand
+type: none
+title: Qualify executable jumphost fixture candidates before service gates
+description: Use explicit COPY permissions in the derived fixture recipe and audit
+  actual merged image entrypoint ownership, mode, source and bash interpreter before
+  any service gate allocation.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
+reason: Only the isolated candidate recipe, image audit and smoke regression tests
+  change; production Dockerfiles, runtime guards and VD images remain unchanged.

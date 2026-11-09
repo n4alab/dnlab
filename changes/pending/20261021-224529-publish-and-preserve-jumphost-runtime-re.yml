@@ -1,0 +1,14 @@
+id: 20261021-224529-publish-and-preserve-jumphost-runtime-re
+type: bugfix
+title: Publish and preserve jumphost runtime relay inventory
+description: Publish complete relay mappings after relay deployment and refresh them
+  for current placement. Journal generation-qualified inventory updates, recover interrupted
+  writes, and preserve the refreshed mapping when the jumphost entrypoint runs again.
+components:
+- multinode
+audience:
+- operator
+visibility: public
+breaking: false
+upgrade_notes: []
+references: []

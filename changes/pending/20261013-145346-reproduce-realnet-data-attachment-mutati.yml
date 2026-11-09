@@ -1,0 +1,21 @@
+id: 20261013-145346-reproduce-realnet-data-attachment-mutati
+type: internal
+title: Guard experimental RealNet data attachments and recover interrupted operations
+description: Require provisioned immutable VD identity, host and VD namespace, reciprocal
+  data-veth identities and owned RealNet bridge before attachment or carrier changes.
+  Exclude the selected management port. Persist intents and exclusive endpoint reservations
+  under the custom bridge/VXLAN shared lock and journal; retain interrupted operations
+  until explicit recovery and verified detach. Preserve carrier-skip teardown compatibility.
+  Native isolated gate passed with three Linux VDs, data traffic, eight real worker crashes,
+  shared bridge/VXLAN conflict refusal, management/control preservation and verified cleanup.
+  Warm carriers have unit coverage only. Production proof generation and infrastructure
+  preflight integration remain unqualified; fail closed on legacy or unqualified resources.
+components:
+- multinode
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

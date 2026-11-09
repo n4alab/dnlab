@@ -1,0 +1,14 @@
+id: 20261021-205914-stream-the-jumphost-worker-source-and-re
+type: internal
+title: Stream the jumphost worker source and request through stdin
+description: Replace the full-source python -c argument with a bounded bootstrap and
+  JSON stdin envelope. Preserve root worker validation, request semantics and timeout;
+  qualify large-source execution and payload isolation without remote temporary files.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

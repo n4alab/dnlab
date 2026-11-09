@@ -1,0 +1,14 @@
+id: 20261104-235937-observe-pinned-cleanup-container-provena
+type: internal
+title: Observe pinned cleanup container provenance without mutations
+description: Add read-only Docker and pidfd provenance checks for qualified cleanup
+  containers, preserving separate artifact and process-generation evidence and default
+  live-gate denial.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

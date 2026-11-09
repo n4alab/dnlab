@@ -1,0 +1,15 @@
+id: 20261021-221656-bind-management-service-configurations-b
+type: internal
+title: Bind management service configurations before infrastructure provisioning
+description: Compile immutable helper identities, DNS records, DHCP content and per-segment
+  attachments from the resolved management ledger, then include that complete service
+  intent in the offline barrier plan before infrastructure RPCs. Reject changed retry
+  inputs; keep service materialization and fence release pending.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

@@ -1,0 +1,14 @@
+id: 20261107-122303-verify-native-workload-scope-transitions
+type: internal
+title: Verify native workload scope transitions against original operations
+description: Connect pinned Linux birth records to existing coordinator/runtime ownership
+  checks, current Docker and pidfd identity, exact scope definitions and verified
+  ordinary shutdown receipts without mutating resources.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

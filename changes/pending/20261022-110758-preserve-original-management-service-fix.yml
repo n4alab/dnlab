@@ -1,0 +1,16 @@
+id: 20261022-110758-preserve-original-management-service-fix
+type: none
+title: Preserve original management service fixture diagnostics
+description: Capture worker stderr, cause chains and selected journal/kernel snapshots
+  before cleanup. Use an empty-response-aware Docker DELETE only for the qualified
+  fixture-owned external network.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
+reason: Only isolated smoke fixture diagnostics and their regression tests change;
+  runtime guards and production lifecycle behavior remain unchanged.

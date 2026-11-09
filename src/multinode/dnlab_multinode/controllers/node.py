@@ -23,7 +23,7 @@ from dnlab_multinode.services import (
     mgmt_network as mgmt_network_svc,
 )
 from dnlab_multinode.services.hostsfile import HostEntry
-from dnlab_multinode.services.config import assign_sticky_mgmt_identities, assign_sticky_mgmt_ipv4, parse_topology
+from dnlab_multinode.services.config import assign_sticky_management
 from dnlab_multinode.services.ssh import create_clients
 from dnlab_multinode.services.state import load_state, save_state
 from dnlab_multinode.utils import naming
@@ -48,14 +48,15 @@ class NodeLifecycleController:
     ):
         self.topology_file = topology_file
         self.hosts_file = hosts_file
-        self.topo = parse_topology(topology_file, hosts_file=hosts_file)
         self.state_dir = Path(topology_file).parent
-        self.state = load_state(self.topo.name, self.state_dir)
+        from dnlab_multinode.services.owned_topology import load, MissingDeployment
+        try:
+            self.topo, self.state = load(topology_file, hosts_file=hosts_file, require_state=True)
+        except MissingDeployment as error:
+            raise NodeLifecycleError(str(error)) from error
         self.cancel_event = cancel_event
         self.phase_callback = phase_callback
         self._active_clients = {}
-        if not self.state:
-            raise NodeLifecycleError(f"Lab '{self.topo.name}' is not deployed")
         # Capability inspection is persisted in node runtime state.  Rehydrate
         # the parsed topology so later stop/start/reconcile does not fall back
         # to trusting a mutable image tag.
@@ -68,7 +69,20 @@ class NodeLifecycleController:
                 self.topo.nodes[name].env[warm_links_svc.IMAGE_STATUS_ENV] = "experimental"
 
     def list_nodes(self) -> dict:
-        return self.state.node_runtime
+        from dnlab_multinode.services import native_public
+        if native_public.backend(self.state)=='containerlab':return self.state.node_runtime
+        factory=getattr(self,'_native_clients_factory',create_clients)
+        clients=factory({r.host:self.topo.all_hosts[r.host] for r in self.state.node_runtime.values()})
+        try:
+            for client in clients.values():client.connect()
+            return native_public.project(self.state,self.state_dir,clients)
+        finally:
+            for client in clients.values():client.close()
+
+    def _native(self,action,node,*,force=False,request_id=None):
+        from dnlab_multinode.services import native_public
+        if native_public.backend(self.state,node)!='custom':return None
+        return native_public.run(self,action,node,force=force,request_id=request_id)
 
     def _cancelled(self) -> bool:
         event = getattr(self, "cancel_event", None)
@@ -80,6 +94,12 @@ class NodeLifecycleController:
 
     def request_cancel(self) -> None:
         """Cancel the operation and unblock any in-flight remote command."""
+        intent=getattr(self,'_native_intent',None)
+        if intent:
+            from dnlab_multinode.services.runtime_operations import OperationStore
+            store=OperationStore(intent[0])
+            try:store.request_cancel(intent[1],intent[2])
+            finally:store.close()
         event = getattr(self, "cancel_event", None)
         already_cancelled = bool(event and event.is_set())
         if event:
@@ -104,7 +124,11 @@ class NodeLifecycleController:
         if save:
             save_state(self.state, self.state_dir)
 
-    def stop(self, node: str, *, force: bool = False) -> DeploymentState:
+    def stop(self, node: str, *, force: bool = False, request_id: str | None = None) -> DeploymentState:
+        if type(force) is not bool:
+            raise NodeLifecycleError("force must be boolean")
+        result=self._native('stop',node,force=force,request_id=request_id)
+        if result is not None:return result
         runtime = self.state.node_runtime.get(node)
         if runtime is None:
             if force and node in self.topo.nodes:
@@ -151,8 +175,10 @@ class NodeLifecycleController:
             for client in clients.values():
                 client.close()
 
-    def start(self, node: str) -> DeploymentState:
+    def start(self, node: str, *, request_id: str | None = None) -> DeploymentState:
         self._check_cancelled()
+        result=self._native('start',node,request_id=request_id)
+        if result is not None:return result
         if node not in self.state.node_runtime:
             return self.add(node)
         runtime = self._runtime(node)
@@ -168,8 +194,11 @@ class NodeLifecycleController:
             self._check_cancelled()
             self._set_phase(runtime, "starting")
             mgmt_network_svc.ensure_mgmt_network(
-                self.topo, clients[runtime.host],
+                self.topo, clients[runtime.host],state=self.state,clients=clients,mark_used=True,
+                checkpoint=lambda:save_state(self.state,self.state_dir),
             )
+            self._prepare_node_files(node, clients[runtime.host])
+            self._check_cancelled()
 
             clients[runtime.host].deploy_clab(
                 runtime.topology_file, cancel_event=getattr(self, "cancel_event", None),
@@ -215,22 +244,24 @@ class NodeLifecycleController:
         """Deploy a node added to the topology while the lab is running."""
         self._check_cancelled()
         self._ensure_deployed()
+        from dnlab_multinode.services.native_public import backend
+        if backend(self.state)=='custom':
+            return self._native('start',node)
         self._ensure_hot_add_supported()
         if node in self.state.node_runtime:
             return self.start(node)
         if node not in self.topo.nodes:
             raise NodeLifecycleError(f"Unknown topology VD '{node}'")
 
-        reservations = assign_sticky_mgmt_ipv4(
-            self.topo.nodes, self.topo.mgmt, self.state.mgmt_ip_reservations,
-        )
-        identities = assign_sticky_mgmt_identities(
+        allocations = assign_sticky_management(
             self.topo.nodes, self.topo.mgmt, lab_name=self.topo.name,
+            ipv4_reservations=self.state.mgmt_ip_reservations,
             ipv6_reservations=self.state.mgmt_ipv6_reservations,
             mac_reservations=self.state.mgmt_mac_reservations,
             duid_reservations=self.state.mgmt_duid_reservations,
             iaid_reservations=self.state.mgmt_iaid_reservations,
         )
+        reservations, identities = allocations[0], allocations[1:]
         clients = create_clients(self.topo.all_hosts)
         self._set_active_clients(clients)
         runtime: NodeRuntimeState | None = None
@@ -251,6 +282,7 @@ class NodeLifecycleController:
             name: list(items) for name, items in self.state.webui_allocations.items()
         }
         created_mgmt_anchor = False
+        management_ready = False
         try:
             self._connect(clients)
             self._check_cancelled()
@@ -260,7 +292,9 @@ class NodeLifecycleController:
             vd = self.topo.nodes[node]
             warm_links_svc.inspect_image_on_host(vd, clients[host])
             plan = self._plan_with_added_node(node, host, requirement)
-            mgmt_network_svc.ensure_mgmt_network(self.topo, clients[host])
+            mgmt_network_svc.ensure_mgmt_network(self.topo, clients[host],state=self.state,clients=clients,mark_used=True,
+                checkpoint=lambda:save_state(self.state,self.state_dir))
+            management_ready = True
             created_mgmt_anchor = self._ensure_mgmt_anchor(host, plan, clients)
             self._allocate_node_webui(node, clients)
             webui_allocations = {
@@ -302,17 +336,7 @@ class NodeLifecycleController:
             self._set_phase(runtime, "starting")
             self._check_cancelled()
 
-            if generator._needs_persist_bind(vd.image):
-                persist_dir = generator.persist_dir_for_node(
-                    self.topo.name, node, vd.persist_id, self.topo.persistence.root,
-                )
-                client.run(f"mkdir -p '{persist_dir}'")
-            for path, content in generator.render_node_feature_files(self.topo, node).items():
-                client.run(f"mkdir -p '{Path(path).parent}'")
-                client.upload_text(content, path)
-            for path, asset in generator.render_node_override_files(self.topo, node).items():
-                client.run(f"mkdir -p '{Path(path).parent}'")
-                client.upload_text(asset, path)
+            self._prepare_node_files(node, client)
 
             client.upload_text(yaml_content, remote_path)
             self._check_cancelled()
@@ -364,6 +388,7 @@ class NodeLifecycleController:
                 )
             return self.state
         except Exception as exc:
+            if not management_ready: raise NodeLifecycleError(f"Management admission failed before VD allocation: {exc}") from exc
             if self._cancelled() and runtime is not None:
                 self._cancel_started_node(node, runtime, clients)
                 persistence_svc.save_placement_history(
@@ -428,18 +453,24 @@ class NodeLifecycleController:
         save_state(self.state, self.state_dir)
         return True
 
-    def restart(self, node: str) -> DeploymentState:
+    def restart(self, node: str, *, request_id: str | None = None) -> DeploymentState:
         """Restart one VD using the established per-VD stop/start paths."""
+        result=self._native('restart',node,request_id=request_id)
+        if result is not None:return result
         self.stop(node)
         return self.start(node)
 
-    def remove(self, node: str) -> DeploymentState:
+    def remove(self, node: str, *, force: bool = False, request_id: str | None = None) -> DeploymentState:
         """Stop a VD and remove its runtime bookkeeping from a live lab."""
+        if type(force) is not bool:
+            raise NodeLifecycleError("force must be boolean")
+        result=self._native('remove',node,force=force,request_id=request_id)
+        if result is not None:return result
         runtime = self._runtime(node)
         self._ensure_deployed()
         self._ensure_per_vd_runtime(runtime)
         if runtime.state != "stopped":
-            self.stop(node, force=True)
+            self.stop(node, force=force)
 
         clients = create_clients(self.topo.all_hosts)
         try:
@@ -476,6 +507,10 @@ class NodeLifecycleController:
 
     def reconcile(self, node: str | None = None) -> DeploymentState:
         self._ensure_deployed()
+        from dnlab_multinode.services.native_public import backend
+        if backend(self.state)=='custom':
+            if node is None:raise NodeLifecycleError('native reconciliation requires an explicit VD')
+            return self._native('reconcile',node)
         clients = create_clients(self.topo.all_hosts)
         try:
             self._connect(clients)
@@ -507,6 +542,8 @@ class NodeLifecycleController:
         real_net: str = "",
     ):
         """Reconcile exactly one desired link and persist its live status."""
+        from dnlab_multinode.services.native_public import backend
+        if backend(self.state)=='custom':raise NodeLifecycleError('native link reconciliation requires its qualified runtime adapter')
         self._ensure_deployed()
         clients = create_clients(self.topo.all_hosts)
         try:
@@ -798,6 +835,8 @@ class NodeLifecycleController:
                 port=info["port"],
                 api_key=info["api_key"],
                 allowed=info["allowed"],
+                generation=info.get("generation", ""),
+                container_id=info.get("container_id", ""),
             )
             for host, info in relays.items()
         }
@@ -810,6 +849,7 @@ class NodeLifecycleController:
                 entries.append(HostEntry(runtime.node, runtime.mgmt_ipv4, "A"))
             count, _ = dns_svc.refresh_dns(
                 self.topo.name, clients["master"], clients, extra_entries=entries,
+                generation=self.state.dns.generation,
             )
             self.state.dns.entries = count
 
@@ -818,21 +858,32 @@ class NodeLifecycleController:
                 runtime.node: runtime.container
                 for runtime in self.state.node_runtime.values()
             }
-            relay_map: dict[str, dict] = {}
-            for relay in self.state.runtime_relays.values():
-                for container in relay.allowed:
-                    relay_map[container] = {
-                        "host": relay.bind_ip,
-                        "port": relay.port,
-                        "api_key": relay.api_key,
-                    }
+            relay_map = jumphost_svc.relay_inventory_from_state(self.state)
             jumphost_svc.refresh_jumphost_inventory(
                 self.topo.name, clients["master"], vd_map, relay_map,
+                generation=self.state.jumphost.generation,
             )
             jumphost_svc.refresh_dhcp_config(
                 self.topo, clients["master"], self.state.jumphost.container,
                 self.state.jumphost.resolver or None,
+                generation=self.state.jumphost.generation,
             )
+
+    def _prepare_node_files(self, node: str, client) -> None:
+        """Restore bind sources after wipe; the image creates its own overlay."""
+        vd = self.topo.nodes[node]
+        directories = set()
+        if generator._needs_persist_bind(vd.image):
+            directories.add(generator.persist_dir_for_node(
+                self.topo.name, node, vd.persist_id, self.topo.persistence.root,
+            ))
+        assets = generator.render_node_feature_files(self.topo, node)
+        assets.update(generator.render_node_override_files(self.topo, node))
+        directories.update(str(Path(path).parent) for path in assets)
+        for directory in sorted(directories):
+            client.run(shlex.join(["mkdir", "-p", "--", directory]))
+        for path, content in assets.items():
+            client.upload_text(content, path)
 
     def _ensure_per_vd_runtime(self, runtime) -> None:
         expected_prefix = f"clab-dnlab-{self.topo.name}-"

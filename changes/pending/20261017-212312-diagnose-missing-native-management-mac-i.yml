@@ -1,0 +1,15 @@
+id: 20261017-212312-diagnose-missing-native-management-mac-i
+type: internal
+title: Diagnose missing native management MAC identity
+description: 'Record three read-only/unit diagnostics: existing DHCP reservations
+  use sticky VD MAC identities, native manifests cannot carry them and Docker creation
+  omits them; legacy Linux generation also omits the identity. No runtime correction
+  or live DHCP qualification is included.'
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

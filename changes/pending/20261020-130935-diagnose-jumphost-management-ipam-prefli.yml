@@ -1,0 +1,14 @@
+id: 20261020-130935-diagnose-jumphost-management-ipam-prefli
+type: internal
+title: Diagnose jumphost management IPAM preflight mismatch
+description: Add two no-host regressions showing the existing jumphost guard authorizes
+  container and veth creation with incompatible management subnet or IPAM driver;
+  correction awaits contract decision.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

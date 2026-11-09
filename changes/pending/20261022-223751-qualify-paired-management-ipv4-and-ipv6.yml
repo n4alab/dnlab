@@ -1,0 +1,15 @@
+id: 20261022-223751-qualify-paired-management-ipv4-and-ipv6
+type: feature
+title: Qualify paired management IPv4 and IPv6 forwarding
+description: Run paired addressless UDP probes through the original jumphost using
+  owned container execs, scoped ARP/ND replies, preserved IP identities and decremented
+  hops. Persist both peers before starting, require both executions to exit before
+  cleanup, and retain the workload fence.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

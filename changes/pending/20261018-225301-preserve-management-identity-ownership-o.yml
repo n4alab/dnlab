@@ -1,0 +1,16 @@
+id: 20261018-225301-preserve-management-identity-ownership-o
+type: bugfix
+title: Preserve management identity ownership on retry and hot-add
+description: Management planning reuses a VD’s own sticky identity, rejects reservations
+  owned by other VDs and duplicate IPv6 addresses, and validates all identity ledgers
+  before publishing changes.
+components:
+- multinode
+audience:
+- operator
+visibility: public
+breaking: false
+upgrade_notes:
+- Conflicting or malformed existing reservations now stop planning and hot-add before
+  changes. Resolve ledger conflicts explicitly; ownership is never silently reassigned.
+references: []

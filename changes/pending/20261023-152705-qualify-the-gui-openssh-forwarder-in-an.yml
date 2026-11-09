@@ -1,0 +1,22 @@
+id: 20261023-152705-qualify-the-gui-openssh-forwarder-in-an
+type: internal
+title: Qualify the GUI OpenSSH forwarder in an owned container
+description: Run current GUI tunnel code in a dedicated immutable client container
+  with durable birth, permission before forwarding and guarded cleanup. Check bounded
+  DNS TCP payloads, reuse and replacement against qualified infrastructure targets
+  while VD HTTP readiness remains unqualified. Bootstrap the mounted client with
+  an explicit GUI package root and audit loaded module paths and source hashes
+  before permitting connections. Keep topology and log writes under the owned
+  output mount and verify configured paths and writability before forwarding.
+  Capture bounded existing listener observations in the fixture without changing
+  production ownership checks, retries or exceptions. Exercise the real FastAPI
+  opening route using JUMPHOST_HOST and live per-lab port, with fixture-controlled
+  authorization and status inputs explicitly excluded from readiness claims.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

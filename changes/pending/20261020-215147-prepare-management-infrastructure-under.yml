@@ -1,0 +1,16 @@
+id: 20261020-215147-prepare-management-infrastructure-under
+type: internal
+title: Prepare management infrastructure under the offline runtime barrier
+description: Add an opt-in coordinator boundary that freezes management inputs, reserves
+  VNIs only after workload fencing, checkpoints infrastructure progress and recovers
+  original kernel and Docker generations. Qualify complete read-only infrastructure
+  readiness separately from admission; keep the workload fence for subsequent service
+  integration.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

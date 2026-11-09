@@ -280,3 +280,56 @@ def test_docker_plugin_dispatches_network_and_ipam_apis(tmp_path):
     handler.path = "/NetworkDriver.Join"
     joined = handler._dispatch({"NetworkID": "network-a", "EndpointID": "endpoint-a"})
     assert joined["InterfaceName"]["DstPrefix"] == "eth"
+
+
+def test_optional_endpoint_name_persists_across_join_restart_and_retry(tmp_path):
+    path = tmp_path / 'state.json'
+    store = PluginStore(path)
+    ops = FakeNetworkOps()
+    store.create_network(_network_request('network-a'), ops)
+    request = _endpoint_request('network-a', 'endpoint-a', '172.20.20.2/29')
+    request['Options'] = {'com.docker.network.endpoint.ifname': 'dnmu0'}
+    store.create_endpoint(request)
+    join = {'NetworkID': 'network-a', 'EndpointID': 'endpoint-a'}
+    expected = store.join(join, ops)
+    assert expected['InterfaceName']['DstName'] == 'dnmu0'
+    restored = PluginStore(path)
+    assert restored.create_endpoint(request) == {}
+    assert restored.join(join, ops) == expected
+    restored.leave(join, ops)
+    assert restored.join(join, ops) == expected
+    assert json.loads(path.read_text())['endpoints']['endpoint-a']['destination_name'] == 'dnmu0'
+    changed = dict(request, Options={'com.docker.network.endpoint.ifname': 'other0'})
+    with pytest.raises(NetworkDriverError, match='configuration changed'):
+        restored.create_endpoint(changed)
+    assert restored.join(join, ops) == expected
+
+
+@pytest.mark.parametrize('name', ['', None, 12, [], {}, '.', '..', 'lo', 'a'*16, 'a/b', 'a b', 'a:b', 'éth0', 'eth0\n'])
+def test_invalid_endpoint_name_rejected_without_state_changes(tmp_path, name):
+    path = tmp_path / 'state.json'
+    store = PluginStore(path)
+    store.create_network(_network_request('network-a'), FakeNetworkOps())
+    baseline = path.read_bytes()
+    request = _endpoint_request('network-a', 'endpoint-a', '172.20.20.2/29')
+    request['Options'] = {'com.docker.network.endpoint.ifname': name}
+    with pytest.raises(NetworkDriverError, match='interface name is invalid'):
+        store.create_endpoint(request)
+    assert path.read_bytes() == baseline
+
+
+def test_legacy_endpoint_without_name_keeps_eth_prefix(tmp_path):
+    path = tmp_path / 'state.json'
+    store = PluginStore(path)
+    ops = FakeNetworkOps()
+    store.create_network(_network_request('network-a'), ops)
+    request = _endpoint_request('network-a', 'endpoint-a', '172.20.20.2/29')
+    store.create_endpoint(request)
+    state = json.loads(path.read_text())
+    del state['endpoints']['endpoint-a']['destination_name']
+    path.write_text(json.dumps(state))
+    restored = PluginStore(path)
+    assert restored.create_endpoint(request) == {}
+    joined = restored.join({'NetworkID': 'network-a', 'EndpointID': 'endpoint-a'}, ops)
+    assert joined['InterfaceName']['DstPrefix'] == 'eth'
+    assert 'DstName' not in joined['InterfaceName']

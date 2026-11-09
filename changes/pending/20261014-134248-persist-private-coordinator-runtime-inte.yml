@@ -1,0 +1,21 @@
+id: 20261014-134248-persist-private-coordinator-runtime-inte
+type: internal
+title: Persist private coordinator runtime intents and bound receipts
+description: Add an opt-in private SQLite coordinator journal and driver that persist
+  immutable node requests, host/socket targets and remote journal UUID before mutations.
+  Keep manifests outside public summaries, serialize execution, retain cancellation
+  flags independently and recover unknown submit outcomes by content-verified lookup.
+  Add optional journal-bound API/CLI metadata checked by the server before handling
+  requests and a read-only original-request comparison. Preserve pending/recovery
+  state and refuse target, journal, content or receipt changes without fallback or
+  implicit force. Existing deploy/node controllers remain unchanged pending adoption
+  and qualification.
+components:
+- multinode
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

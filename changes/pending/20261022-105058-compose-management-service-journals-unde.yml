@@ -1,0 +1,15 @@
+id: 20261022-105058-compose-management-service-journals-unde
+type: internal
+title: Compose management service journals under the offline barrier
+description: Add experimental coordinator-driven materialization of the original jumphost,
+  DNS and shared external network intent, with all-host fence checks, qualified recovery
+  and stdin source transport. Keep workload admission sealed pending functional service
+  readiness and cleanup-barrier qualification.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

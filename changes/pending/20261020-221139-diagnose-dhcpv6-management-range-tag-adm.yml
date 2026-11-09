@@ -1,0 +1,15 @@
+id: 20261020-221139-diagnose-dhcpv6-management-range-tag-adm
+type: internal
+title: Diagnose DHCPv6 management range tag admission
+description: Add a static diagnostic of independent DHCPv6 range eligibility against
+  the unchanged HEAD renderer and primary dnsmasq tag semantics. IPv4 control passes
+  and IPv6 admission fails; actual wire behavior and any product correction require
+  a separate isolated comparison.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

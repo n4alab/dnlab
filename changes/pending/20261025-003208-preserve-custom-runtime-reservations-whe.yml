@@ -1,0 +1,14 @@
+id: 20261025-003208-preserve-custom-runtime-reservations-whe
+type: bugfix
+title: Preserve custom runtime reservations when loading state
+description: Keep persisted reservation maps unchanged when loading custom runtime
+  state, including empty maps. Retain IPv4 reservation backfill for compatible legacy
+  Containerlab state without altering the original segmented management ledger.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

@@ -1,0 +1,15 @@
+id: 20261021-211037-diagnose-oversized-standalone-dns-worker
+type: internal
+title: Diagnose oversized standalone DNS worker transport arguments
+description: Capture DNS source delivery exceeding the Linux per-argument limit and
+  reproduce E2BIG using an inert payload. Add a bounded-argument regression pending
+  approval to reuse the stdin bootstrap; no product correction or host service mutation
+  performed.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

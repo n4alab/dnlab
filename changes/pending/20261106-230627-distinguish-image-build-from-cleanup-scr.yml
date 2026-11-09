@@ -1,0 +1,14 @@
+id: 20261106-230627-distinguish-image-build-from-cleanup-scr
+type: internal
+title: Distinguish image-build from cleanup script entrypoints
+description: Classify qualified script paths into separate cleanup and image-build
+  process groups, retain ambiguous scripts as conflicts, and keep gate admission blocked
+  while image-build is running.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

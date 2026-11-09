@@ -1,0 +1,21 @@
+id: 20261013-131046-reproduce-realnet-vni-collision-between
+type: internal
+title: Reserve experimental RealNet VNIs per master-worker edge
+description: Persist coordinator VNI reservations for full lab/RealNet/worker identity
+  with a broad pool, atomic fsync writes and flock. Preflight every host and existing
+  VXLAN before reservation commit, resolve new collisions, preserve existing generations
+  and refuse active conflicts or unqualified legacy resources. Generate distinct VNIs
+  per master-worker pair, persist the optional worker map and named intent before
+  host mutations, preserve qualified peers on retry and release only after authoritative
+  remote cleanup-journal verification. All 619 multinode tests pass, including concurrent
+  processes and coordinator SIGKILL recovery. The isolated two-lab/three-host gate
+  passes data traffic, overlap isolation, retry, verified release and cleanup; full
+  production ownership provisioning remains pending.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

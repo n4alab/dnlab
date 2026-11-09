@@ -1,0 +1,15 @@
+id: 20261016-141445-diagnose-nos-fixture-missing-durable-wor
+type: internal
+title: Track NOS fixture creation and cleanup with durable birth evidence
+description: Persist complete privileged fixture intents before Docker creation,
+  bind nonce and immutable container IDs before bootstrap, and retain guarded
+  recovery for lost responses or conflicts. Keep strict runtime ownership checks
+  and preserve dependent fixture infrastructure when cleanup is incomplete.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

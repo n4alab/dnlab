@@ -32,6 +32,14 @@ _DEFAULTS: dict[str, str] = {
     "lab_cleanup_state": "/var/lib/dnlab-lab-cleanup/state.json",
     "persist_root":      "/var/lib/docker/dnlab-backups",
     "topologies_dir":    "/root/dnlab-topologies",
+    "realnet_vni_dir":   "",
+    "runtime_operations_dir": "",
+    "management_journal_dir": "/var/lib/dnlab/management",
+    "management_probe_journal_dir": "/var/lib/dnlab/management-probes",
+    "jumphost_journal_dir": "/var/lib/dnlab/jumphost",
+    "jumphost_network_journal_dir": "/var/lib/dnlab/jumphost-network",
+    "dns_journal_dir": "/var/lib/dnlab/dns",
+    "relay_journal_dir": "/var/lib/dnlab/runtime-relay",
     "gui_dir":           "/opt/dnlab-gui",
     "multinode_dir":     "/opt/dnlab-multinode",
     "image_build_dir":   "/opt/dnlab-image-build",
@@ -59,6 +67,14 @@ class Paths:
     lab_cleanup_state: str
     persist_root:      str
     topologies_dir:    str
+    realnet_vni_dir:   str
+    runtime_operations_dir: str
+    management_journal_dir: str
+    management_probe_journal_dir: str
+    jumphost_journal_dir: str
+    jumphost_network_journal_dir: str
+    dns_journal_dir: str
+    relay_journal_dir: str
     gui_dir:           str
     multinode_dir:     str
     image_build_dir:   str
@@ -87,6 +103,8 @@ def _load() -> Paths:
         log.error("Failed to read %s: %s — using built-in defaults", path, exc)
 
     merged = {**_DEFAULTS, **data}
+    if not merged['realnet_vni_dir']:
+        merged['realnet_vni_dir']=str(Path(merged['topologies_dir'])/'.realnet-vni')
     extra = set(data) - set(_DEFAULTS)
     if extra:
         log.warning("Ignoring unknown keys in %s: %s", path, sorted(extra))

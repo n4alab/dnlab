@@ -1,0 +1,14 @@
+id: 20261104-144248-prepare-explicit-cleanup-attestation-for
+type: internal
+title: Prepare explicit cleanup attestation for local runtime gates
+description: Add a fail-closed local admission protocol with pinned execution qualification,
+  actor provenance and bounded rechecks. Existing live runners remain blocked until
+  trusted providers are integrated and qualified.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

@@ -1,0 +1,15 @@
+id: 20261023-090759-qualify-dns-from-original-management-pro
+type: feature
+title: Qualify DNS from original management probe clients
+description: Resolve bound A and AAAA records from each management through the original
+  router using owned UDP and TCP clients. Verify original resolver and packet identities,
+  TCP closure and exec exit before cleanup; retain the workload fence and recover
+  original operations without duplicate clients.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

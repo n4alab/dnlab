@@ -1,0 +1,15 @@
+id: 20261023-225156-preserve-empty-custom-runtime-inventorie
+type: bugfix
+title: Preserve empty custom runtime inventories when loading state
+description: Do not reconstruct Containerlab node names or running states from placement
+  for custom or unknown runtime backends. Preserve the saved native inventory through
+  startup and recovery while retaining compatibility reconstruction for older Containerlab
+  states.
+components:
+- multinode
+audience:
+- operator
+visibility: public
+breaking: false
+upgrade_notes: []
+references: []

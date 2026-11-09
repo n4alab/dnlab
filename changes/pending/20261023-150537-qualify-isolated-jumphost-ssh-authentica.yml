@@ -1,0 +1,14 @@
+id: 20261023-150537-qualify-isolated-jumphost-ssh-authentica
+type: internal
+title: Qualify isolated jumphost SSH authentication
+description: Add an optional bounded service fixture probe with a dedicated initial
+  authorized key, pinned original host key and helper generation, verified labuser
+  identity and explicit client closure. Keep VD and WebUI reachability unqualified.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

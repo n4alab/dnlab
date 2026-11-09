@@ -2,6 +2,13 @@
 
 from pathlib import Path
 
+import os
+import stat
+
+import pytest
+
+from dnlab_multinode.services import state as state_service
+
 from dnlab_multinode.models.state import (
     DeploymentState, MgmtState, JumphostState, DnsState, HostScheduleState,
     VxlanLinkState, NodeRuntimeState, RuntimeLinkState, MgmtAnchorState,
@@ -227,3 +234,97 @@ def test_runtime_mode_is_conservative_for_legacy_state():
 
     assert state.runtime_mode == "legacy"
     assert state.teardown_requested is False
+
+
+@pytest.mark.parametrize("nested", [False, True])
+def test_save_syncs_file_then_replace_then_directory_chain(tmp_path, monkeypatch, nested):
+    directory = tmp_path / "new" / "nested" if nested else tmp_path
+    events = []
+    original_sync, original_replace = os.fsync, os.replace
+
+    def synced(fd):
+        if stat.S_ISDIR(os.fstat(fd).st_mode):
+            events.append(("directory-fsync", Path(os.readlink(f"/proc/self/fd/{fd}"))))
+        else:
+            events.append(("file-fsync", None))
+        return original_sync(fd)
+
+    def replaced(source, target):
+        result = original_replace(source, target)
+        events.append(("replace", None))
+        return result
+
+    monkeypatch.setattr(state_service.os, "fsync", synced)
+    monkeypatch.setattr(state_service.os, "replace", replaced)
+    state = _sample_state()
+    path = save_state(state, directory)
+    absolute = directory.resolve()
+    assert events == [("file-fsync", None), ("replace", None)] + [
+        ("directory-fsync", parent) for parent in (absolute, *absolute.parents)
+    ]
+    assert path.exists() and load_state(state.lab_name, directory) is not None
+
+
+@pytest.mark.parametrize("stage", ["file", "replace", "directory", "ancestor"])
+def test_save_failure_propagates_and_preserves_last_published_file(tmp_path, monkeypatch, caplog, stage):
+    state = _sample_state()
+    path = save_state(state, tmp_path)
+    original = path.read_bytes()
+    state.node_runtime["new"] = NodeRuntimeState(node="new", state="starting")
+    original_sync = os.fsync
+    sync_fds = []
+
+    def synced(fd):
+        is_directory = stat.S_ISDIR(os.fstat(fd).st_mode)
+        if is_directory:
+            sync_fds.append(fd)
+        if (stage == "file" and not is_directory
+                or stage == "directory" and is_directory
+                or stage == "ancestor" and is_directory and len(sync_fds) == 2):
+            raise OSError("injected persistence failure")
+        return original_sync(fd)
+
+    def failed_replace(*args):
+        raise OSError("injected persistence failure")
+
+    monkeypatch.setattr(state_service.os, "fsync", synced)
+    if stage == "replace":
+        monkeypatch.setattr(state_service.os, "replace", failed_replace)
+    caplog.clear()
+    with caplog.at_level("INFO"), pytest.raises(OSError, match="persistence failure"):
+        save_state(state, tmp_path)
+    assert "State saved:" not in caplog.text
+    if stage in {"file", "replace"}:
+        assert path.read_bytes() == original
+    else:
+        assert load_state(state.lab_name, tmp_path).node_runtime["new"].state == "starting"
+    assert list(tmp_path.iterdir()) == [path]
+    for fd in sync_fds:
+        with pytest.raises(OSError):
+            os.fstat(fd)
+
+
+def test_retry_syncs_ancestors_of_previously_created_directory(tmp_path, monkeypatch):
+    directory = tmp_path / "created" / "nested"
+    state = _sample_state()
+    original_sync = os.fsync
+
+    def failed(fd):
+        if stat.S_ISDIR(os.fstat(fd).st_mode):
+            raise OSError("injected directory failure")
+        return original_sync(fd)
+
+    monkeypatch.setattr(state_service.os, "fsync", failed)
+    with pytest.raises(OSError):
+        save_state(state, directory)
+    assert directory.is_dir()
+    seen = []
+
+    def synced(fd):
+        if stat.S_ISDIR(os.fstat(fd).st_mode):
+            seen.append(Path(os.readlink(f"/proc/self/fd/{fd}")))
+        return original_sync(fd)
+
+    monkeypatch.setattr(state_service.os, "fsync", synced)
+    save_state(state, directory)
+    assert seen == [directory.resolve(), *directory.resolve().parents]

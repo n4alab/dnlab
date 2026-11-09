@@ -1,0 +1,16 @@
+id: 20261023-235503-select-lifecycle-management-parsing-from
+type: bugfix
+title: Select lifecycle management parsing from persisted runtime ownership
+description: Load the saved backend before selecting topology parsing for node lifecycle
+  operations. Custom management declarations require their original ledger; reject
+  implicit network, assignment or identity changes and preserve Containerlab parser
+  behavior. Exercise the real constructor, compiled initial bindings and public stop/start
+  with simulated runtime adapters.
+components:
+- multinode
+audience:
+- operator
+visibility: public
+breaking: false
+upgrade_notes: []
+references: []

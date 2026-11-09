@@ -1,0 +1,15 @@
+id: 20261023-104254-use-a-dns-proxy-on-each-custom-managemen
+type: bugfix
+title: Use a DNS proxy on each custom management network
+description: Route IPv4 and IPv6 DNS through the qualified jumphost proxy on each
+  management network, preserve DHCP and RA disabled on static segments, and verify
+  the original daemon owns the expected listener addresses. Finish live probe cleanup
+  before replaying cleaned attempts in the isolated fixture.
+components:
+- multinode
+audience:
+- operator
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

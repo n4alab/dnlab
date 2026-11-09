@@ -1,0 +1,14 @@
+id: 20261022-124042-reobserve-original-management-services-b
+type: internal
+title: Reobserve original management services before functional qualification
+description: Add read-only observation of completed helper journals, original Docker
+  births and all management attachments under the coordinator fence; retain separate
+  functional readiness and reject changed or pending resources.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

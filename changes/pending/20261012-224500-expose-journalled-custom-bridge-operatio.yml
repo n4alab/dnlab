@@ -1,0 +1,17 @@
+id: 20261012-224500-expose-journalled-custom-bridge-operatio
+type: internal
+title: Expose journalled custom bridge operations through the local runtime API
+description: Extend local link requests with bridge kind and two committed node endpoints,
+  preserving VXLAN payloads. Track both endpoint states atomically, block stop and
+  conflicting queues for either owner, verify both kernel endpoint identities, and
+  reuse cancellation, retry and replay recovery. Keep the opt-in adapter outside production
+  controllers.
+components:
+- multinode
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

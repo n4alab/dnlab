@@ -1,0 +1,14 @@
+id: 20261022-133343-qualify-the-explicit-jumphost-candidate
+type: internal
+title: Qualify the explicit jumphost candidate DHCP log profile
+description: Register the locally observed candidate image digest with its qualified
+  dnsmasq binary hash and log metadata, preserving rejection of unknown images and
+  incompatible resources.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

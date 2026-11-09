@@ -1,0 +1,18 @@
+id: 20261015-232638-diagnose-initial-native-management-netwo
+type: internal
+title: Pin initial native management network identity across workload generations
+description: Persist Docker network identity and configuration before workload
+  allocation, retain the proof across stop and compensation, and refuse replaced
+  or changed networks during inspect, restart and recovery. Bind create to the
+  immutable network ID; share proofs across the lab and isolate history by lab
+  generation. Preserve recovery evidence on conflicts, qualify inactive Docker
+  placeholders and refuse implicit adoption of missing proofs. Require the new
+  capability before sending management manifests to older runtimes.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

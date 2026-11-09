@@ -117,6 +117,12 @@ run_relay_connect() {
     rest="${relay#*:}"
     port="${rest%%:*}"
     api_key="${rest#*:}"
+    if [[ "$api_key" == *:* ]]; then
+        identity="${api_key#*:}"
+        api_key="${api_key%%:*}"
+        [[ "$identity" =~ ^custom:([0-9a-f]{64})$ ]] || { echo 'vd: invalid native relay identity' >&2; return 1; }
+        exec vd-relay-client connect "$host" "$port" "$api_key" "$container" "${BASH_REMATCH[1]}"
+    fi
     exec vd-relay-client connect "$host" "$port" "$api_key" "$container"
 }
 
@@ -129,6 +135,12 @@ run_relay_log() {
     rest="${relay#*:}"
     port="${rest%%:*}"
     api_key="${rest#*:}"
+    if [[ "$api_key" == *:* ]]; then
+        identity="${api_key#*:}"
+        api_key="${api_key%%:*}"
+        [[ "$identity" =~ ^custom:([0-9a-f]{64})$ ]] || { echo 'vd: invalid native relay identity' >&2; return 1; }
+        exec vd-relay-client log "$host" "$port" "$api_key" "$container" "$tail" "$follow" "${BASH_REMATCH[1]}"
+    fi
     exec vd-relay-client log "$host" "$port" "$api_key" "$container" "$tail" "$follow"
 }
 

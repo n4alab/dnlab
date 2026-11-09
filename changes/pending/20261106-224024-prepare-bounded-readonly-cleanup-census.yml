@@ -1,0 +1,13 @@
+id: 20261106-224024-prepare-bounded-readonly-cleanup-census
+type: internal
+title: Prepare bounded readonly cleanup census readers
+description: Read recognizable process entrypoints and explicit scheduled-source trees
+  without executing commands, with stable identity checks and bounded evidence.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

@@ -1,0 +1,13 @@
+id: 20261019-112210-diagnose-jumphost-dhcp-refresh-asset-mis
+type: internal
+title: Diagnose jumphost DHCP refresh asset mismatch
+description: Add no-host regressions showing that legacy DHCP refresh leaves the journal-owned
+  mounted asset unchanged and signals an unqualified container name.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

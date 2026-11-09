@@ -14,6 +14,7 @@ from dnlab_multinode.services.mgmt_ips import ipv4_reservations
 from dnlab_multinode.services.paths import PATHS, persist_dir_for, persist_dir_for_node
 from dnlab_multinode.utils import naming
 from dnlab_multinode.services import node_plugins, warm_links
+from dnlab_multinode.services.webui_bindings import containerlab_binding
 
 log = logging.getLogger(__name__)
 
@@ -256,7 +257,7 @@ def _build_clab_dict(
         links.append({
             "endpoints": [
                 f"{rn_link.node}:{rn_link.iface}",
-                f"{bridge}:{rn_link.bridge_iface}",
+                f"{bridge}:{naming.realnet_bridge_iface(rn_link.node,rn_link.iface,topo.name)}",
             ],
         })
 
@@ -323,10 +324,10 @@ def _build_node_dict(
                 warm_links.BASE_DIGEST_ENV,
             }
         }
-    # Enforce after catalog/user environment merge.
+    # Enforce the global policy after merging catalog and legacy node env.
+    env = node_dict.setdefault("env", {})
+    env["CLAB_MGMT_PASSTHROUGH"] = "false"
     if vd.image.startswith("vrnetlab/"):
-        env = node_dict.setdefault("env", {})
-        env["CLAB_MGMT_PASSTHROUGH"] = "true"
         env["CLAB_MGMT_MAC"] = vd.mgmt_mac
         env["CLAB_MGMT_DUID"] = vd.mgmt_duid
         env["CLAB_MGMT_IAID"] = vd.mgmt_iaid
@@ -362,7 +363,7 @@ def _build_node_dict(
     if node_allocs:
         existing_ports = list(node_dict.get("ports") or [])
         for a in node_allocs:
-            spec = f"{a['host_port']}:{a['container_port']}/{a.get('proto', 'tcp')}"
+            spec = containerlab_binding(a)
             if spec not in existing_ports:
                 existing_ports.append(spec)
         node_dict["ports"] = existing_ports
@@ -466,7 +467,7 @@ def _build_mgmt_anchor_clab_dict(topo: DistributedTopology, host_name: str) -> d
                     "image": image_for("mgmt-anchor"),
                     "mgmt-ipv4": ipv4_reservations(topo.mgmt.ipv4_subnet).anchor,
                     "env": {
-                        "CLAB_MGMT_PASSTHROUGH": "true",
+                        "CLAB_MGMT_PASSTHROUGH": "false",
                     },
                 },
             },
@@ -527,7 +528,7 @@ def _micro_host_endpoints(topo: DistributedTopology, plan: SchedulePlan) -> dict
             rn_link.node,
             rn_link.iface,
             lid,
-            fallback=rn_link.bridge_iface or naming.realnet_bridge_iface(rn_link.node, rn_link.iface),
+            fallback=naming.realnet_bridge_iface(rn_link.node, rn_link.iface, topo.name),
         )
         per_host.setdefault(rn_link.host, []).append(key)
 

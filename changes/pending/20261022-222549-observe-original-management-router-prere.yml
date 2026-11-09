@@ -1,0 +1,14 @@
+id: 20261022-222549-observe-original-management-router-prere
+type: feature
+title: Observe original management router prerequisites
+description: Add a read-only snapshot of qualified jumphost forwarding, connected
+  routes and policy rules, retaining firewall diagnostics and rejected evidence without
+  claiming packet forwarding or releasing the management fence.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

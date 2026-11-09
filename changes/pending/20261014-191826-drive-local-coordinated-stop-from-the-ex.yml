@@ -1,0 +1,16 @@
+id: 20261014-191826-drive-local-coordinated-stop-from-the-ex
+type: internal
+title: Drive local coordinated stop from the existing coordinator
+description: Add an opt-in native node controller that advances verified shutdown
+  and cleanup receipts through durable stage intents, preserves explicit recovery
+  and force decisions, and requires an explicitly complete single-host footprint.
+  Keep legacy controllers unchanged until backend binding and distributed barriers
+  are qualified.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

@@ -1,0 +1,15 @@
+id: 20261012-134436-prepare-opt-in-ssh-adapter-for-local-run
+type: internal
+title: Prepare opt-in SSH adapter for local runtime links
+description: Add a standalone experimental runtime client with capability checks,
+  shell-quoted requests, validated operation envelopes and bounded polling retaining
+  operation identity on timeout. Existing controllers remain unchanged; runtime error
+  fields describe operation outcomes and do not reject valid status responses.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

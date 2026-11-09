@@ -1,0 +1,15 @@
+id: 20261021-122213-qualify-every-management-attachment-befo
+type: bugfix
+title: Qualify every management attachment before DHCP refresh
+description: Use a shared complete preflight for DHCP refresh, recovery and replay,
+  repeated before live asset writes, HUP and finalization. Preserve pending intent
+  and the original service on attachment conflicts; qualify the correction with regressions
+  and an isolated two-attachment gate.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

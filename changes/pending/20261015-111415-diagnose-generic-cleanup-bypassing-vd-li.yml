@@ -1,0 +1,17 @@
+id: 20261015-111415-diagnose-generic-cleanup-bypassing-vd-li
+type: internal
+title: Delegate experimental VD cleanup to its qualified runtime owner
+description: Protect native and unqualified legacy VDs from generic name-based forced
+  removal. Recheck live inventory and durable coordinator intent, journal and Docker
+  generation before resuming verified local shutdown cleanup. Retain dependent
+  infrastructure and deployment state while recovery or unqualified resources remain.
+  Native journal inspection vetoes finalization with pending lab resources. Distributed
+  native teardown remains protected until separately qualified.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

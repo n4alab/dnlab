@@ -1,0 +1,14 @@
+id: 20261025-234620-audit-qualified-jumphost-cli-assets-in-i
+type: internal
+title: Audit qualified jumphost CLI assets in isolated candidates
+description: Copy and qualify the native-ID vd helper and relay client alongside entrypoint
+  and inventory assets. Verify exact source, ownership, executable modes, interpreters
+  and capability before allowing a candidate into a future gate.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

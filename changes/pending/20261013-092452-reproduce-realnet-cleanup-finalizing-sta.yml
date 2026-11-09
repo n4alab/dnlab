@@ -1,0 +1,18 @@
+id: 20261013-092452-reproduce-realnet-cleanup-finalizing-sta
+type: internal
+title: Preserve RealNet teardown state until guarded recovery is verified
+description: Census all persisted RealNet VXLAN and router-veth resources. Prevent
+  generic name-based deletion and require complete preflight before lab cleanup.
+  Recover through the ownership guard with persistent state checkpoints. Finalize
+  state only after resource absence and root-owned journal steps are verified,
+  including owned firewall cleanup. Qualify two isolated daemon recovery cases
+  after real SIGKILL, plus fourteen worker crash cases, without changing scheduler
+  or public API contracts. Unqualified legacy resources remain protected.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

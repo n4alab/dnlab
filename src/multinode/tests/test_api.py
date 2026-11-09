@@ -197,7 +197,7 @@ def test_duplicate_start_is_rejected_while_operation_is_registered():
 
 def test_stop_cancels_queued_start_without_waiting_for_global_lock():
     async def exercise():
-        req = api.NodeRequest(topology_file="/tmp/demo.yml", node="r1")
+        req = api.NodeStopRequest(topology_file="/tmp/demo.yml", node="r1")
         key = api._node_operation_key(req)
         operation = api._ActiveNodeStart(api.threading.Event(), asyncio.Event())
         api._active_node_starts[key] = operation
@@ -221,7 +221,7 @@ def test_stop_interrupts_running_start_controller():
             self.cancelled = True
 
     async def exercise():
-        req = api.NodeRequest(topology_file="/tmp/demo.yml", node="r1")
+        req = api.NodeStopRequest(topology_file="/tmp/demo.yml", node="r1")
         key = api._node_operation_key(req)
         operation = api._ActiveNodeStart(api.threading.Event(), asyncio.Event())
         operation.controller = Controller()
@@ -389,3 +389,43 @@ def test_lab_cleanup_reconcile_uses_lock_and_returns_report(monkeypatch):
 
 async def _to_thread_sync(fn, /, *args, **kwargs):
     return fn(*args, **kwargs)
+
+
+@pytest.mark.parametrize("action", ["stop", "remove"])
+@pytest.mark.parametrize("supplied,expected", [({}, False), ({"force": False}, False), ({"force": True}, True)])
+def test_stop_and_remove_forward_only_explicit_force(monkeypatch, action, supplied, expected):
+    calls = []
+
+    async def mutation(request, action, *, force=False):
+        calls.append((action, force))
+        return {"lab_name": "diagnostic"}
+
+    monkeypatch.setattr(api, "_node_mutation", mutation)
+    request = api.NodeStopRequest(topology_file="/tmp/diagnostic.yml", node="a", **supplied)
+    asyncio.run(getattr(api, "lab_node_" + action)(request))
+    assert calls == [(action, expected)]
+
+
+@pytest.mark.parametrize("value", ["true", "false", 1, 0, None, [], {}])
+def test_stop_force_requires_a_json_boolean(value):
+    with pytest.raises(ValueError):
+        api.NodeStopRequest(topology_file="/tmp/diagnostic.yml", node="a", force=value)
+
+
+@pytest.mark.parametrize("force", [False, True])
+def test_remove_mutation_passes_force_to_controller(monkeypatch, force):
+    calls = []
+
+    class Controller:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def remove(self, node, *, force=False):
+            calls.append((node, force))
+            return _FakeState()
+
+    monkeypatch.setattr(api, "NodeLifecycleController", Controller)
+    monkeypatch.setattr(api.asyncio, "to_thread", _to_thread_sync)
+    request = api.NodeStopRequest(topology_file="/tmp/diagnostic.yml", node="a", force=force)
+    asyncio.run(api._node_mutation(request, "remove", force=force))
+    assert calls == [("a", force)]

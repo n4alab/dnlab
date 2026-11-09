@@ -1,0 +1,17 @@
+id: 20261014-142434-restore-persistent-bind-sources-when-sta
+type: bugfix
+title: Restore persistent bind sources when starting a wiped VD
+description: Single-node start prepares the persistent directory and regenerates node
+  feature and override files before deployment, using the same preparation as hot-add.
+  Stop followed by disk wipe can start with an empty persist directory so the image
+  launcher creates a new overlay. Existing overlays are preserved, placement is unchanged,
+  and failed preparation prevents deployment.
+components:
+- multinode
+audience:
+- operator
+- user
+visibility: public
+breaking: false
+upgrade_notes: []
+references: []

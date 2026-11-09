@@ -39,6 +39,10 @@ fi
 # sshd login sessions do not inherit the container entrypoint environment.
 # JUMPHOST_RELAY_MAP is a space-separated runtime-container=host:port:key map.
 # JUMPHOST_LAB_NAME is the lab name itself.
+# A qualified refresh supersedes the immutable bootstrap environment.
+if [ -e /etc/dnlab-inventory.json ] || [ -L /etc/dnlab-inventory.json ]; then
+    python3 /usr/local/lib/dnlab-inventory.py --restore >/dev/null
+else
 : > /etc/dnlab-vds
 if [ -n "${JUMPHOST_RELAY_MAP:-}" ]; then
     read -r -a relays <<< "$JUMPHOST_RELAY_MAP"
@@ -89,6 +93,8 @@ if [ -n "${JUMPHOST_VD_LIST:-}" ]; then
         sed -i '/pam_motd\.so/ s|^|#|' /etc/pam.d/sshd || true
     fi
 fi
+
+fi # persistent inventory / environment bootstrap
 
 # Start reservation-only DHCPv4/RA/DHCPv6 when provided by the controller.
 # eth1 is manually attached just after Docker starts this container. DHCP must

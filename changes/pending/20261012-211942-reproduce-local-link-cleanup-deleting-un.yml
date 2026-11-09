@@ -1,0 +1,15 @@
+id: 20261012-211942-reproduce-local-link-cleanup-deleting-un
+type: internal
+title: Preserve unrelated TC filters during local link lifecycle
+description: Verify LLDP/LACP rule ownership before attachment or removal, track
+  newly created clsact qdiscs and preserve preexisting or newly shared qdiscs and
+  unrelated ingress/egress filters. Reject reserved priority conflicts before
+  mutation, avoid rewriting owned rules on retry and verify cleanup.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

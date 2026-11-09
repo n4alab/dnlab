@@ -1,0 +1,16 @@
+id: 20261025-232912-publish-native-jumphost-inventory-before
+type: bugfix
+title: Publish native jumphost inventory before completing lifecycle operations
+description: Preserve the original Docker ID in native jumphost console and log inventory,
+  extend the CLI with qualified relay requests, and persist publication before lifecycle
+  completion. Resume the original publication after a lost response or checkpoint
+  without restarting the VD; retain legacy inventory compatibility and reject unsupported
+  images.
+components:
+- multinode
+audience:
+- operator
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

@@ -1,0 +1,15 @@
+id: 20261021-145828-requalify-dhcp-service-absence-before-ev
+type: bugfix
+title: Requalify DHCP service absence before every inactive exec start
+description: Check the qualified service observer before persisting a start attempt
+  and again after the final save/container preflight, including recovery of an already
+  recorded exec ID. Refuse existing, foreign or unreadable services without another
+  start; preserve the exec and journal for qualified retry.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

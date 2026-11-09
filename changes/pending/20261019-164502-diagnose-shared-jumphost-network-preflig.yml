@@ -1,0 +1,14 @@
+id: 20261019-164502-diagnose-shared-jumphost-network-preflig
+type: internal
+title: Diagnose shared jumphost network preflight failures
+description: Add no-host regressions for incompatible shared external subnet reuse
+  and attempted network creation after a denied Docker inspection; product behavior
+  unchanged pending contract decision.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

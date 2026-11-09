@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import time
+import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
@@ -73,6 +74,11 @@ class DeployController:
                    f"{len(plan.cross_host_links)} cross-host links",
         )
 
+        from dnlab_multinode.services.native_public import backend
+        existing=state_svc.load_state(topo.name,Path(self.topology_file).parent)
+        if existing and backend(existing)=='custom':
+            raise DeployError('Existing native ownership requires its qualified deployment coordinator; Containerlab fallback refused')
+
         # Init state
         self._state = DeploymentState(
             lab_name=topo.name,
@@ -95,6 +101,9 @@ class DeployController:
             for client in self._clients.values():
                 client.connect()
 
+            self._phase("jumphost-network-preflight", "Qualifying shared jumphost external network",
+                        jumphost.ensure_jumphost_network, self._clients["master"], topo.jumphost_net,
+                        action="preflight")
             self._phase("image-capabilities", "Inspecting warm-link image capabilities",
                         self._inspect_image_capabilities, topo, plan)
             self._phase("underlay", "Resolving underlay IPs",
@@ -221,58 +230,26 @@ class DeployController:
 
     def _deploy_mgmt(self, topo, plan):
         log.info("Phase 2: Setting up mgmt infrastructure")
-        all_ips = self._underlay_ips
-
-
-        def _setup_host(host_name):
-            client = self._clients[host_name]
-            netsetup.setup_mgmt_infra(topo, plan, client, host_name, all_ips)
-            return host_name
-
-        with ThreadPoolExecutor(max_workers=len(self._clients)) as pool:
-            futures = {pool.submit(_setup_host, h): h for h in self._clients}
-            for f in as_completed(futures):
-                host = futures[f]
-                try:
-                    f.result()
-                    log.info("[%s] Mgmt infra OK", host)
-                except Exception as e:
-                    raise DeployError(f"[{host}] Mgmt setup failed: {e}")
-
-
-        self._state.mgmt = MgmtState(
-            subnet=topo.mgmt.ipv4_subnet,
-            gateway=topo.mgmt.ipv4_gw,
-            bridge=topo.mgmt.bridge,
-            vrf=naming.vrf_name(topo.name),
-            vxlan_id=plan.mgmt_vxlan_id,
-            vxlan_iface=naming.mgmt_vxlan_iface(topo.name),
-            network=topo.mgmt.network,
-            network_driver=mgmt_network_svc.NETWORK_DRIVER,
-            ipam_driver=mgmt_network_svc.IPAM_DRIVER,
-        )
-        self._state.phases_completed.append("mgmt")
+        checkpoint = lambda: state_svc.save_state(self._state, Path(self.topology_file).parent)
+        intent = netsetup.prepare(topo, plan, self._clients, self._underlay_ips, self._state, checkpoint)
+        if "mgmt" not in self._state.phases_completed:
+            self._state.phases_completed.append("mgmt")
+        checkpoint()
+        for host_name, client in sorted(self._clients.items()):
+            netsetup.setup_mgmt_infra(topo, plan, client, host_name, self._underlay_ips, intent=intent)
+            intent.setdefault('applied_hosts', {})[host_name] = 'active'; checkpoint()
+        intent['phase'] = 'active'; intent['provision'] = False; checkpoint()
 
     def _deploy_mgmt_network(self, topo):
         """Create the managed Docker network after its bridge/VRF exists."""
+        checkpoint=lambda:state_svc.save_state(self._state,Path(self.topology_file).parent)
         if "mgmt_network" not in self._state.phases_completed:
-            # Track the phase before fan-out so rollback also removes a network
-            # that was created successfully on only a subset of hosts.
             self._state.phases_completed.append("mgmt_network")
-
-        def _ensure_host(host_name: str) -> str:
-            mgmt_network_svc.ensure_mgmt_network(topo, self._clients[host_name])
-            return host_name
-
-        with ThreadPoolExecutor(max_workers=len(self._clients)) as pool:
-            futures = {pool.submit(_ensure_host, host): host for host in self._clients}
-            for future in as_completed(futures):
-                host = futures[future]
-                try:
-                    future.result()
-                    log.info("[%s] Docker management network ready", host)
-                except Exception as exc:
-                    raise DeployError(f"[{host}] Docker mgmt network setup failed: {exc}") from exc
+        checkpoint()
+        netsetup.network_action(self._state,self._clients,'ensure',checkpoint=checkpoint)
+        # DNS, jumphost, anchors and VDs may attach in later phases. Persist use
+        # before the first caller is allowed to create any endpoint.
+        netsetup.network_action(self._state,self._clients,'mark-used',checkpoint=checkpoint)
 
     # ── Phase 2.5: Allocate Web UI host ports ─────────────────────────
     def _allocate_webui_ports(self, topo):
@@ -357,10 +334,16 @@ class DeployController:
             realnet_svc.ensure_realnet_wan_network(master, topo)
         if any(rn.bgp for rn in topo.real_nets.values()):
             realnet_svc.deploy_route_reflector(topo, master)
-        states = realnet_svc.setup_bridges(topo, self._clients, self._underlay_ips)
+        previous=state_svc.load_state(topo.name,Path(self.topology_file).parent)
+        def checkpoint(states):
+            self._state.realnets=states
+            state_svc.save_state(self._state,Path(self.topology_file).parent)
+        states = realnet_svc.setup_bridges(topo, self._clients, self._underlay_ips,
+                                         existing_states=previous.realnets if previous else (),checkpoint=checkpoint)
         for rn_state in states:
             rn = topo.real_nets[rn_state.name]
             realnet_svc.deploy_router(topo, rn, rn_state, master)
+            checkpoint(states)
         self._state.realnets = states
         self._state.phases_completed.append("realnet")
 
@@ -737,8 +720,19 @@ class DeployController:
                 port=info["port"],
                 api_key=info["api_key"],
                 allowed=info["allowed"],
+                generation=info.get("generation", ""),
+                container_id=info.get("container_id", ""),
             )
         self._state.phases_completed.append("runtime_relay")
+        # The jumphost is created before sidecars: persist relay state before
+        # publishing the complete inventory to its original generation.
+        state_svc.save_state(self._state, Path(self.topology_file).parent)
+        if self._state.jumphost:
+            jumphost.refresh_jumphost_inventory(
+                topo.name, self._clients["master"],
+                {r.node:r.container for r in self._state.node_runtime.values()},
+                self._relay_map_for_jumphost(), generation=self._state.jumphost.generation,
+            )
 
     # ── Phase 6: Centralized DNS container ──────────────────────────
 
@@ -746,9 +740,14 @@ class DeployController:
         log.info("Phase 6: Deploying centralized DNS on master")
 
         master = self._clients["master"]
+        generation = self._state.dns.generation if self._state.dns and self._state.dns.generation else uuid.uuid4().hex
+        self._state.dns = DnsState(node="master", container=dns_svc.dns_container_name(topo.name), mgmt_ip="", generation=generation)
+        if "dns" not in self._state.phases_completed: self._state.phases_completed.append("dns")
+        state_svc.save_state(self._state, Path(self.topology_file).parent)
+        receipt = {}
         container, mgmt_ip, upstream, entries = dns_svc.deploy_dns(
             topo, master, self._clients,
-            extra_entries=self._runtime_dns_entries(),
+            extra_entries=self._runtime_dns_entries(), generation=generation, receipt=receipt,
         )
 
         self._state.dns = DnsState(
@@ -756,10 +755,9 @@ class DeployController:
             container=container,
             mgmt_ip=mgmt_ip,
             upstream=upstream,
-            hosts_file=dns_svc.hosts_file_path(topo.name),
-            entries=entries,
+            hosts_file=dns_svc.hosts_file_path(topo.name, receipt.get("nonce")),
+            entries=entries, generation=generation,
         )
-        self._state.phases_completed.append("dns")
 
     def _refresh_dns(self, topo) -> None:
         if not self._state.dns:
@@ -767,6 +765,7 @@ class DeployController:
         entries = self._runtime_dns_entries()
         count, _ = dns_svc.refresh_dns(
             topo.name, self._clients["master"], self._clients, extra_entries=entries,
+            generation=self._state.dns.generation,
         )
         self._state.dns.entries = count
 
@@ -810,7 +809,9 @@ class DeployController:
         # Register the jumphost in state BEFORE deploying so a mid-way crash
         # still gets cleaned up by rollback. host_ip/ext_network are filled
         # in after deploy_jumphost() returns the auto-assigned IP.
+        generation = self._state.jumphost.generation if self._state.jumphost and self._state.jumphost.generation else uuid.uuid4().hex
         self._state.jumphost = JumphostState(
+            generation=generation,
             node="master",
             container=naming.jumphost_container_name(topo.name),
             mgmt_ip=mgmt_ip,
@@ -820,6 +821,7 @@ class DeployController:
             resolver=resolver_ip or "",
         )
         self._state.phases_completed.append("jumphost")
+        state_svc.save_state(self._state, Path(self.topology_file).parent)
 
         container, password, ext_network, jh_ip_cidr, ssh_port = jumphost.deploy_jumphost(
             topo, self._clients["master"], mgmt_ip,
@@ -828,9 +830,10 @@ class DeployController:
             vd_names=vd_names,
             vd_map=vd_map,
             authorized_keys=authorized_keys,
-            relay_map=self._relay_map_for_jumphost(),
+            relay_map=self._relay_map_for_jumphost() if self._state.runtime_relays else {},
             ssh_bind_ip=topo.jumphost_net.ssh_bind_ip,
             ssh_port_range=topo.jumphost_net.ssh_port_range,
+            generation=generation,
         )
 
         self._state.jumphost.container = container
@@ -905,11 +908,11 @@ class DeployController:
         for phase in phases:
             try:
                 if phase == "jumphost":
-                    jumphost.destroy_jumphost(topo.name, self._clients["master"])
+                    jumphost.destroy_jumphost(topo.name, self._clients["master"], self._state.jumphost.generation if self._state.jumphost else "")
                 elif phase == "dns":
-                    dns_svc.destroy_dns(topo.name, self._clients["master"])
+                    dns_svc.destroy_dns(topo.name, self._clients["master"], self._state.dns.generation if self._state.dns else "")
                 elif phase == "runtime_relay":
-                    runtime_relay_svc.destroy_runtime_relays(topo.name, self._clients)
+                    runtime_relay_svc.destroy_runtime_relays(topo.name, self._clients, self._state.runtime_relays)
                 elif phase == "runtime_links":
                     for link in self._state.runtime_links:
                         runtime_links_svc.delete_link(link, self._clients)
@@ -933,24 +936,17 @@ class DeployController:
                             )
                 elif phase == "mgmt_network":
                     for client in self._clients.values():
-                        mgmt_network_svc.destroy_mgmt_network(topo, client)
+                        mgmt_network_svc.destroy_mgmt_network(topo, client,state=self._state,clients=self._clients,
+                            checkpoint=lambda:state_svc.save_state(self._state,Path(self.topology_file).parent))
                 elif phase == "mgmt":
-                    for host_name in self._clients:
-                        netsetup.teardown_mgmt_infra(
-                            topo.name, topo.mgmt.bridge,
-                            self._clients[host_name], host_name,
-                        )
+                    netsetup.destroy_management(self._state, self._clients,
+                        checkpoint=lambda: state_svc.save_state(self._state, Path(self.topology_file).parent))
             except Exception as e:
                 log.error("Rollback phase '%s' failed: %s", phase, e)
                 log.error("Manual cleanup may be needed for phase '%s'", phase)
+                if phase == "dns":
+                    log.error("DNS recovery pending; dependent infrastructure retained")
+                    return
 
     def _relay_map_for_jumphost(self) -> dict[str, dict]:
-        relay_by_container: dict[str, dict] = {}
-        for relay in (self._state.runtime_relays or {}).values():
-            for container in relay.allowed:
-                relay_by_container[container] = {
-                    "host": relay.bind_ip,
-                    "port": relay.port,
-                    "api_key": relay.api_key,
-                }
-        return relay_by_container
+        return jumphost.relay_inventory_from_state(self._state)

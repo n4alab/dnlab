@@ -1,0 +1,20 @@
+id: 20261014-192125-diagnose-native-container-generation-ado
+type: internal
+title: Bind native workloads to their persistent Docker birth generation
+description: Persist a per-attempt birth nonce before Docker allocation and bind
+  the returned immutable container ID before start or cleanup. Verify the birth
+  proof for inspect, lifecycle and coordinated stop, including nodes without data
+  ports or management authority. Preserve state, resources and recovery on a
+  replacement or incomplete proof, keep generation history and allow a fresh
+  generation only after verified cleanup and committed stop. Lost create replies
+  with an extant unbound workload require recovery rather than label adoption.
+  Require the generation capability in the native multinode client.
+components:
+- runtime
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

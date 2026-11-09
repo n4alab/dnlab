@@ -1,0 +1,15 @@
+id: 20261026-000944-qualify-the-native-jumphost-candidate-dh
+type: internal
+title: Qualify the native jumphost candidate DHCP log profile
+description: Register only the observed immutable native-ID jumphost candidate digest
+  with its qualified dnsmasq binary and log GID/mode. Preserve rejection of unknown
+  images, changed binaries, file generations, writers and metadata; no automatic inheritance
+  from base images.
+components:
+- multinode
+audience:
+- operator
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

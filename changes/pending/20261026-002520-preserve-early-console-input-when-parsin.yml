@@ -1,0 +1,15 @@
+id: 20261026-002520-preserve-early-console-input-when-parsin
+type: bugfix
+title: Preserve early console input when parsing relay requests
+description: Read only the bounded request line before handing the same socket to
+  the console broker. Preserve coalesced command bytes for legacy CONNECT and qualified
+  CONNECT_ID without requiring guest output, and reject incomplete or oversized requests
+  before target inspection.
+components:
+- multinode
+audience:
+- user
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

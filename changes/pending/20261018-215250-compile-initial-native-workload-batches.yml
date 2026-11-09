@@ -1,0 +1,17 @@
+id: 20261018-215250-compile-initial-native-workload-batches
+type: internal
+title: Compile initial native workload batches from existing placement
+description: Add read-only Linux manifest compilation from the existing topology and
+  schedule, immutable image resolutions, stable management identities and current
+  endpoint naming. Persist compilation/link/WebUI metadata atomically with all child
+  intents, reject unqualified explicit publications and unsupported attributes, and
+  preserve GUI WebUI access through the jumphost without implicit Docker publication.
+  Production backend selection is unchanged.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

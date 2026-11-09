@@ -4,6 +4,7 @@ import os
 import queue
 import threading
 import time
+from copy import deepcopy
 from unittest.mock import MagicMock
 
 import pytest
@@ -87,6 +88,7 @@ def _mock_host_client(image_exists: bool = True, runs_ok: bool = True) -> MagicM
         return 0, "", ""
 
     client.run_no_check.side_effect = run_no_check
+    client.relay_image_exists = image_exists
     client.run.return_value = ""
     return client
 
@@ -99,126 +101,109 @@ def _plan_with_assignments(lab_name: str, mapping: dict[str, list[str]]) -> Sche
     return SchedulePlan(lab_name=lab_name, assignments=assignments)
 
 
-def test_deploy_runtime_relays_one_per_host_with_vds():
-    topo = make_topology(name="demo", num_workers=2)
-    plan = _plan_with_assignments("demo", {
-        "master": ["R1"],
-        "worker1": ["R2"],
-        "worker2": [],
-    })
-    clients = {
-        "master": _mock_host_client(),
-        "worker1": _mock_host_client(),
-        "worker2": _mock_host_client(),
-    }
-
-    results = relay_svc.deploy_runtime_relays(
-        topo,
-        plan,
-        clients,
-        {"master": "10.0.0.10", "worker1": "10.0.0.11", "worker2": "10.0.0.12"},
-        api_key="secret",
-    )
-
-    assert set(results) == {"master", "worker1"}
-    assert results["master"]["container"] == runtime_relay_container_name("demo")
-    assert results["master"]["bind_ip"] == "10.0.0.10"
-    assert results["master"]["port"] == runtime_relay_port("demo")
-    assert results["master"]["api_key"] == "secret"
-    assert results["master"]["allowed"] == [micro_vd_container_name("demo", "R1")]
+@pytest.fixture
+def relay_guard(monkeypatch,tmp_path):
+    from tests.test_relay_host import API
+    from dnlab_multinode.services.relay_host import Worker
+    workers={}
+    def guard(client,lab,host,action,config=None,generation=None):
+        if config and getattr(client,'relay_image_exists',True) is False:
+            raise RuntimeError('relay image not found')
+        worker=workers.setdefault(host,Worker(lab,host,directory=tmp_path/host,api=API(),
+                                              host_context=lambda:{'boot':'fixture','namespace':'fixture'}))
+        return worker.control(action,config,generation)
+    monkeypatch.setattr(relay_svc,'_guard',guard)
+    return workers
 
 
-def test_deploy_runtime_relay_command_is_lab_scoped_and_host_local():
-    topo = make_topology(name="demo")
-    plan = _plan_with_assignments("demo", {"master": ["R1", "R2"]})
-    client = _mock_host_client()
-
-    relay_svc.deploy_runtime_relays(
-        topo,
-        plan,
-        {"master": client},
-        {"master": "10.0.0.10"},
-        api_key="secret with space",
-    )
-
-    run_cmds = [c.args[0] for c in client.run.call_args_list]
-    run_cmd = next(cmd for cmd in run_cmds if "docker run -d" in cmd)
-    expected_list = (
-        f"{micro_vd_container_name('demo', 'R1')} "
-        f"{micro_vd_container_name('demo', 'R2')}"
-    )
-
-    assert "--network host" in run_cmd
-    assert "/var/run/docker.sock:/var/run/docker.sock" in run_cmd
-    assert "-e RELAY_BIND=10.0.0.10" in run_cmd
-    assert f"-e RELAY_PORT={runtime_relay_port('demo')}" in run_cmd
-    assert "-e RELAY_API_KEY='secret with space'" in run_cmd
-    assert f"-e RELAY_ALLOWED_CONTAINERS='{expected_list}'" in run_cmd
-    assert "-e RELAY_ALLOWED_PREFIX=clab-dnlab-demo-" in run_cmd
+def test_deploy_runtime_relays_one_per_host_with_vds(relay_guard):
+    topo=make_topology(name='demo',num_workers=2)
+    plan=_plan_with_assignments('demo',{'master':['R1'],'worker1':['R2'],'worker2':[]})
+    clients={host:_mock_host_client() for host in plan.assignments}
+    results=relay_svc.deploy_runtime_relays(topo,plan,clients,
+                 {'master':'10.0.0.10','worker1':'10.0.0.11','worker2':'10.0.0.12'},'secret')
+    assert set(results)=={'master','worker1'}
+    for host,info in results.items():
+        assert info['container']==runtime_relay_container_name('demo')
+        assert info['port']==runtime_relay_port('demo')
+        assert len(info['generation'])==32 and len(info['container_id'])==64
+    assert relay_guard['worker2'].api.creates==0
 
 
-def test_reconcile_runtime_relay_with_prefix_does_not_restart():
-    topo = make_topology(name="demo")
-    plan = _plan_with_assignments("demo", {"master": ["R1", "R2"]})
-    client = _mock_host_client()
-    client.run_no_check.side_effect = lambda cmd, *_, **__: (
-        (0, "lab-prefix-console-port-v1,multisession-console-v1", "")
-        if "runtime-relay.capabilities" in cmd else (0, "true", "")
-    )
-    current = {
-        "master": RuntimeRelayState(
-            host="master", container=runtime_relay_container_name("demo"),
-            bind_ip="10.0.0.10", port=runtime_relay_port("demo"),
-            api_key="secret", allowed=[micro_vd_container_name("demo", "R1")],
-        ),
-    }
-
-    result = relay_svc.reconcile_runtime_relays(
-        topo, plan, {"master": client}, {"master": "10.0.0.10"},
-        "secret", current,
-    )
-
-    assert result["master"]["allowed"] == [
-        micro_vd_container_name("demo", "R1"),
-        micro_vd_container_name("demo", "R2"),
-    ]
-    assert not any(
-        "docker rm -f" in call.args[0] or "docker run -d" in call.args[0]
-        for call in client.run.call_args_list
-    )
+def test_relay_transport_keeps_source_and_credentials_on_stdin():
+    import json
+    client=_mock_host_client();client.run_input.return_value='{"phase":"absent"}'
+    relay_svc._guard(client,'demo','master','preflight',{'api_key':'secret with space'})
+    call=client.run_input.call_args
+    assert 'secret with space' not in call.args[0] and len(call.args[0])<4096
+    request=json.loads(call.args[1])
+    assert request['request']['config']['api_key']=='secret with space'
+    assert 'class Worker' in request['source']
+    assert not client.run.called
 
 
-def test_reconcile_restarts_relay_without_multisession_capability():
-    topo = make_topology(name="demo")
-    plan = _plan_with_assignments("demo", {"master": ["R1"]})
-    client = _mock_host_client()
+def test_reconcile_runtime_relay_with_prefix_does_not_restart(relay_guard):
+    topo=make_topology(name='demo');client=_mock_host_client();clients={'master':client};ips={'master':'10.0.0.10'}
+    initial=relay_svc.deploy_runtime_relays(topo,_plan_with_assignments('demo',{'master':['R1']}),clients,ips,'secret')
+    current={host:RuntimeRelayState(host=host,**info) for host,info in initial.items()}
+    api=relay_guard['master'].api;before=[c for c in api.calls if c[0]!='GET']
+    result=relay_svc.reconcile_runtime_relays(topo,_plan_with_assignments('demo',{'master':['R1','R2']}),clients,ips,'secret',current)
+    assert result['master']['allowed']==[micro_vd_container_name('demo','R1'),micro_vd_container_name('demo','R2')]
+    assert result['master']['container_id']==initial['master']['container_id']
+    assert [c for c in api.calls if c[0]!='GET']==before
 
-    def run_no_check(cmd, *_, **__):
-        if "runtime-relay.capabilities" in cmd:
-            return 0, "lab-prefix-console-port-v1", ""
-        if "docker image inspect" in cmd:
-            return 0, "", ""
-        if "docker inspect" in cmd and "State.Running" in cmd:
-            return 0, "true", ""
-        return 0, "", ""
 
-    client.run_no_check.side_effect = run_no_check
-    current = {
-        "master": RuntimeRelayState(
-            host="master", container=runtime_relay_container_name("demo"),
-            bind_ip="10.0.0.10", port=runtime_relay_port("demo"),
-            api_key="secret", allowed=[micro_vd_container_name("demo", "R1")],
-        ),
-    }
+def test_reconcile_refuses_legacy_relay_without_generation_proof(relay_guard):
+    topo=make_topology(name='demo');client=_mock_host_client();clients={'master':client};ips={'master':'10.0.0.10'}
+    plan=_plan_with_assignments('demo',{'master':['R1']})
+    info=relay_svc.deploy_runtime_relays(topo,plan,clients,ips,'secret')['master']
+    current={'master':RuntimeRelayState(host='master',**{k:v for k,v in info.items() if k not in ('generation','container_id')})}
+    api=relay_guard['master'].api;before=[c for c in api.calls if c[0]!='GET']
+    with pytest.raises(RuntimeError,match='generation unqualified'):
+        relay_svc.reconcile_runtime_relays(topo,plan,clients,ips,'secret',current)
+    assert [c for c in api.calls if c[0]!='GET']==before
 
-    relay_svc.reconcile_runtime_relays(
-        topo, plan, {"master": client}, {"master": "10.0.0.10"},
-        "secret", current,
-    )
 
-    commands = [call.args[0] for call in client.run.call_args_list]
-    assert any("docker rm -f" in command for command in commands)
-    assert any("docker run -d" in command for command in commands)
+def test_all_hosts_preflight_precedes_any_relay_allocation(relay_guard):
+    topo=make_topology(name='demo',num_workers=1)
+    plan=_plan_with_assignments('demo',{'master':['R1'],'worker1':['R2']})
+    # Seed a foreign name on the last host. The first host must remain untouched.
+    clients={'master':_mock_host_client(),'worker1':_mock_host_client()}
+    original=relay_svc._guard
+    def conflict(client,lab,host,action,config=None,generation=None):
+        if host=='worker1' and action=='preflight':raise RuntimeError('foreign relay')
+        return original(client,lab,host,action,config,generation)
+    from unittest.mock import patch
+    with patch.object(relay_svc,'_guard',conflict),pytest.raises(RuntimeError,match='foreign relay'):
+        relay_svc.deploy_runtime_relays(topo,plan,clients,{'master':'10.0.0.10','worker1':'10.0.0.11'},'secret')
+    assert relay_guard['master'].api.creates==0
+
+
+@pytest.mark.parametrize('action',['deploy','reconcile'])
+@pytest.mark.parametrize('fault',['absent','stopped','pending'])
+def test_last_host_unavailable_relay_blocks_all_allocations(relay_guard,action,fault):
+    topo=make_topology(name='demo',num_workers=1)
+    ips={'master':'10.0.0.10','worker1':'10.0.0.11'}
+    clients={host:_mock_host_client() for host in ips}
+    plan=_plan_with_assignments('demo',{'worker1':['R2']})
+    previous=relay_svc.deploy_runtime_relays(topo,plan,{'worker1':clients['worker1']},ips,'secret')
+    worker=relay_guard['worker1'];record=worker.read()
+    if fault=='absent':worker.api.values.clear()
+    if fault=='stopped':worker.api.values[record['container_id']]['State']['Running']=False
+    if fault=='pending':record['phase']='recovery_required';worker.save(record)
+    original=deepcopy(worker.read());resources=deepcopy(worker.api.values)
+    mutations=[c for c in worker.api.calls if c[0]!='GET']
+    plan.assignments['master']=HostAssignment('master',ips['master'],['R1'])
+    with pytest.raises(RuntimeError):
+        if action=='deploy':relay_svc.deploy_runtime_relays(topo,plan,clients,ips,'secret')
+        else:
+            current={h:RuntimeRelayState(host=h,**info) for h,info in previous.items()}
+            relay_svc.reconcile_runtime_relays(topo,plan,clients,ips,'secret',current)
+    master=relay_guard['master']
+    assert master.api.creates==0 and master.api.values=={} and master.read() is None
+    assert not [c for c in master.api.calls if c[0]!='GET']
+    assert worker.read()==original and worker.api.values==resources
+    assert [c for c in worker.api.calls if c[0]!='GET']==mutations
 
 
 def test_relay_authorizes_lab_prefix_but_not_another_lab(monkeypatch):
@@ -231,7 +216,7 @@ def test_relay_authorizes_lab_prefix_but_not_another_lab(monkeypatch):
     assert not relay_daemon._authorized("secret", "clab-dnlab-demo-arbitrary")
 
 
-def test_deploy_runtime_relay_missing_image_raises():
+def test_deploy_runtime_relay_missing_image_raises(relay_guard):
     topo = make_topology(name="demo")
     plan = _plan_with_assignments("demo", {"master": ["R1"]})
 
@@ -245,17 +230,16 @@ def test_deploy_runtime_relay_missing_image_raises():
         )
 
 
-def test_destroy_runtime_relays_removes_sidecar_on_each_host():
-    clients = {"master": MagicMock(), "worker1": MagicMock()}
-
-    relay_svc.destroy_runtime_relays("demo", clients)
-
-    for client in clients.values():
-        run_cmds = [c.args[0] for c in client.run.call_args_list]
-        assert any(
-            f"docker rm -f {runtime_relay_container_name('demo')}" in cmd
-            for cmd in run_cmds
-        )
+def test_destroy_runtime_relays_removes_sidecar_on_each_host(relay_guard):
+    clients={'master':MagicMock(),'worker1':MagicMock()}
+    topo=make_topology(name='demo',num_workers=1)
+    plan=_plan_with_assignments('demo',{'master':['R1'],'worker1':['R2']})
+    results=relay_svc.deploy_runtime_relays(topo,plan,clients,{'master':'10.0.0.10','worker1':'10.0.0.11'},'secret')
+    current={host:RuntimeRelayState(host=host,**info) for host,info in results.items()}
+    relay_svc.destroy_runtime_relays('demo',clients,current)
+    for host,client in clients.items():
+        assert relay_guard[host].api.values=={}
+        assert not client.run.called
 
 
 def test_connect_cmd_returns_serial_port(monkeypatch):
@@ -395,14 +379,7 @@ def test_relay_pty_disconnect_cleans_container_telnet(monkeypatch):
     finally:
         relay_sock.close()
 
-    assert cleanup_calls == [[
-        "docker",
-        "exec",
-        "container1",
-        "sh",
-        "-c",
-        "pkill -f '[t]elnet 127[.]0[.]0[.]1 5000' || true",
-    ]]
+    assert cleanup_calls == [["docker", "exec", "container1", "python3", "-c", relay_daemon._TELNET_CLEANUP, "5000"]]
 
 
 def test_relay_pty_shell_fallback_does_not_cleanup_telnet(monkeypatch):
@@ -443,13 +420,14 @@ def test_relay_pty_shell_fallback_does_not_cleanup_telnet(monkeypatch):
     assert cleanup_calls == []
 
 
-def test_container_telnet_cleanup_errors_are_best_effort(monkeypatch):
+def test_container_telnet_cleanup_errors_are_visible(monkeypatch):
     def fake_run(*_args, **_kwargs):
         raise TimeoutError("docker stuck")
 
     monkeypatch.setattr(relay_daemon.subprocess, "run", fake_run)
 
-    relay_daemon._cleanup_container_telnet("container1", "5000")
+    with pytest.raises(TimeoutError):
+        relay_daemon._cleanup_container_telnet("container1", "5000")
 
 
 def test_console_broker_fanout_input_replay_and_grace(monkeypatch):

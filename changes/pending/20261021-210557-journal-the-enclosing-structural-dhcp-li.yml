@@ -1,0 +1,15 @@
+id: 20261021-210557-journal-the-enclosing-structural-dhcp-li
+type: internal
+title: Journal the enclosing structural DHCP lifecycle before shutdown
+description: Persist desired configuration and original service proof before stopping
+  DHCP, resume inode-preserving asset writes and one nonce-bound exec through lost
+  replies, qualify live daemon inventory and retain pending state until coordinator
+  readiness. Keep the flow private with no public barrier release.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

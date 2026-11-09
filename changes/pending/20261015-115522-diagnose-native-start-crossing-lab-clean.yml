@@ -1,0 +1,17 @@
+id: 20261015-115522-diagnose-native-start-crossing-lab-clean
+type: internal
+title: Fence lab finalization against late native runtime mutations
+description: Persist a lab closing fence in the private coordinator ledger and
+  local runtime journal before delegated teardown. Reject delayed lifecycle, link,
+  and management mutations while allowing only the original qualified stop intents
+  and their verified cleanup children. Keep a closed tombstone after state removal;
+  require explicit verified reopening and a new lab generation. Recover unknown
+  closure and reopening acknowledgements with the same immutable identity.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

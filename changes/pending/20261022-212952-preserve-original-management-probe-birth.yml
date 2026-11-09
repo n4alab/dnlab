@@ -1,0 +1,14 @@
+id: 20261022-212952-preserve-original-management-probe-birth
+type: bugfix
+title: Preserve original management probe birth throughout recovery
+description: Keep the coordinator birth proof immutable, use read-only inspection
+  for bound recovery, and carry the expected proof to local packet and cleanup actions
+  checked under lock; retain state and the workload fence on conflicts.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

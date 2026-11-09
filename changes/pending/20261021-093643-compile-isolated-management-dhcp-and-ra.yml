@@ -1,0 +1,14 @@
+id: 20261021-093643-compile-isolated-management-dhcp-and-ra
+type: feature
+title: Compile isolated management DHCP and RA segments
+description: Add a pure opt-in compiler tied to resolved management and service intents,
+  with distinct interfaces, range tags, reservations and IPv6 DNS per segment; retain
+  separate structural provisioning and dynamic reservation operations.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

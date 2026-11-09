@@ -1,0 +1,15 @@
+id: 20261027-002308-record-management-usage-before-managed-i
+type: bugfix
+title: Record management usage before managed initial workload creation
+description: Persist the original all-host management usage handoff before creating
+  managed initial workloads. Reobserve qualified network and kernel generations before
+  mutations and publication; recover lost acknowledgements without repeating marks,
+  and reject missing pre-birth intents after allocation.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

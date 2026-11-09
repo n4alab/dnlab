@@ -1,0 +1,13 @@
+id: 20261028-115250-preserve-valid-json-in-cleanup-cli-repor
+type: bugfix
+title: Preserve valid JSON in cleanup CLI reports
+description: Emit cleanup-labs --json reports without terminal wrapping or Rich markup
+  processing, preserving long Docker IDs and literal report values.
+components:
+- multinode
+audience:
+- operator
+visibility: public
+breaking: false
+upgrade_notes: []
+references: []

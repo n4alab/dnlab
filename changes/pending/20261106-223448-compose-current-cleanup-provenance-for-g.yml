@@ -1,0 +1,14 @@
+id: 20261106-223448-compose-current-cleanup-provenance-for-g
+type: internal
+title: Compose current cleanup provenance for gate admission
+description: Combine executed artifact descriptors with fresh actor and environment
+  observations, rejecting changed gate conditions while preserving default live-runner
+  denial.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

@@ -1,0 +1,15 @@
+id: 20261022-213742-reproduce-unqualified-probe-process-retr
+type: internal
+title: Reproduce unqualified probe process retry and cleanup after uncertainty
+description: 'Add two isolated regressions for packet execution still in progress
+  after a lost worker response: retry starts another execution and cleanup can complete
+  without qualifying original process exit. Record the process-only reproduction separately
+  pending correction.'
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

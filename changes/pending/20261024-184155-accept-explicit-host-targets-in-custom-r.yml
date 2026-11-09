@@ -1,0 +1,14 @@
+id: 20261024-184155-accept-explicit-host-targets-in-custom-r
+type: bugfix
+title: Accept explicit host targets in custom runtime compilation
+description: Preserve an explicitly selected host runtime through initial deployment
+  compilation and coordinator admission. Runtime containers still require a valid
+  name; missing or invalid names never fall back to the host.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

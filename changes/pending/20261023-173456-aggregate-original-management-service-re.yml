@@ -1,0 +1,15 @@
+id: 20261023-173456-aggregate-original-management-service-re
+type: internal
+title: Aggregate original management service readiness before release
+description: Compile probe coverage once for execution and readiness, reobserve original
+  management and service generations, validate DHCP, DNS and routed-pair packet evidence
+  and verified cleanup, then release the original workload fence without new packets
+  or implicit repairs. Guest readiness remains separate.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

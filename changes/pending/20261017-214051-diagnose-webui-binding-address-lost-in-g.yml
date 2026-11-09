@@ -1,0 +1,14 @@
+id: 20261017-214051-diagnose-webui-binding-address-lost-in-g
+type: internal
+title: Diagnose WebUI binding address lost in generation
+description: Six unit diagnostics confirm both current generators drop the configured
+  bind_ip from structured WebUI allocations and emit only host-port/container-port/protocol.
+  No generator correction, native producer or host exposure test is included.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

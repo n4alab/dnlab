@@ -1,0 +1,16 @@
+id: 20261017-212829-preserve-native-management-mac-identity
+type: internal
+title: Preserve native management MAC identity across lifecycle
+description: Add optional canonical management.mac to Linux manifests, set Docker
+  endpoint MAC and verify Docker/kernel peer identity during lifecycle. Reject duplicate
+  or changed identities without mutation, retain restart identity, and gate clients
+  by capability. NOS guest identities remain separate.
+components:
+- multinode
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

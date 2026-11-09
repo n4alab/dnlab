@@ -1,0 +1,14 @@
+id: 20261020-223108-restore-management-dhcpv6-reservations-a
+type: bugfix
+title: Restore management DHCPv6 reservations and router advertisements
+description: Generate reservation-only DHCPv6 ranges from the configured IPv6 prefix
+  and assign the management tag independently of IPv4, avoiding NoAddrsAvail and offers
+  with zero preferred lifetime.
+components:
+- multinode
+audience:
+- operator
+visibility: public
+breaking: false
+upgrade_notes: []
+references: []

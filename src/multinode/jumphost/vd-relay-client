@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import os
+import re
 import select
 import shlex
 import signal
@@ -18,8 +19,8 @@ READ_SIZE = 4096
 def _usage() -> int:
     print(
         "Usage:\n"
-        "  vd-relay-client connect <host> <port> <api_key> <container>\n"
-        "  vd-relay-client log <host> <port> <api_key> <container> <tail> <follow>",
+        "  vd-relay-client connect <host> <port> <api_key> <container> [container_id]\n"
+        "  vd-relay-client log <host> <port> <api_key> <container> <tail> <follow> [container_id]",
         file=sys.stderr,
     )
     return 2
@@ -51,10 +52,12 @@ def _read_status(sock_file) -> str:
 
 
 def _run_log(argv: list[str]) -> int:
-    if len(argv) != 6:
+    if len(argv) not in (6,7):
         return _usage()
-    host, port, api_key, container, tail, follow = argv
-    with _open(host, port, "LOG", api_key, container, tail, follow) as sock:
+    host, port, api_key, container, tail, follow = argv[:6]
+    identity=argv[6:]
+    if identity and not re.fullmatch('[0-9a-f]{64}',identity[0]):return _usage()
+    with _open(host, port, "LOG_ID" if identity else "LOG", api_key, container, *identity, tail, follow) as sock:
         with sock.makefile("rb", buffering=0) as sock_file:
             status = _read_status(sock_file)
             if status != "OK":
@@ -70,10 +73,12 @@ def _run_log(argv: list[str]) -> int:
 
 
 def _run_connect(argv: list[str]) -> int:
-    if len(argv) != 4:
+    if len(argv) not in (4,5):
         return _usage()
-    host, port, api_key, container = argv
-    sock = _open(host, port, "CONNECT", api_key, container)
+    host, port, api_key, container = argv[:4]
+    identity=argv[4:]
+    if identity and not re.fullmatch('[0-9a-f]{64}',identity[0]):return _usage()
+    sock = _open(host, port, "CONNECT_ID" if identity else "CONNECT", api_key, container, *identity)
     old_term = None
     stdin_fd = sys.stdin.fileno()
     stdout = sys.stdout.buffer

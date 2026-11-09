@@ -1,0 +1,16 @@
+id: 20261027-004133-add-qualified-retirement-for-unmarked-in
+type: bugfix
+title: Add qualified retirement for unmarked initial management attachments
+description: Add a separate deletion-only coordinator intent and read-only network
+  observer for original managed batches missing the pre-birth usage handoff. Pin original
+  network and workload generations, fence new mutations, require ordinary verified
+  shutdown before ordered guarded infrastructure cleanup, and retain journals on conflict
+  or uncertain delivery without changing admission flags.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

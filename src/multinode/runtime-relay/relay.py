@@ -4,13 +4,17 @@
 The relay is intentionally narrow: it accepts CONNECT and LOG requests for
 containers explicitly allowlisted at deploy time, guarded by one lab-scoped
 API key. It is the only component in this path with the Docker socket.
+Native clients use CONNECT_ID/LOG_ID with an immutable Docker ID. All their
+Docker commands and console broker keys use the qualified ID, never the name.
 """
 
 from __future__ import annotations
 
 import os
+import json
 import pty
 import queue
+import re
 import select
 import shlex
 import signal
@@ -28,6 +32,7 @@ API_KEY = os.getenv("RELAY_API_KEY", "")
 ALLOWED = {x for x in os.getenv("RELAY_ALLOWED_CONTAINERS", "").split() if x}
 ALLOWED_PREFIX = os.getenv("RELAY_ALLOWED_PREFIX", "")
 READ_SIZE = 4096
+MAX_REQUEST_BYTES = 8192
 CONSOLE_PORT_FILE = "/run/dnlab-console-port"
 CONSOLE_PORTS = {str(port) for port in range(5000, 5008)}
 CONSOLE_HISTORY_BYTES = 64 * 1024
@@ -101,6 +106,8 @@ class _ConsoleBroker:
         self.master_fd: int | None = None
         self._lock = threading.RLock()
         self._input_lock = threading.Lock()
+        self._upstream_lifecycle_lock = threading.RLock()
+        self._cleanup_error = None
         self._subscribers: set[_ConsoleSubscriber] = set()
         self._history = bytearray()
         self._grace_timer: threading.Timer | None = None
@@ -141,6 +148,20 @@ class _ConsoleBroker:
             self.close()
 
     def _start_upstream(self, cmd: list[str], port: str | None) -> None:
+        with self._upstream_lifecycle_lock:
+            with self._lock:
+                if self._closed: return
+                self.port = port
+            try:
+                _cleanup_container_telnet(self.container, port)
+            except Exception as error:
+                self._cleanup_error = type(error).__name__
+                raise
+            with self._lock:
+                if self._closed: return
+            self._open_upstream(cmd, port)
+
+    def _open_upstream(self, cmd: list[str], port: str | None) -> None:
         master_fd, slave_fd = pty.openpty()
         try:
             proc = subprocess.Popen(
@@ -282,6 +303,10 @@ class _ConsoleBroker:
             self.master_fd = None
             proc = self.proc
             self.proc = None
+        with self._upstream_lifecycle_lock:
+            self._finish_close(subscribers, master_fd, proc)
+
+    def _finish_close(self, subscribers, master_fd, proc):
         for subscriber in subscribers:
             subscriber.close()
         if master_fd is not None:
@@ -311,8 +336,12 @@ class _ConsoleBroker:
                 pass
         try:
             _cleanup_container_telnet(self.container, self.port)
+        except Exception as error:
+            self._cleanup_error = type(error).__name__
+            print("console cleanup failed: " + self._cleanup_error, file=sys.stderr)
         finally:
-            _remove_console_broker(self.container, self)
+            if self._cleanup_error is None:
+                _remove_console_broker(self.container, self)
             self._cleanup_done.set()
 
 
@@ -334,6 +363,8 @@ def _get_console_broker(container: str) -> _ConsoleBroker:
         # cleanup has finished, otherwise its best-effort pkill could race
         # with and terminate the new upstream.
         broker._cleanup_done.wait()
+        if broker._cleanup_error is not None:
+            raise RuntimeError("console cleanup failed; qualified recovery required")
 
 
 def _remove_console_broker(container: str, broker: _ConsoleBroker) -> None:
@@ -354,14 +385,18 @@ def _send_line(sock: socket.socket, line: str) -> None:
 
 
 def _read_request(sock: socket.socket) -> list[str] | None:
-    buf = b""
-    while b"\n" not in buf and len(buf) < 8192:
-        chunk = sock.recv(1024)
+    # The broker reads from this same socket. Do not read ahead into console
+    # input: clients may send it before the guest has produced any output.
+    buf = bytearray()
+    while len(buf) < MAX_REQUEST_BYTES:
+        chunk = sock.recv(1)
         if not chunk:
             return None
-        buf += chunk
-    line = buf.split(b"\n", 1)[0].decode(errors="replace").strip()
-    return shlex.split(line) if line else None
+        buf.extend(chunk)
+        if chunk == b"\n":
+            line = buf.decode(errors="replace").strip()
+            return shlex.split(line) if line else None
+    raise ValueError("relay request exceeds size limit")
 
 
 def _authorized(key: str, container: str) -> bool:
@@ -396,6 +431,27 @@ def _container_running(container: str) -> bool:
         check=False,
     )
     return proc.returncode == 0 and proc.stdout.strip() == "true"
+
+
+def _resolve_target(container: str, expected_id: str | None = None) -> str:
+    """Verify the requested name, then address native operations by full ID."""
+    if expected_id is not None and not re.fullmatch(r'[0-9a-f]{64}',expected_id):
+        raise RuntimeError('invalid container identity')
+    proc=subprocess.run(['docker','inspect','--type','container',container],
+                        capture_output=True,text=True,timeout=5,check=False)
+    if proc.returncode:raise RuntimeError('container identity unavailable')
+    values=json.loads(proc.stdout)
+    if not isinstance(values,list) or len(values)!=1 or not isinstance(values[0],dict):
+        raise RuntimeError('container identity ambiguous')
+    value=values[0]
+    if value.get('Name')!='/'+container or value.get('State',{}).get('Running') is not True:
+        raise RuntimeError('container identity or state differs')
+    if expected_id is not None:
+        if value.get('Id')!=expected_id:raise RuntimeError('container generation differs')
+        return expected_id
+    if 'org.dnlab.runtime' in (value.get('Config',{}).get('Labels') or {}):
+        raise RuntimeError('native container requires qualified identity')
+    return container
 
 
 def _discover_console_port(container: str) -> str:
@@ -501,29 +557,61 @@ def _connect_cmd(container: str) -> tuple[list[str], str | None] | None:
     )
 
 
+# Executed inside the VD: no procps dependency, exact argv and PID-safe signals.
+_TELNET_CLEANUP = r"""
+import os,select,signal,sys
+port=sys.argv[1]
+if port not in {str(v) for v in range(5000,5008)}:raise RuntimeError('invalid serial port')
+if not hasattr(os,'pidfd_open') or not hasattr(signal,'pidfd_send_signal'):
+ raise RuntimeError('pidfd support required for serial recovery')
+for name in os.listdir('/proc'):
+ if not name.isdigit():continue
+ fd=None
+ try:
+  fd=os.pidfd_open(int(name))
+  with open('/proc/'+name+'/cmdline','rb') as stream:argv=stream.read().split(b'\0')
+  if argv and argv[-1]==b'':argv.pop()
+  if len(argv)!=3 or os.path.basename(argv[0]) not in (b'telnet',b'inetutils-telnet') or argv[1:]!=[b'127.0.0.1',port.encode()]:continue
+  signal.pidfd_send_signal(fd,signal.SIGTERM)
+  poll=select.poll();poll.register(fd,select.POLLIN)
+  if not poll.poll(2000):raise RuntimeError('serial client did not exit after TERM')
+ except ProcessLookupError:pass
+ except FileNotFoundError:
+  # A disappeared proc entry is benign only when its pinned process exited.
+  if fd is not None:
+   poll=select.poll();poll.register(fd,select.POLLIN)
+   if not poll.poll(0):raise RuntimeError('serial process observation incomplete')
+ finally:
+  if fd is not None:os.close(fd)
+"""
+
+
 def _cleanup_container_telnet(container: str, port: str | None) -> None:
-    if not port:
+    if port is None:
         return
     if port not in CONSOLE_PORTS:
-        return
-    pattern = f"[t]elnet 127[.]0[.]0[.]1 {port}"
+        raise RuntimeError("Invalid serial port for recovery")
     try:
-        subprocess.run(
-            [
-                "docker",
-                "exec",
-                container,
-                "sh",
-                "-c",
-                f"pkill -f {shlex.quote(pattern)} || true",
-            ],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            timeout=3,
-            check=False,
+        result = subprocess.run(
+            ["docker", "exec", container, "python3", "-c", _TELNET_CLEANUP, port],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            text=True, timeout=10, check=False,
         )
-    except Exception:
-        pass
+    except subprocess.TimeoutExpired as error:
+        raise RuntimeError("Serial recovery timed out") from error
+    if result.returncode:
+        detail = result.stderr or ""
+        if "pidfd support required" in detail:
+            reason = "pidfd support unavailable in VD Python"
+        elif "serial client did not exit" in detail:
+            reason = "serial client did not exit after TERM"
+        elif "serial process observation incomplete" in detail:
+            reason = "serial process qualification incomplete"
+        elif result.returncode == 127:
+            reason = "Python unavailable in VD image"
+        else:
+            reason = "Docker exec or process qualification failed"
+        raise RuntimeError("Serial recovery failed: " + reason)
 
 
 def _relay_pty(sock: socket.socket, cmd: list[str], container: str, port: str | None) -> None:
@@ -647,9 +735,15 @@ def _handle(sock: socket.socket, _addr) -> None:
             if not _authorized(key, container):
                 _send_line(sock, "ERR unauthorized")
                 return
-            if not _container_running(container):
-                _send_line(sock, "ERR container not running")
-                return
+            qualified=action in ('CONNECT_ID','LOG_ID')
+            if qualified:
+                if len(parts)!=(4 if action=='CONNECT_ID' else 6):
+                    raise RuntimeError('invalid qualified request')
+                container=_resolve_target(container,parts[3])
+                action=action.removesuffix('_ID')
+                parts=parts[:3]+parts[4:]
+            else:
+                container=_resolve_target(container)
             if action == "CONNECT":
                 _get_console_broker(container).attach(sock)
                 return

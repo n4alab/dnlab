@@ -1,0 +1,14 @@
+id: 20261018-231237-resolve-opt-in-native-management-segment
+type: internal
+title: Resolve opt-in native management segments before batch admission
+description: Native planning resolves segment-scoped addresses and VD identities,
+  preserves immutable assignments and compiled provenance, and checks runtime network
+  proofs before admitting a complete workload batch.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

@@ -1,0 +1,19 @@
+id: 20261013-151628-diagnose-realnet-infrastructure-prefligh
+type: internal
+title: Integrate guarded RealNet data detach with infrastructure preflight and recovery
+description: Qualify VD data attachments from existing host intents during read-only
+  complete infrastructure preflight, using a private stable DB/WAL snapshot to avoid
+  SQLite SHM writes to the live journal. Guarded detach precedes VD cleanup in destroy
+  controller and daemon; persist pending state on failures. Infrastructure deletion
+  holds the custom link resource lock, requires all attachments cleaned and never
+  deletes VD data veths. Native isolated gate passed with 17 real crash/recovery cases,
+  data traffic, VD veth and management/control preservation and complete fixture cleanup.
+  Production ownership proof generation and distributed/NOS qualification remain pending.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

@@ -1,0 +1,15 @@
+id: 20261021-131154-journal-structural-dhcp-main-writes-with
+type: internal
+title: Journal structural DHCP main writes without replacing the bind inode
+description: Add a shutdown-gated main-file writer with bounded write-ahead chunks,
+  strict file and directory identity, partial-write recovery and fsync propagation.
+  Qualify original-inode visibility through a real read-only Docker bind. The enclosing
+  structural service operation remains private and incomplete.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

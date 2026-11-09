@@ -1,0 +1,16 @@
+id: 20261021-134457-recover-dhcp-shutdown-after-losing-the-o
+type: internal
+title: Recover DHCP shutdown after losing the original exit receipt
+description: Add a private persisted DHCP stop sub-operation and read-only original-generation
+  shutdown probe. Verify container, attachments, mounted assets, PID/log/executable
+  identity and namespace inventory; retain conflicts and reverify committed exit without
+  signalling replacement processes. Qualify lost-receipt recovery on an isolated real
+  helper.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

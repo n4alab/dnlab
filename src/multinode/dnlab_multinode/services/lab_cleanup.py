@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from contextlib import nullcontext
+
 import json
 import logging
 import re
@@ -14,7 +16,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from dnlab_multinode.models.state import DeploymentState
-from dnlab_multinode.services import mgmt_network as mgmt_network_svc, state as state_svc
+from dnlab_multinode.services import mgmt_network as mgmt_network_svc, state as state_svc, realnet as realnet_svc
 from dnlab_multinode.services.hosts_config import HostsConfig
 from dnlab_multinode.services.paths import PATHS
 from dnlab_multinode.services.ssh import SSHClient, create_clients
@@ -217,7 +219,7 @@ def expected_artifacts_from_state(state: DeploymentState) -> list[CleanupArtifac
     """Build state-derived cleanup targets that are safe to name exactly."""
     lab = state.lab_name
     out: list[CleanupArtifact] = []
-    for runtime in state.node_runtime.values():
+    for runtime in {**state.retired_native_nodes,**state.node_runtime}.values():
         if runtime.host and runtime.container:
             out.append(CleanupArtifact("container", runtime.container, runtime.host, lab, source="state"))
     if state.dns:
@@ -237,11 +239,16 @@ def expected_artifacts_from_state(state: DeploymentState) -> list[CleanupArtifac
                 metadata={"role": "mgmt-anchor"},
             ))
     for rn in state.realnets:
-        for host in rn.hosts or ["master"]:
+        metadata={"role":"realnet","realnet":rn.name}
+        for host in set(rn.hosts or ["master"]) | set(rn.vxlan_ifaces):
             if rn.bridge:
-                out.append(CleanupArtifact("interface", rn.bridge, host, lab, source="state"))
+                out.append(CleanupArtifact("interface", rn.bridge, host, lab, source="state",metadata=dict(metadata)))
+            for name in rn.vxlan_ifaces.get(host,[]):
+                out.append(CleanupArtifact("interface",name,host,lab,source="state",metadata=dict(metadata)))
+        if rn.router_veth:
+            out.append(CleanupArtifact("interface",rn.router_veth,"master",lab,source="state",metadata=dict(metadata)))
         if rn.router_container:
-            out.append(CleanupArtifact("container", rn.router_container, "master", lab, source="state"))
+            out.append(CleanupArtifact("container", rn.router_container, "master", lab, source="state",metadata=dict(metadata)))
     if state.mgmt:
         network = state.mgmt.network or naming.mgmt_network_name(lab)
         for host in state.scheduling or {}:
@@ -337,6 +344,11 @@ def build_cleanup_plan(
         if state:
             expected_hosts.update(a.host for a in expected_artifacts_from_state(state) if a.host)
 
+        expected_hosts.update(a.host for a in artifacts if a.host)
+        if state is None:expected_hosts.update(inventories)
+        reason=_vd_block_reason(artifacts,state)
+        if reason:
+            plan.protected=True;plan.reasons.append(reason)
         teardown_requested = bool(state and state.teardown_requested)
         if not teardown_requested and _lab_has_running_vd(lab, artifacts, state):
             plan.protected = True
@@ -396,7 +408,8 @@ def reconcile_once(
         labs=plans,
     )
     if not effective_dry_run:
-        _execute_plans(plans, clients or create_clients(hosts.all_hosts), own_clients=clients is None)
+        _execute_plans(plans, clients or create_clients(hosts.all_hosts), own_clients=clients is None,
+                       states=states,state_directory=Path(topologies_dir))
         teardown_status = _finalize_requested_teardowns(
             states,
             Path(topologies_dir),
@@ -476,7 +489,7 @@ def _list_containers(client: SSHClient, host: str, known_labs: set[str]) -> list
         timeout=20,
     )
     if rc != 0:
-        return []
+        raise RuntimeError("cannot read VD container inventory")
     artifacts = []
     for line in out.splitlines():
         parts = line.split("\t")
@@ -493,7 +506,36 @@ def _list_containers(client: SSHClient, host: str, known_labs: set[str]) -> list
             lab=lab,
             state=parts[1],
             age_seconds=_age_from_created_at(parts[2] if len(parts) > 2 else ""),
+            metadata={"live_observed":True},
         ))
+    # Discover custom workloads independently of naming and without returning
+    # their environment or birth nonce in the cleanup report.
+    rc,ids,_=client.run_no_check("docker container ls -aq --no-trunc --filter label=org.dnlab.runtime",timeout=20)
+    if rc!=0:raise RuntimeError("cannot read runtime-owned VD inventory")
+    fields={'id':'.Id','name':'.Name','state':'.State.Status','created':'.Created',
+            'backend':'index .Config.Labels "org.dnlab.runtime"',
+            'lab':'index .Config.Labels "org.dnlab.runtime.lab"',
+            'node':'index .Config.Labels "org.dnlab.runtime.node"',
+            'creator':'index .Config.Labels "org.dnlab.runtime.creator"',
+            'spec':'index .Config.Labels "org.dnlab.runtime.spec"'}
+    template='{'+','.join(json.dumps(k)+':{{json ('+v+')}}' for k,v in fields.items())+'}'
+    for cid in ids.splitlines():
+        if not re.fullmatch(r'[0-9a-f]{64}',cid):raise RuntimeError("invalid runtime container identity")
+        rc,raw,_=client.run_no_check(shlex.join(['docker','inspect','--format',template,cid]),timeout=20)
+        if rc!=0:raise RuntimeError("runtime VD identity unavailable")
+        try:value=json.loads(raw)
+        except (ValueError,TypeError):raise RuntimeError("invalid runtime VD metadata") from None
+        if (not isinstance(value,dict) or value.get('id')!=cid or not isinstance(value.get('name'),str)
+                or not value['name'].startswith('/') or not isinstance(value.get('state'),str)):
+            raise RuntimeError("runtime VD metadata identity differs")
+        name=value['name'][1:];claimed=value.get('lab');inferred=parse_artifact_lab('container',name,known_labs)
+        if not isinstance(claimed,str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,62}',claimed):
+            raise RuntimeError("runtime VD lab ownership is unqualified")
+        owner={k:value.get(k) for k in ('backend','lab','node','creator','spec')}
+        for lab in {claimed,inferred}-{'',None}:
+            artifacts.append(CleanupArtifact('container',name,host,lab,state=value['state'],
+                age_seconds=_age_from_created_at(value.get('created','')),
+                metadata={'live_observed':True,'container_id':cid,'runtime_owner':owner}))
     return artifacts
 
 
@@ -604,8 +646,33 @@ def _action_for_artifact(
     artifact: CleanupArtifact,
     state: DeploymentState | None,
 ) -> CleanupAction | None:
-    if artifact.shared:
+    if artifact.shared or _is_vd_container(artifact,artifact.lab,state):
         return None
+    if (artifact.metadata.get("role")=="realnet"
+            or artifact.kind=="container" and _REALNET_CONTAINER_RE.fullmatch(artifact.name)
+            or state and any(item.metadata.get("role")=="realnet" and
+                            (item.host,item.kind,item.name)==(artifact.host,artifact.kind,artifact.name)
+                            for item in expected_artifacts_from_state(state))):
+        # Inventory names authorize observation, never generic deletion.
+        return None
+    if artifact.kind == "container" and (
+        artifact.name == naming.runtime_relay_container_name(artifact.lab)
+        or state and any(artifact.name == relay.container for relay in state.runtime_relays.values())
+    ):
+        return CleanupAction(action="cleanup-relay", artifact=artifact, command="",
+                             reason="journal-owned relay cleanup; never remove by name")
+    if artifact.kind == "container" and (
+        artifact.name == f"dnlab-{artifact.lab}-dns"
+        or state and state.dns and artifact.name == state.dns.container
+    ):
+        return CleanupAction(action="cleanup-dns", artifact=artifact, command="",
+                             reason="journal-owned DNS cleanup; never remove by name")
+    if artifact.kind == "container" and (
+        artifact.name == naming.jumphost_container_name(artifact.lab)
+        or state and state.jumphost and artifact.name == state.jumphost.container
+    ):
+        return CleanupAction(action="cleanup-jumphost", artifact=artifact, command="",
+                             reason="journal-owned jumphost cleanup; never remove by name")
     if artifact.kind == "container":
         if (
             artifact.state
@@ -619,6 +686,8 @@ def _action_for_artifact(
             command=f"docker rm -f {shlex.quote(artifact.name)}",
             reason="stale dNLab lab container",
         )
+    if artifact.kind == "network" and artifact.metadata.get('role') == 'mgmt-network':
+        return None  # Docker birth journal, never generic network rm by name.
     if artifact.kind == "network":
         containers = artifact.metadata.get("containers")
         # A state-derived network must also be observed live and empty before
@@ -637,6 +706,8 @@ def _action_for_artifact(
             command=f"docker network rm {shlex.quote(artifact.name)}",
             reason="empty per-lab docker network",
         )
+    if artifact.kind == "interface" and artifact.metadata.get('role') == 'mgmt-infra':
+        return None  # Host journal is the only authority for management teardown.
     if artifact.kind == "interface":
         if state is None and artifact.source != "state":
             return None
@@ -705,7 +776,7 @@ def _expected_vd_container_names(lab: str, state: DeploymentState | None) -> set
     names: set[str] = set()
     if not state:
         return names
-    for runtime in state.node_runtime.values():
+    for runtime in {**state.retired_native_nodes,**state.node_runtime}.values():
         if runtime.container:
             names.add(runtime.container)
         if runtime.node:
@@ -718,25 +789,68 @@ def _expected_vd_container_names(lab: str, state: DeploymentState | None) -> set
     return names
 
 
-def _is_vd_container(
-    artifact: CleanupArtifact,
-    lab: str,
-    state: DeploymentState | None,
-    expected_names: set[str] | None = None,
-) -> bool:
-    if artifact.kind != "container":
-        return False
-    if _is_mgmt_anchor_container(artifact) or _is_service_container(artifact):
-        return False
-    expected_names = expected_names if expected_names is not None else _expected_vd_container_names(lab, state)
-    if artifact.name in expected_names:
-        return True
+def _is_vd_container(artifact,lab,state,expected_names=None):
+    if artifact.kind!='container':return False
+    if artifact.metadata.get('runtime_owner'):return True
+    expected_names=expected_names if expected_names is not None else _expected_vd_container_names(lab,state)
+    if artifact.name in expected_names:return True
+    if _is_mgmt_anchor_container(artifact) or _is_service_container(artifact):return False
+    return artifact.name.startswith(f'clab-{lab}-') or artifact.name.startswith(f'clab-dnlab-{lab}-')
+
+
+def _vd_block_reason(artifacts,state):
     if state:
-        return False
-    return (
-        artifact.name.startswith(f"clab-{lab}-")
-        or artifact.name.startswith(f"clab-dnlab-{lab}-")
-    )
+        for runtime in {**state.retired_native_nodes,**state.node_runtime}.values():
+            if not runtime.runtime_binding and runtime.state not in ('running','stopped'):
+                return 'vd-lifecycle-unresolved'
+        if any(r.runtime_binding for r in {**state.retired_native_nodes,**state.node_runtime}.values()) and not state.teardown_requested:
+            return 'runtime-teardown-intent-required'
+    for artifact in artifacts:
+        if not _is_vd_container(artifact,artifact.lab,state):continue
+        if not artifact.state and not artifact.metadata.get('live_observed'):continue
+        runtime=next((r for r in {**state.retired_native_nodes,**state.node_runtime}.values() if r.host==artifact.host and r.container==artifact.name),None) if state else None
+        if not runtime or not runtime.runtime_binding:return 'vd-ownership-unqualified'
+        owner=artifact.metadata.get('runtime_owner')
+        if owner and (owner.get('backend')!='v1' or owner.get('lab')!=artifact.lab or owner.get('node')!=runtime.node):
+            return 'vd-ownership-conflict'
+        if not state.teardown_requested:return 'runtime-teardown-intent-required'
+    return ''
+
+
+def _vd_preflight(plan,state,clients,state_directory,*,advance,management_guarded=False):
+    from .runtime_cleanup import CleanupBlocked,Delegate,operation_directory,management_cleanup_guard
+    if not management_guarded:
+        with management_cleanup_guard(plan.lab,state,state_directory):
+            return _vd_preflight(plan,state,clients,state_directory,advance=advance,management_guarded=True)
+    required={a.artifact.host for a in plan.actions}
+    if state:
+        required.update(state.scheduling)
+        required.update(a.host for a in expected_artifacts_from_state(state) if a.host)
+    else:required.update(clients)
+    if required-set(clients):raise CleanupBlocked('complete VD preflight: host unavailable')
+    artifacts=[]
+    for host in sorted(required):
+        artifacts.extend(a for a in _list_containers(clients[host],host,{plan.lab}) if a.lab==plan.lab)
+    reason=_vd_block_reason(artifacts,state)
+    if reason:raise CleanupBlocked(reason)
+    if any(a.action=='remove-container' and _is_vd_container(a.artifact,plan.lab,state) for a in plan.actions):
+        raise CleanupBlocked('generic VD cleanup action rejected')
+    bindings=bool(state and any(r.runtime_binding for r in {**state.retired_native_nodes,**state.node_runtime}.values()))
+    ledger=state_directory is not None and (operation_directory(state_directory)/'operations.sqlite3').is_file()
+    if bindings or ledger:
+        if state_directory is None:raise CleanupBlocked('runtime intent directory missing')
+        owner=state or DeploymentState(lab_name=plan.lab,topology_file='')
+        delegate=Delegate(owner,clients,state_directory)
+        try:
+            delegate.preflight(artifacts)
+            if bindings:
+                if state.realnets:raise CleanupBlocked('VD cleanup with RealNet requires its distributed coordinator')
+                if not state.teardown_requested:raise CleanupBlocked('runtime teardown intent required')
+                delegate.fence()
+                done=delegate.advance() if advance else delegate.verified()
+                if not done:raise CleanupBlocked('runtime cleanup pending; dependent infrastructure retained')
+                delegate.seal()
+        finally:delegate.close()
 
 
 def _lab_has_running_vd(
@@ -744,9 +858,8 @@ def _lab_has_running_vd(
     artifacts: list[CleanupArtifact],
     state: DeploymentState | None,
 ) -> bool:
-    # A successful deployment always persists multinode state. Live VD
-    # containers without it are leftovers from an incomplete deploy or destroy;
-    # treating them as authoritative would protect them forever.
+    # Unqualified orphan workloads are protected by the ownership preflight.
+    # This additional running-state rule only applies to known deployment state.
     if state is None:
         return False
     expected_names = _expected_vd_container_names(lab, state)
@@ -762,6 +875,8 @@ def _execute_plans(
     clients: dict[str, SSHClient],
     *,
     own_clients: bool,
+    states: dict[str, DeploymentState] | None = None,
+    state_directory: Path | None = None,
 ) -> None:
     connected: set[str] = set()
     try:
@@ -777,30 +892,151 @@ def _execute_plans(
         for plan in plans.values():
             if plan.protected:
                 continue
-            blocked_mgmt_hosts: set[str] = set()
-            for action in sorted(plan.actions, key=_cleanup_action_priority):
-                client = clients.get(action.artifact.host)
-                if (
-                    action.artifact.host in blocked_mgmt_hosts
-                    and action.artifact.metadata.get("role") == "mgmt-infra"
-                ):
-                    action.error = "skipped: managed Docker network removal failed"
-                    continue
-                if client is None or action.artifact.host not in connected:
-                    action.executed = True
-                    action.ok = False
-                    action.error = "host unavailable"
-                    continue
-                action.executed = True
-                rc, _, err = client.run_no_check(action.command, timeout=30)
-                action.ok = rc == 0
-                action.error = "" if rc == 0 else err.strip()
-                if (
-                    not action.ok
-                    and action.action == "remove-network"
-                    and action.artifact.metadata.get("role") == "mgmt-network"
-                ):
-                    blocked_mgmt_hosts.add(action.artifact.host)
+            state=(states or {}).get(plan.lab)
+            from .native_public import state_guard
+            try:
+                guard=state_guard(state,state_directory) if state else nullcontext()
+                from .runtime_cleanup import management_cleanup_guard
+                with guard, management_cleanup_guard(plan.lab,state,state_directory):
+                    available={name:clients[name] for name in connected}
+                    from . import runtime_relay as relay_svc
+                    try:
+                        for action in plan.actions:
+                            if action.action != 'cleanup-relay': continue
+                            host=action.artifact.host
+                            relay=state.runtime_relays.get(host) if state else None
+                            if not relay or host not in available:raise RuntimeError('relay host or coordinator proof unavailable')
+                            relay_svc.preflight_relay_cleanup(plan.lab,host,available[host],relay.generation)
+                    except Exception as exc:
+                        plan.protected=True;plan.reasons.append('relay-preflight-failed');plan.warnings.append(str(exc))
+                        continue
+                    from . import dns as dns_svc
+                    try:
+                        for action in plan.actions:
+                            if action.action != 'cleanup-dns': continue
+                            host = action.artifact.host
+                            if host not in available: raise RuntimeError('DNS host unavailable')
+                            if not state or not state.dns or not state.dns.generation:
+                                raise RuntimeError('DNS cleanup requires qualified coordinator generation')
+                            dns_svc.preflight_dns_cleanup(plan.lab, available[host], state.dns.generation)
+                    except Exception as exc:
+                        plan.protected=True;plan.reasons.append('dns-preflight-failed')
+                        plan.warnings.append(str(exc));continue
+                    from . import jumphost as jumphost_svc
+                    try:
+                        for action in plan.actions:
+                            if action.action != 'cleanup-jumphost': continue
+                            host = action.artifact.host
+                            if host not in available: raise RuntimeError('jumphost host unavailable')
+                            if not state or not state.jumphost or not state.jumphost.generation:
+                                raise RuntimeError('jumphost cleanup requires qualified coordinator generation')
+                            jumphost_svc.preflight_jumphost_cleanup(plan.lab, available[host], action.artifact.name, state.jumphost.generation)
+                    except Exception as exc:
+                        plan.protected=True;plan.reasons.append('jumphost-preflight-failed')
+                        plan.warnings.append(str(exc));continue
+                    if state and state.mgmt:
+                        try:
+                            from . import netsetup
+                            if not state.teardown_requested: raise RuntimeError('management teardown intent required')
+                            netsetup.preflight_management(state, available)
+                        except Exception as exc:
+                            plan.protected=True;plan.reasons.append('management-preflight-failed');plan.warnings.append(str(exc))
+                            continue
+                    try:_vd_preflight(plan,state,available,state_directory,advance=True,management_guarded=True)
+                    except Exception as exc:
+                        plan.protected=True;plan.reasons.append('vd-runtime-preflight-failed')
+                        plan.warnings.append(str(exc));continue
+                    if state and state.realnets:
+                        try:
+                            if not state.teardown_requested:
+                                raise RuntimeError("RealNet infrastructure requires explicit teardown intent")
+                            if state_directory is None:
+                                raise RuntimeError("RealNet recovery requires a persistent state directory")
+                            required=set(state.scheduling)
+                            required.update(a.host for a in expected_artifacts_from_state(state) if a.host)
+                            if required-set(available):raise RuntimeError("complete cleanup preflight: host unavailable")
+                            realnet_svc.preflight_realnets(state.lab_name,available,state.realnets)
+                            from .realnet_cleanup import detach_realnet_attachments
+                            detach_realnet_attachments(state.lab_name,available,state.realnets,
+                                checkpoint=lambda:state_svc.save_state(state,state_directory),runtime_links=state.runtime_links)
+                        except Exception as exc:
+                            plan.protected=True
+                            plan.reasons.append("realnet-preflight-failed")
+                            plan.warnings.append(str(exc))
+                            continue
+                    blocked_mgmt_hosts: set[str] = set()
+                    for action in sorted(plan.actions, key=_cleanup_action_priority):
+                        client = clients.get(action.artifact.host)
+                        if (
+                            action.artifact.host in blocked_mgmt_hosts
+                            and action.artifact.metadata.get("role") == "mgmt-infra"
+                        ):
+                            action.error = "skipped: managed Docker network removal failed"
+                            continue
+                        if client is None or action.artifact.host not in connected:
+                            action.executed = True
+                            action.ok = False
+                            action.error = "host unavailable"
+                            continue
+                        action.executed = True
+                        if action.action == 'cleanup-relay':
+                            try:
+                                relay_svc.destroy_runtime_relays(plan.lab,{action.artifact.host:client},
+                                                               {action.artifact.host:state.runtime_relays[action.artifact.host]})
+                                action.ok=True
+                            except Exception as exc:
+                                action.ok=False;action.error=str(exc)
+                                plan.protected=True;plan.reasons.append('relay-recovery-required')
+                                break
+                            continue
+                        if action.action == 'cleanup-dns':
+                            try:
+                                dns_svc.destroy_dns(plan.lab, client, state.dns.generation)
+                                action.ok=True
+                            except Exception as exc:
+                                action.ok=False;action.error=str(exc)
+                                plan.protected=True;plan.reasons.append('dns-recovery-required')
+                                break
+                            continue
+                        if action.action == 'cleanup-jumphost':
+                            try:
+                                jumphost_svc.destroy_jumphost(plan.lab, client, state.jumphost.generation)
+                                action.ok=True
+                            except Exception as exc:
+                                action.ok=False;action.error=str(exc)
+                                plan.protected=True;plan.reasons.append('jumphost-recovery-required')
+                                break
+                            continue
+                        rc, _, err = client.run_no_check(action.command, timeout=30)
+                        action.ok = rc == 0
+                        action.error = "" if rc == 0 else err.strip()
+                        if (
+                            not action.ok
+                            and action.action == "remove-network"
+                            and action.artifact.metadata.get("role") == "mgmt-network"
+                        ):
+                            blocked_mgmt_hosts.add(action.artifact.host)
+                    if plan.protected: continue
+                    if state and state.mgmt:
+                        if any(action.executed and not action.ok for action in plan.actions):
+                            plan.warnings.append('management recovery deferred: earlier cleanup failed');continue
+                        try:
+                            netsetup.destroy_management(state, available,
+                                checkpoint=lambda:state_svc.save_state(state,state_directory))
+                        except Exception as exc:
+                            plan.warnings.append('management recovery pending: '+str(exc));continue
+                    if state and state.realnets:
+                        if any(action.executed and not action.ok for action in plan.actions):
+                            plan.warnings.append("RealNet recovery deferred: earlier cleanup failed")
+                            continue
+                        try:
+                            realnet_svc.destroy_realnets(state.lab_name,available,state.realnets,
+                                checkpoint=lambda:state_svc.save_state(state,state_directory))
+                        except Exception as exc:
+                            plan.warnings.append("RealNet recovery pending: "+str(exc))
+            except Exception as exc:
+                plan.protected=True;plan.reasons.append('native-state-guard-failed');plan.warnings.append(str(exc))
+
     finally:
         if own_clients:
             for name in connected:
@@ -843,14 +1079,72 @@ def _finalize_requested_teardowns(
             connected = set(active_clients)
 
         for lab, state in pending.items():
-            remaining, reason = _teardown_remaining_artifacts(
-                state, active_clients, connected,
-            )
-            if remaining:
-                status[lab] = f"pending teardown state retained: {reason}"
-                continue
-            state_svc.delete_state(lab, topologies_dir)
-            status[lab] = "pending teardown state finalized"
+            from .native_public import state_guard
+            try:
+                from .runtime_cleanup import management_cleanup_guard
+                with state_guard(state,topologies_dir), management_cleanup_guard(lab,state,topologies_dir):
+                    try:_vd_preflight(LabCleanupPlan(lab=lab),state,
+                                      {name:active_clients[name] for name in connected},topologies_dir,advance=False,management_guarded=True)
+                    except Exception as exc:
+                        status[lab]='pending teardown state retained: VD runtime: '+str(exc)
+                        continue
+                    try:
+                        from . import runtime_relay as relay_svc
+                        for host,relay in state.runtime_relays.items():
+                            if host not in connected:raise RuntimeError('relay host unavailable')
+                            relay_svc.verify_relay_cleaned(lab,host,active_clients[host],relay.generation)
+                    except Exception as exc:
+                        status[lab]='pending teardown state retained: relay journal: '+str(exc)
+                        continue
+                    if state.dns:
+                        try:
+                            from . import dns as dns_svc
+                            if state.dns.node not in connected or not state.dns.generation:
+                                raise RuntimeError('DNS host or coordinator generation unavailable')
+                            dns_svc.verify_dns_cleaned(lab, active_clients[state.dns.node], state.dns.generation)
+                        except Exception as exc:
+                            status[lab]='pending teardown state retained: DNS journal: '+str(exc)
+                            continue
+                    if state.jumphost:
+                        try:
+                            from . import jumphost as jumphost_svc
+                            jh=state.jumphost
+                            if jh.node not in connected: raise RuntimeError('jumphost host unavailable')
+                            if not jh.generation: raise RuntimeError("unqualified jumphost coordinator generation")
+                            jumphost_svc.verify_jumphost_cleaned(lab, active_clients[jh.node], jh.container, jh.generation)
+                        except Exception as exc:
+                            status[lab]='pending teardown state retained: jumphost journal: '+str(exc)
+                            continue
+                    remaining, reason = _teardown_remaining_artifacts(
+                        state, active_clients, connected,
+                    )
+                    if remaining:
+                        status[lab] = f"pending teardown state retained: {reason}"
+                        continue
+                    if state.realnets:
+                        try:
+                            from .realnet_cleanup import verify_realnets_cleaned
+                            verify_realnets_cleaned(state.lab_name,
+                                {name:active_clients[name] for name in connected},state.realnets)
+                            from .realnet_vni import release_realnets
+                            release_realnets(state.lab_name,
+                                {name:active_clients[name] for name in connected},state.realnets)
+                        except Exception as exc:
+                            status[lab]="pending teardown state retained: RealNet journal/VNI recovery: "+str(exc)
+                            continue
+                    if state.mgmt:
+                        try:
+                            from .netsetup import release_management
+                            release_management(state,{name:active_clients[name] for name in connected},
+                                checkpoint=lambda:state_svc.save_state(state,topologies_dir))
+                        except Exception as exc:
+                            status[lab]='pending teardown state retained: management journal/VNI recovery: '+str(exc)
+                            continue
+                    state_svc.delete_state(lab, topologies_dir)
+                    status[lab] = "pending teardown state finalized"
+            except Exception as exc:
+                status[lab]='pending teardown state retained: native state guard: '+str(exc)
+
     finally:
         if own_clients:
             for name in connected:
@@ -926,6 +1220,9 @@ def _host_teardown_artifacts_remaining(
 def _cleanup_action_priority(action: CleanupAction) -> int:
     """Keep Docker endpoint teardown ahead of dependent mgmt infrastructure."""
     return {
+        "cleanup-jumphost": 5,
+        "cleanup-dns": 5,
+        "cleanup-relay": 5,
         "remove-container": 10,
         "remove-network": 20,
         "delete-interface": 40,

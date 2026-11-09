@@ -1,5 +1,7 @@
 FROM debian:bookworm-slim
 
+LABEL io.dnlab.jumphost.capabilities="qualified-relay-inventory-v1"
+
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -34,6 +36,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         > /usr/share/doc/dnlab/third-party/THIRD_PARTY_NOTICES.md
 
 COPY entrypoint.sh /entrypoint.sh
+COPY inventory.py /usr/local/lib/dnlab-inventory.py
 COPY vd /usr/local/bin/vd
 COPY vd-relay-client /usr/local/bin/vd-relay-client
 COPY vd-completion.bash /etc/bash_completion.d/vd

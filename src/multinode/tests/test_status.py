@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from pathlib import Path
 
 from dnlab_multinode.controllers.status import (
@@ -249,18 +251,19 @@ def test_status_marks_new_node_startable_only_for_per_vd_runtime(tmp_path, monke
     assert report.nodes["R1"].can_start is False
 
 
-def test_status_resolves_new_node_alias_to_live_runtime(tmp_path, monkeypatch):
+@pytest.mark.parametrize("declared_ip", ["172.20.0.30", "172.20.0.99"])
+def test_status_resolves_new_node_alias_to_live_runtime(tmp_path, monkeypatch, declared_ip):
     hosts = tmp_path / "hosts.yml"
     hosts.write_text(HOSTS_YML)
     topo = tmp_path / "lab.yml"
-    topo.write_text("""\
+    topo.write_text(f"""\
 name: lab
 topology:
   nodes:
     SERVER:
       kind: linux
       image: alpine
-      mgmt-ipv4: 172.20.0.30
+      mgmt-ipv4: {declared_ip}
   links: []
 """)
     state = DeploymentState(
@@ -286,12 +289,16 @@ topology:
         "worker1": "clab-dnlab-lab-NEW-SERVER-NEW-SERVER\trunning\tUp 2 minutes",
     })
 
+    original_state = state_svc.load_state("lab", topo.parent)
     report = StatusController(str(topo), hosts_file=str(hosts)).run()
 
     node = report.nodes["SERVER"]
     assert node.state == "running"
     assert node.container == "clab-dnlab-lab-NEW-SERVER-NEW-SERVER"
     assert node.host == "worker1"
+    assert node.mgmt_ipv4 == "172.20.0.30"
+    assert state_svc.load_state("lab", topo.parent) == original_state
+
 
 
 def test_status_preserves_reconciling_over_live_docker_state(tmp_path, monkeypatch):

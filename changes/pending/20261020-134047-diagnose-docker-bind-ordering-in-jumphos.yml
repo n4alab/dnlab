@@ -1,0 +1,14 @@
+id: 20261020-134047-diagnose-docker-bind-ordering-in-jumphos
+type: internal
+title: Diagnose Docker bind ordering in jumphost recovery
+description: Reproduce a qualified jumphost rejection when Docker returns the same
+  two distinct read-only bind mounts in reverse order; retain negative checks for
+  duplicate and changed mounts. No bind guard correction applied.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

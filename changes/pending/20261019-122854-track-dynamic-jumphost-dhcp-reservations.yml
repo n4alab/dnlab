@@ -1,0 +1,17 @@
+id: 20261019-122854-track-dynamic-jumphost-dhcp-reservations
+type: bugfix
+title: Track dynamic jumphost DHCP reservations
+description: Separate fixed DHCP configuration from generation-qualified reservation
+  and option files, journal updates and recovery, verify dnsmasq process identity
+  before reload, and preserve legacy layouts without implicit recreation.
+components:
+- multinode
+audience:
+- operator
+visibility: public
+breaking: true
+upgrade_notes:
+- Dynamic DHCP refresh requires an explicitly created jumphost generation with the
+  new asset layout; existing generations are preserved and are not converted or recreated
+  automatically.
+references: []

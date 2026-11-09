@@ -1,0 +1,15 @@
+id: 20261023-172255-reobserve-management-readiness-during-re
+type: internal
+title: Reobserve management readiness during release recovery
+description: Preserve the original sealed management attestation and reobserve every
+  original host before each remote release, including recovery. Persist successful
+  checks before remote mutation and retain partial-release state on missing or replaced
+  resources, unavailable hosts or checkpoint errors.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

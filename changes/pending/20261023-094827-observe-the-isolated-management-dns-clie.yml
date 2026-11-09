@@ -1,0 +1,14 @@
+id: 20261023-094827-observe-the-isolated-management-dns-clie
+type: internal
+title: Observe the isolated management DNS client packet path
+description: Add bounded synchronous packet observations and route, neighbour and
+  firewall snapshots to the diagnostic fixture. Preserve the original DNS exec, runtime
+  guards and result.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

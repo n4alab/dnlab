@@ -1,0 +1,15 @@
+id: 20261021-135229-diagnose-inactive-dhcp-exec-bypassing-se
+type: internal
+title: Diagnose inactive DHCP exec bypassing service preflight before start
+description: Two unit regressions show a persisted inactive DHCP exec starts without
+  observing a foreign daemon appearing after create or before recovery. Preserve evidence
+  and retain the product source unchanged pending the decision on complete pre-start
+  service verification.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

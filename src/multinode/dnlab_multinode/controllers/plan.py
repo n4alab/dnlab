@@ -7,7 +7,7 @@ from pathlib import Path
 
 from dnlab_multinode.models.topology import DistributedTopology
 from dnlab_multinode.models.schedule import SchedulePlan, VDResources
-from dnlab_multinode.services.config import assign_sticky_mgmt_identities, assign_sticky_mgmt_ipv4, parse_topology
+from dnlab_multinode.services.config import assign_sticky_management, parse_topology
 from dnlab_multinode.services.persistence import load_placement_preferences
 from dnlab_multinode.services.resources import extract_resources, check_images_on_hosts
 from dnlab_multinode.services.scheduler import compute_schedule, gather_host_resources
@@ -30,10 +30,13 @@ class PlanController:
         no_cache: bool = False,
         *,
         hosts_file: str | None = None,
+        native_management: bool = False,
     ):
         self.topology_file = topology_file
         self.no_cache = no_cache
         self.hosts_file = hosts_file
+        if type(native_management) is not bool: raise PlanError("native_management must be a boolean")
+        self.native_management = native_management
         self.topo: DistributedTopology | None = None
         self.vd_resources: dict[str, VDResources] = {}
         self.plan: SchedulePlan | None = None
@@ -48,30 +51,36 @@ class PlanController:
         5. Compute schedule
         """
         # Phase 0: Parse
-        self.topo = parse_topology(self.topology_file, hosts_file=self.hosts_file)
+        options = {"hosts_file": self.hosts_file}
+        if self.native_management: options["native_management"] = True
+        self.topo = parse_topology(self.topology_file, **options)
         previous_state = state_svc.load_state(self.topo.name, Path(self.topology_file).parent)
         if previous_state is not None and previous_state.teardown_requested:
             raise PlanError(
                 f"Lab '{self.topo.name}' has a pending teardown. Restore all hosts and "
                 "wait for lab-cleanup to finish, or run destroy again before deploying it."
             )
-        previous_reservations = (
-            previous_state.mgmt_ip_reservations if previous_state is not None else {}
-        )
-        self.topo.raw["dnlab_mgmt_ip_reservations"] = assign_sticky_mgmt_ipv4(
-            self.topo.nodes,
-            self.topo.mgmt,
-            previous_reservations,
-        )
-        identities = assign_sticky_mgmt_identities(
-            self.topo.nodes, self.topo.mgmt, lab_name=self.topo.name,
-            ipv6_reservations=(previous_state.mgmt_ipv6_reservations if previous_state else {}),
-            mac_reservations=(previous_state.mgmt_mac_reservations if previous_state else {}),
-            duid_reservations=(previous_state.mgmt_duid_reservations if previous_state else {}),
-            iaid_reservations=(previous_state.mgmt_iaid_reservations if previous_state else {}),
-        )
-        for key, value in zip(("dnlab_mgmt_ipv6_reservations", "dnlab_mgmt_mac_reservations", "dnlab_mgmt_duid_reservations", "dnlab_mgmt_iaid_reservations"), identities):
-            self.topo.raw[key] = value
+        if self.native_management:
+            from dnlab_multinode.services.management_segments import resolve, SegmentError
+            if previous_state is not None and not previous_state.management_plan:
+                raise SegmentError("Native segment planning refuses implicit legacy state conversion")
+            self.topo, _ = resolve(self.topo, previous_state.management_plan if previous_state else None)
+        else:
+            previous_reservations = (
+                previous_state.mgmt_ip_reservations if previous_state is not None else {}
+            )
+            reservations = assign_sticky_management(
+                self.topo.nodes, self.topo.mgmt, lab_name=self.topo.name,
+                ipv4_reservations=previous_reservations,
+                ipv6_reservations=(previous_state.mgmt_ipv6_reservations if previous_state else {}),
+                mac_reservations=(previous_state.mgmt_mac_reservations if previous_state else {}),
+                duid_reservations=(previous_state.mgmt_duid_reservations if previous_state else {}),
+                iaid_reservations=(previous_state.mgmt_iaid_reservations if previous_state else {}),
+            )
+            self.topo.raw["dnlab_mgmt_ip_reservations"] = reservations[0]
+            identities = reservations[1:]
+            for key, value in zip(("dnlab_mgmt_ipv6_reservations", "dnlab_mgmt_mac_reservations", "dnlab_mgmt_duid_reservations", "dnlab_mgmt_iaid_reservations"), identities):
+                self.topo.raw[key] = value
 
         # Phase 1: Extract VD resources
         images = {name: node.image for name, node in self.topo.nodes.items()}

@@ -1,4 +1,8 @@
 import threading
+import os
+import stat
+
+import pytest
 
 from dnlab_multinode.controllers import node as node_module
 from dnlab_multinode.controllers.node import NodeLifecycleController
@@ -12,6 +16,7 @@ from tests.conftest import make_topology
 
 def test_restart_reuses_per_vd_stop_then_start():
     controller = object.__new__(NodeLifecycleController)
+    controller.state=DeploymentState(lab_name="demo",topology_file="/tmp/demo.yml",runtime_mode="per-vd")
     calls = []
     expected = object()
     controller.stop = lambda node: calls.append(("stop", node))
@@ -97,7 +102,7 @@ def test_shared_service_reconcile_reloads_dns_and_refreshes_jumphost(monkeypatch
         calls["dns_entries"] = kwargs["extra_entries"]
         return 4, kwargs["extra_entries"]
 
-    def refresh_inventory(lab, client, vd_map, relay_map):
+    def refresh_inventory(lab, client, vd_map, relay_map, **kwargs):
         calls["inventory"] = (lab, vd_map, relay_map)
 
     monkeypatch.setattr(node_module.dns_svc, "refresh_dns", refresh_dns)
@@ -174,7 +179,7 @@ def _starting_controller(tmp_path, monkeypatch, *, on_deploy=None):
     monkeypatch.setattr(
         node_module.mgmt_network_svc,
         "ensure_mgmt_network",
-        lambda topo, candidate: mgmt_network_calls.append((topo.name, candidate)),
+        lambda topo, candidate, **kwargs: mgmt_network_calls.append((topo.name, candidate)),
     )
     controller._mgmt_network_calls = mgmt_network_calls
     return controller, client, phases
@@ -234,3 +239,106 @@ def test_request_cancel_interrupts_active_remote_commands():
 
     assert controller.cancel_event.is_set()
     assert interrupted == [True]
+
+
+@pytest.mark.parametrize("action", ["start", "stop"])
+@pytest.mark.parametrize("failure", ["file", "directory"])
+def test_state_sync_failure_blocks_remote_lifecycle_mutations(tmp_path, monkeypatch, action, failure):
+    controller, client, phases = _starting_controller(tmp_path, monkeypatch)
+    if action == "stop":
+        controller.state.node_runtime["R1"].state = "running"
+    mutations = []
+    client.deploy_clab = lambda *args, **kwargs: mutations.append("deploy")
+    client.destroy_clab = lambda *args, **kwargs: mutations.append("destroy")
+    monkeypatch.setattr(node_module.runtime_links_svc, "delete_node_links",
+                        lambda *args, **kwargs: mutations.append("delete-links"))
+    monkeypatch.setattr(node_module.runtime_links_svc, "reconcile_node_links",
+                        lambda *args, **kwargs: mutations.append("reconcile-links"))
+    original_sync = os.fsync
+
+    def fail_sync(fd):
+        is_directory = stat.S_ISDIR(os.fstat(fd).st_mode)
+        if is_directory == (failure == "directory"):
+            raise OSError("injected state sync failure")
+        return original_sync(fd)
+
+    monkeypatch.setattr(os, "fsync", fail_sync)
+    with pytest.raises(OSError, match="state sync failure"):
+        getattr(controller, action)("R1")
+    assert mutations == []
+    assert controller._mgmt_network_calls == []
+    assert controller._active_clients == {}
+    assert "running" not in phases and "stopped" not in phases
+
+
+@pytest.mark.parametrize("force", [False, True])
+def test_remove_passes_explicit_force_and_preserves_state_if_stop_fails(tmp_path, monkeypatch, force):
+    """No host mutation: interrupt at the controller's stop invocation."""
+    controller, client, phases = _starting_controller(tmp_path, monkeypatch)
+    controller.state.node_runtime["R1"].state = "running"
+    calls = []
+
+    class StopObserved(Exception):
+        pass
+
+    def observed_stop(node, *, force=False):
+        calls.append((node, force))
+        raise StopObserved
+
+    controller.stop = observed_stop
+    with pytest.raises(StopObserved):
+        controller.remove("R1", force=force)
+    assert calls == [("R1", force)]
+    assert "R1" in controller.state.node_runtime
+    assert client.destroyed == []
+
+
+@pytest.mark.parametrize('force', [False, True])
+def test_stop_cli_forwards_explicit_force(monkeypatch, force):
+    from click.testing import CliRunner
+    from dnlab_multinode.cli import node_stop
+    calls = []
+
+    class Controller:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def stop(self, node, *, force=False):
+            calls.append((node, force))
+            return type('State', (), {'node_runtime': {node: type('Node', (), {'state': 'stopped'})()}})()
+
+    monkeypatch.setattr(node_module, 'NodeLifecycleController', Controller)
+    arguments = ['R1', '--topo', '/tmp/fixture.yml'] + (['--force'] if force else [])
+    result = CliRunner().invoke(node_stop, arguments)
+    assert result.exit_code == 0, result.output
+    assert calls == [('R1', force)]
+
+
+def test_start_network_guard_failure_prevents_files_and_container_mutations(tmp_path,monkeypatch):
+    from unittest.mock import MagicMock
+    controller,client,phases=_starting_controller(tmp_path,monkeypatch)
+    controller._prepare_node_files=MagicMock();client.deploy_clab=MagicMock()
+    def fail(topo,candidate,**kwargs):
+        assert kwargs['mark_used'] and kwargs['state'] is controller.state
+        raise RuntimeError('management network generation changed')
+    monkeypatch.setattr(node_module.mgmt_network_svc,'ensure_mgmt_network',fail)
+    with pytest.raises(RuntimeError,match='generation changed'):controller.start('R1')
+    controller._prepare_node_files.assert_not_called();client.deploy_clab.assert_not_called()
+    assert controller.state.node_runtime['R1'].state=='error'
+
+
+def test_hot_add_guard_failure_does_not_reconcile_services_or_allocate_vd(tmp_path,monkeypatch):
+    from unittest.mock import MagicMock
+    from dnlab_multinode.controllers.node import NodeLifecycleError
+    controller,client,phases=_starting_controller(tmp_path,monkeypatch);controller.state.node_runtime={}
+    controller.topo.mgmt.ipv6_subnet='2001:db8:1::/64';controller.topo.mgmt.ipv6_gw='2001:db8:1::254'
+    controller._resolve_underlay_ips=lambda clients:{'master':'192.0.2.1'}
+    controller._select_add_host=lambda *args:('master',None)
+    controller._plan_with_added_node=lambda *args:SchedulePlan('demo',assignments={})
+    controller._reconcile_shared_services=MagicMock();client.deploy_clab=MagicMock()
+    monkeypatch.setattr(node_module.warm_links_svc,'inspect_image_on_host',lambda *args:None)
+    def fail(*args,**kwargs):raise RuntimeError('management generation changed')
+    monkeypatch.setattr(node_module.mgmt_network_svc,'ensure_mgmt_network',fail)
+    with pytest.raises(NodeLifecycleError,match='before VD allocation'):controller.add('R1')
+    controller._reconcile_shared_services.assert_not_called();client.deploy_clab.assert_not_called()
+    assert controller.state.node_runtime=={}

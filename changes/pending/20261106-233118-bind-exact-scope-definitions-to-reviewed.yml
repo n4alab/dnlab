@@ -1,0 +1,14 @@
+id: 20261106-233118-bind-exact-scope-definitions-to-reviewed
+type: internal
+title: Bind exact scope definitions to reviewed Docker profiles
+description: Verify scoped file content, inventory and permissions against finite
+  configuration profiles, rejecting unknown variants without automatic learning or
+  live-gate admission.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

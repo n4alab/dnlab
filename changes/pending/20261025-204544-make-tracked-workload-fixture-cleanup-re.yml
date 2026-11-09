@@ -1,0 +1,15 @@
+id: 20261025-204544-make-tracked-workload-fixture-cleanup-re
+type: internal
+title: Make tracked workload fixture cleanup repeatable
+description: Qualify immutable workload birth identity, the original completed stop
+  receipt and the expected stopped revision before completing fixture cleanup. Recover
+  a lost stop acknowledgement without another stop, invalidate stale verification
+  flags and preserve pending state on conflicts or incomplete observations.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

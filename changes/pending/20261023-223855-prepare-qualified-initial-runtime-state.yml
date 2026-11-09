@@ -1,0 +1,16 @@
+id: 20261023-223855-prepare-qualified-initial-runtime-state
+type: internal
+title: Prepare qualified initial runtime state publication
+description: 'Add an opt-in publication boundary for original compiled initial workload
+  batches. Verify all original generations, placement and current persisted state
+  before checkpoint under shared lifecycle locks; preserve caller snapshots and
+  propagate failed or uncertain saves without recreating workloads. Inert integration
+  tests cover publication and retry. Public API wiring remains a separate step.'
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

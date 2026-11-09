@@ -1,0 +1,16 @@
+id: 20261013-132603-reproduce-realnet-master-vxlan-binding-c
+type: internal
+title: Reproduce RealNet master VXLAN binding collision across workers
+description: Record native evidence that different remote addresses cannot distinguish
+  two VXLAN devices sharing VNI/local/UDP/underlay on one host. The associated per-edge
+  VNI reservation prototype corrects the generator contract; the regression and isolated
+  multi-worker data gate pass. This diagnostic does not qualify complete production
+  ownership provisioning.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

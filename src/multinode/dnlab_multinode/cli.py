@@ -30,6 +30,47 @@ def main(debug: bool) -> None:
     _setup_logging(debug)
 
 
+@main.group('realnet-infra')
+def realnet_infra_group():
+    """Explicit operations on shared RealNet infrastructure."""
+
+
+@realnet_infra_group.command('qualify-reflector')
+@click.option('-t','--topo',required=True,help='Topology providing the shared infrastructure configuration')
+@click.option('--hosts','hosts_file',default=None,help='Path to global hosts file')
+def qualify_reflector(topo,hosts_file):
+    """Verify and register an existing compatible reflector without restarting it."""
+    from dnlab_multinode.services.config import parse_topology
+    from dnlab_multinode.services.realnet import qualify_route_reflector
+    from dnlab_multinode.services.ssh import SSHClient
+    try:
+        topology=parse_topology(topo,hosts_file=hosts_file);host=topology.master
+        with SSHClient(host=host.host,user=host.ssh_user,key_path=host.ssh_key,name=host.name) as master:
+            result=qualify_route_reflector(topology,master)
+        console.print('Shared reflector qualified: '+result['container_id'])
+    except Exception as error:
+        console.print('[red]Reflector qualification failed: '+str(error)+'[/red]')
+        raise SystemExit(1) from None
+
+
+@realnet_infra_group.command('recover-wan')
+@click.option('-t','--topo',required=True,help='Topology providing shared WAN configuration')
+@click.option('--hosts','hosts_file',default=None,help='Path to global hosts file')
+def recover_wan(topo,hosts_file):
+    """Recover a traced WAN creation without replacing existing infrastructure."""
+    from dnlab_multinode.services.config import parse_topology
+    from dnlab_multinode.services.realnet_wan import ensure_wan
+    from dnlab_multinode.services.ssh import SSHClient
+    try:
+        topology=parse_topology(topo,hosts_file=hosts_file);host=topology.master
+        with SSHClient(host=host.host,user=host.ssh_user,key_path=host.ssh_key,name=host.name) as master:
+            result=ensure_wan(master,topology.realnet_infra,action='recover')
+        console.print('Shared WAN recovery verified: '+result['network_id'])
+    except Exception as error:
+        console.print('[red]WAN recovery failed: '+str(error)+'[/red]')
+        raise SystemExit(1) from None
+
+
 # ── plan ─────────────────────────────────────────────────────────────
 
 @main.command()
@@ -373,11 +414,12 @@ def node_list(topo: str, hosts_file: str | None) -> None:
 @click.argument("node")
 @click.option("-t", "--topo", required=True, help="Path to topology YAML file")
 @click.option("--hosts", "hosts_file", default=None, help="Path to global hosts file")
-def node_stop(node: str, topo: str, hosts_file: str | None) -> None:
+@click.option("--force", is_flag=True, help="Explicitly request a forced stop")
+def node_stop(node: str, topo: str, hosts_file: str | None, force: bool = False) -> None:
     from dnlab_multinode.controllers.node import NodeLifecycleController
 
     try:
-        state = NodeLifecycleController(topo, hosts_file=hosts_file).stop(node)
+        state = NodeLifecycleController(topo, hosts_file=hosts_file).stop(node, force=force)
         runtime = state.node_runtime[node]
         console.print(f"[green][✓] {node}: {runtime.state}[/green]")
     except Exception as e:
@@ -478,6 +520,7 @@ def refresh_dns_cmd(topo: str, hosts_file: str | None) -> None:
             count, entries = dns_svc.refresh_dns(
                 topo_obj.name, clients["master"], clients,
                 extra_entries=runtime_entries,
+                generation=state.dns.generation if state and state.dns else "",
             )
 
             console.print(f"[green][✓] DNS refreshed:[/green] {count} records")
@@ -525,7 +568,7 @@ def cleanup_labs_cmd(
         )
         data = report.to_dict()
         if as_json:
-            console.print(json.dumps(data, indent=2, sort_keys=True))
+            click.echo(json.dumps(data, indent=2, sort_keys=True))
             return
 
         actions = sum(len(plan.actions) for plan in report.labs.values())

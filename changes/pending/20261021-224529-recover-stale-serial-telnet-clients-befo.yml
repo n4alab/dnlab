@@ -1,0 +1,14 @@
+id: 20261021-224529-recover-stale-serial-telnet-clients-befo
+type: bugfix
+title: Recover stale serial telnet clients before opening a console
+description: Replace the implicit pkill dependency with exact argv selection and pidfd-based
+  termination. Qualify stale serial cleanup before upstream creation, serialize cleanup
+  with broker startup, and report failures without interrupting other ports or subscribers.
+components:
+- multinode
+audience:
+- operator
+visibility: public
+breaking: false
+upgrade_notes: []
+references: []

@@ -1,0 +1,16 @@
+id: 20261019-102452-track-dns-service-generations-and-recove
+type: bugfix
+title: Track DNS service generations and recovery
+description: Qualify DNS container birth, network identity and hosts assets before
+  mutation; journal atomic reloads and verified shutdown/cleanup, preserve foreign
+  resources and delegate daemon cleanup without name-based removal.
+components:
+- multinode
+audience:
+- operator
+visibility: public
+breaking: true
+upgrade_notes:
+- Existing DNS containers without birth proofs are preserved and require explicit
+  cleanup or migration; no implicit adoption or replacement is performed.
+references: []

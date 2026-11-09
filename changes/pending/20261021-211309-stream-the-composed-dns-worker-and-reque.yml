@@ -1,0 +1,15 @@
+id: 20261021-211309-stream-the-composed-dns-worker-and-reque
+type: internal
+title: Stream the composed DNS worker and request through stdin
+description: Reuse the qualified bounded jumphost bootstrap for DNS source composition
+  and preserve the original worker request, timeout and ownership checks. Cover large-source
+  execution, Unicode data, argument privacy and error handling; qualify one isolated
+  DNS lifecycle gate.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

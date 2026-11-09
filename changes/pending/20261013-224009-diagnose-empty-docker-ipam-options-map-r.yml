@@ -1,0 +1,19 @@
+id: 20261013-224009-diagnose-empty-docker-ipam-options-map-r
+type: internal
+title: Accept exactly empty Docker IPAM options in shared WAN verification
+description: Treat null and an empty object as absence of IPAM options without
+  modifying inspected data. Preserve exact driver, subnet/gateway, shape, ownership
+  and bridge checks; reject malformed or nonempty options and additional IPAM fields.
+  Unit suite passes. Native isolated WAN gate passed active read-only reuse with a
+  connected Linux container, gateway reachability, six real worker crash/recovery
+  cases and incompatible-network refusal. Control network identity and journal
+  remain unchanged; all fixture containers, networks and bridges removed and the
+  original Docker network inventory restored. No production deployment performed.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

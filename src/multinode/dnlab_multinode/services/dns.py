@@ -3,6 +3,11 @@
 from __future__ import annotations
 
 import logging
+import hashlib
+import json
+from pathlib import Path
+import shlex
+import uuid
 
 from dnlab_multinode.models.topology import DistributedTopology
 from dnlab_multinode.services.hostsfile import (
@@ -10,6 +15,7 @@ from dnlab_multinode.services.hostsfile import (
 )
 from dnlab_multinode.services.images import image_for
 from dnlab_multinode.services.jumphost import (
+    _WORKER_BOOTSTRAP,
     allocate_jumphost_ip,
     ensure_jumphost_network,
 )
@@ -24,8 +30,11 @@ def dns_container_name(lab_name: str) -> str:
     return f"dnlab-{lab_name}-dns"
 
 
-def hosts_file_path(lab_name: str) -> str:
+def hosts_file_path(lab_name: str, nonce: str | None = None) -> str:
     """Path on the master where the merged hosts file lives."""
+    if nonce:
+        key = hashlib.sha256(json.dumps(['dns-v1', lab_name], separators=(',', ':')).encode()).hexdigest()
+        return str(Path(PATHS.dns_journal_dir) / (key + '-' + nonce) / 'hosts')
     return f"{PATHS.tmp_dir}/dnlab-{lab_name}-dns-hosts"
 
 
@@ -39,87 +48,62 @@ def deploy_dns(
     master_client: SSHClient,
     clients: dict[str, SSHClient],
     extra_entries: list[HostEntry] | None = None,
+    *, generation: str | None = None, receipt: dict | None = None,
 ) -> tuple[str, str, list[str], int]:
     """Deploy the DNS container on the master.
 
     Returns: (container_name, resolver_ip, upstream_servers, entry_count)
     """
-    container = dns_container_name(topo.name)
-    image = image_for("dns")
-    network = topo.jumphost_net.network
-    host_file = hosts_file_path(topo.name)
-
-    log.info("Deploying centralized DNS: %s", container)
-
-    # 0. Pre-flight: image must exist locally. Release installs preload these
-    #    images with the Compose `release-images` pull profile.
-    rc, _, _ = master_client.run_no_check(
-        f"docker image inspect {image} >/dev/null 2>&1"
-    )
-    if rc != 0:
-        raise RuntimeError(
-            f"DNS image '{image}' not found on master. "
-            "Run: docker compose --profile release-images pull"
-        )
-
-    # 1. Collect /etc/hosts blocks from every node
+    previous = _guard(master_client, topo.name, 'preflight')
+    if previous['phase'] not in ('absent', 'active', 'cleaned'):
+        raise RuntimeError('DNS explicit recovery required before deploy')
     entries = collect_hosts_entries(topo.name, clients)
-    if extra_entries:
-        entries = _merge_entries(entries, extra_entries)
-    log.info("Collected %d unique DNS entries from %d hosts",
-             len(entries), len(clients))
-
-    # 2. Discover upstream resolvers from the master
+    if extra_entries: entries = _merge_entries(entries, extra_entries)
     upstream = get_upstream_dns(master_client)
-
-    # 3. Upload merged hosts file to the master
-    content = render_hosts_file(entries)
-    master_client.upload_text(content, host_file)
-    log.debug("Uploaded hosts file to %s (%d bytes)", host_file, len(content))
-
-    # 4. Remove stale container if present
-    master_client.run(f"docker rm -f {container} 2>/dev/null", check=False)
-
-    # 5. Ensure the master-local shared jumphost network exists. The DNS
-    #    resolver is consumed by the jumphost, while VD access goes through
-    #    runtime relays; this must not depend on the lab mgmt network existing
-    #    on the master.
     ensure_jumphost_network(master_client, topo.jumphost_net)
-    resolver_ip = allocate_jumphost_ip(master_client, topo.jumphost_net).split("/")[0]
+    if previous['phase'] == 'active':
+        resolver_ip = previous['config']['ip']
+        generation = generation or previous['config']['generation']
+    else:
+        resolver_ip = allocate_jumphost_ip(master_client, topo.jumphost_net).split('/')[0]
+        generation = generation or uuid.uuid4().hex
+    net = topo.jumphost_net
+    config = {'lab': topo.name, 'generation': generation, 'name': dns_container_name(topo.name),
+              'image': image_for('dns'), 'network': {'name': net.network, 'bridge': net.bridge,
+              'subnet': net.ipv4_subnet, 'gateway': net.ipv4_gw}, 'ip': resolver_ip, 'upstream': upstream}
+    record = _guard(master_client, topo.name, 'provision' if previous['phase'] == 'cleaned' else 'ensure', config, render_hosts_file(entries))
+    if receipt is not None: receipt.update(record)
+    return config['name'], resolver_ip, upstream, len(entries)
 
-    # 6. Start the dnsmasq container
-    upstream_env = " ".join(upstream)
-    run_cmd = (
-        f"docker run -d "
-        f"--name {container} "
-        f"--network {network} "
-        f"--ip {resolver_ip} "
-        f"--cap-add NET_ADMIN "
-        f"-v {host_file}:/etc/dnlab-dns/hosts:ro "
-        f"-e UPSTREAM_DNS='{upstream_env}' "
-        f"{image}"
-    )
-    master_client.run(run_cmd)
 
-    # 7. Verify it's actually running (docker run -d returns success even if
-    #    the container dies immediately).
-    rc, out, _ = master_client.run_no_check(
-        f"docker inspect -f '{{{{.State.Running}}}}' {container}"
-    )
-    if rc != 0 or out.strip() != "true":
-        # Grab logs for diagnostics, then bail.
-        _, logs, _ = master_client.run_no_check(f"docker logs {container} 2>&1 | tail -40")
-        master_client.run(f"docker rm -f {container} 2>/dev/null", check=False)
-        raise RuntimeError(
-            f"DNS container '{container}' failed to start.\n"
-            f"--- docker logs (last 40 lines) ---\n{logs}\n"
-            f"-----------------------------------"
-        )
+def _guard(client, lab, action, config=None, content=None):
+    base = Path(__file__).with_name('jumphost_host.py').read_text()
+    worker = Path(__file__).with_name('dns_host.py').read_text()
+    program = "_primitives={'__name__':'_dns_primitives'}\nexec(" + repr(base) + ",_primitives)\n"
+    program += "_BaseWorker=_primitives['Worker']\nJumphostError=_primitives['JumphostError']\ncanonical=_primitives['canonical']\ndigest=_primitives['digest']\n" + worker
+    request = {'lab': lab, 'action': action, 'config': config, 'content': content,
+               'directory': PATHS.dns_journal_dir}
+    try:
+        value = json.loads(client.run_input(shlex.join(['python3', '-c', _WORKER_BOOTSTRAP]),
+            json.dumps({'source':program,'request':request}), timeout=60))
+    except Exception as error:
+        raise RuntimeError('DNS operation rejected or recovery required; journal retained') from error
+    if not isinstance(value, dict) or 'phase' not in value: raise RuntimeError('invalid DNS acknowledgement')
+    return value
 
-    log.info("DNS container running: %s → %s (upstream: %s)",
-             container, resolver_ip, upstream)
 
-    return container, resolver_ip, upstream, len(entries)
+def recover_dns(lab_name, client):
+    return _guard(client, lab_name, 'recover')
+
+
+def preflight_dns_cleanup(lab_name, client, generation):
+    if not generation: raise RuntimeError('DNS coordinator generation required')
+    return _guard(client, lab_name, 'preflight-delete', {'generation': generation})
+
+
+def verify_dns_cleaned(lab_name, client, generation):
+    if not generation: raise RuntimeError('DNS coordinator generation required')
+    return _guard(client, lab_name, 'verify-cleaned', {'generation': generation})
 
 
 def allocate_dns_resolver_ip(topo: DistributedTopology, master_client: SSHClient) -> str:
@@ -133,35 +117,18 @@ def refresh_dns(
     master_client: SSHClient,
     clients: dict[str, SSHClient],
     extra_entries: list[HostEntry] | None = None,
+    *, generation: str | None = None,
 ) -> tuple[int, list[HostEntry]]:
     """Regenerate the hosts file and SIGHUP the DNS container.
 
     Returns: (entry_count, entries)
     """
-    container = dns_container_name(lab_name)
-    host_file = hosts_file_path(lab_name)
-
-    # Check the container is actually running
-    rc, _, _ = master_client.run_no_check(
-        f"docker inspect -f '{{{{.State.Running}}}}' {container}"
-    )
-    if rc != 0:
-        raise RuntimeError(
-            f"DNS container '{container}' not found on master — "
-            f"is the lab deployed?"
-        )
-
     entries = collect_hosts_entries(lab_name, clients)
-    if extra_entries:
-        entries = _merge_entries(entries, extra_entries)
-    content = render_hosts_file(entries)
-    master_client.upload_text(content, host_file)
-    log.info("DNS hosts file rewritten: %d entries", len(entries))
-
-    # SIGHUP dnsmasq to reload addn-hosts
-    master_client.run(f"docker kill -s HUP {container}")
-    log.info("DNS container reloaded via SIGHUP: %s", container)
-
+    if extra_entries: entries = _merge_entries(entries, extra_entries)
+    if generation is not None and not generation:
+        raise RuntimeError('DNS coordinator generation required')
+    _guard(master_client, lab_name, 'reload', {'generation': generation} if generation else None,
+           content=render_hosts_file(entries))
     return len(entries), entries
 
 
@@ -184,12 +151,8 @@ def _merge_entries(
     return list(seen.values())
 
 
-def destroy_dns(lab_name: str, master_client: SSHClient) -> None:
-    """Remove the DNS container and its temporary hosts file."""
-    container = dns_container_name(lab_name)
-    host_file = hosts_file_path(lab_name)
-
-    log.info("Removing DNS container: %s", container)
-    master_client.run(f"docker rm -f {container} 2>/dev/null", check=False)
-    master_client.run(f"rm -f {host_file}", check=False)
-    log.info("DNS container removed")
+def destroy_dns(lab_name: str, master_client: SSHClient, generation: str | None = None) -> None:
+    """Delete only the journal-qualified generation and its proven assets."""
+    if generation is not None and not generation:
+        raise RuntimeError("DNS coordinator generation required")
+    _guard(master_client, lab_name, 'delete', {'generation': generation} if generation else None)

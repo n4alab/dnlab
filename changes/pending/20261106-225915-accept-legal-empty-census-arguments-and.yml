@@ -1,0 +1,14 @@
+id: 20261106-225915-accept-legal-empty-census-arguments-and
+type: internal
+title: Accept legal empty census arguments and retain rejection metadata
+description: Keep a nonempty program requirement while accepting empty later arguments,
+  and expose bounded PID/index/hash metadata for failed process classification without
+  raw argument values.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

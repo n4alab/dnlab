@@ -259,6 +259,9 @@ class PluginStore:
     def __init__(self, path: str | Path):
         self.path = Path(path)
         self._lock = threading.RLock()
+        # Allowed on-disk outcomes of a failed atomic commit. All ledger
+        # operations pass through _load under this lock before any mutation.
+        self._uncertain: set[bytes | None] | None = None
 
     # Docker IPAM API -----------------------------------------------------
     def request_pool(self, request: dict[str, Any]) -> dict[str, Any]:
@@ -412,6 +415,19 @@ class PluginStore:
         interface = request.get("Interface") or {}
         if not isinstance(interface, dict):
             raise NetworkDriverError("endpoint Interface must be an object")
+        options = request.get("Options")
+        if options is None:
+            options = {}
+        if not isinstance(options, dict):
+            raise NetworkDriverError("endpoint Options must be an object")
+        name_key = "com.docker.network.endpoint.ifname"
+        destination_name = options.get(name_key, "")
+        if name_key in options and (
+            not isinstance(destination_name, str)
+            or not re.fullmatch(r"[A-Za-z0-9_.-]{1,15}", destination_name)
+            or destination_name in {".", "..", "lo"}
+        ):
+            raise NetworkDriverError("endpoint interface name is invalid")
         with self._lock:
             state = self._load()
             network = state["networks"].get(network_id)
@@ -427,6 +443,7 @@ class PluginStore:
                 "mac": str(interface.get("MacAddress") or "").strip(),
                 "host_iface": "",
                 "sandbox_iface": "",
+                "destination_name": destination_name,
             }
             if endpoint["mac"] and not _MAC_RE.fullmatch(endpoint["mac"]):
                 raise NetworkDriverError("endpoint MAC address is invalid")
@@ -437,7 +454,7 @@ class PluginStore:
                 )
             existing = state["endpoints"].get(endpoint_id)
             if existing:
-                comparable_keys = ("network_id", "ipv4", "ipv6", "mac")
+                comparable_keys = ("network_id", "ipv4", "ipv6", "mac", "destination_name")
                 if any(existing.get(key, "") != endpoint[key] for key in comparable_keys):
                     raise NetworkDriverError(f"endpoint {endpoint_id} configuration changed")
                 return {}
@@ -474,7 +491,7 @@ class PluginStore:
             sandbox_iface = str(endpoint.get("sandbox_iface") or "")
             if host_iface or sandbox_iface:
                 if host_iface and sandbox_iface and ops.link_exists(host_iface) and ops.link_exists(sandbox_iface):
-                    return self._join_response(network, sandbox_iface)
+                    return self._join_response(network, sandbox_iface, endpoint.get("destination_name", ""))
                 if host_iface:
                     ops.delete_link(host_iface)
                 endpoint["host_iface"] = ""
@@ -501,7 +518,7 @@ class PluginStore:
                     endpoint["sandbox_iface"] = ""
                     self._save(state)
             raise
-        return self._join_response(network, sandbox_iface)
+        return self._join_response(network, sandbox_iface, endpoint.get("destination_name", ""))
 
     def leave(self, request: dict[str, Any], ops: NetworkOps) -> dict[str, Any]:
         network_id = str(request.get("NetworkID") or "").strip()
@@ -526,11 +543,13 @@ class PluginStore:
         return {}
 
     @staticmethod
-    def _join_response(network: dict[str, str], sandbox_iface: str) -> dict[str, Any]:
+    def _join_response(network: dict[str, str], sandbox_iface: str, destination_name: str = "") -> dict[str, Any]:
         response: dict[str, Any] = {
             "InterfaceName": {"SrcName": sandbox_iface, "DstPrefix": "eth"},
             "Gateway": network["ipv4_gateway"],
         }
+        if destination_name:
+            response["InterfaceName"]["DstName"] = destination_name
         if network.get("ipv6_gateway"):
             response["GatewayIPv6"] = network["ipv6_gateway"]
         return response
@@ -595,11 +614,22 @@ class PluginStore:
         raise IPAMError(f"no available addresses in pool {network}")
 
     def _load(self) -> dict[str, Any]:
-        if not self.path.exists():
+        try:
+            raw = self.path.read_bytes()
+        except FileNotFoundError:
+            raw = None
+        if self._uncertain is not None and raw not in self._uncertain:
+            raise PluginError("plugin state differs from uncertain commit; recovery required")
+        if raw is None:
+            if self._uncertain is not None:
+                self._sync_directory()
+                if self.path.exists():
+                    raise PluginError("plugin state appeared during recovery")
+                self._uncertain = None
             return {"version": STATE_VERSION, "pools": {}, "networks": {}, "endpoints": {}}
         try:
-            data = json.loads(self.path.read_text())
-        except (OSError, json.JSONDecodeError) as exc:
+            data = json.loads(raw)
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise PluginError(f"cannot load plugin state {self.path}: {exc}") from exc
         if not isinstance(data, dict) or not isinstance(data.get("pools"), dict):
             raise PluginError(f"invalid plugin state format in {self.path}")
@@ -610,18 +640,48 @@ class PluginStore:
         data.setdefault("endpoints", {})
         if not isinstance(data["networks"], dict) or not isinstance(data["endpoints"], dict):
             raise PluginError(f"invalid plugin network state in {self.path}")
+        # Also establish durability after a process restart and on no-op
+        # retries. Existing resources alone are not a durable acknowledgement.
+        with self.path.open("rb") as handle:
+            os.fsync(handle.fileno())
+        self._sync_directory()
+        if self.path.read_bytes() != raw:
+            raise PluginError("plugin state changed during recovery; recovery required")
+        self._uncertain = None
         return data
+
+    def _sync_directory(self) -> None:
+        # Include ancestor entries: the state directory itself may have been
+        # created during this attempt or an interrupted bootstrap.
+        directory = self.path.parent.absolute()
+        while True:
+            fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY)
+            try:
+                os.fsync(fd)
+            finally:
+                os.close(fd)
+            if directory.parent == directory:
+                break
+            directory = directory.parent
 
     def _save(self, state: dict[str, Any]) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        intended = (json.dumps(state, sort_keys=True, separators=(",", ":")) + "\n").encode()
+        try:
+            previous = self.path.read_bytes()
+        except FileNotFoundError:
+            previous = None
+        self._uncertain = {previous, intended}
         fd, temporary = tempfile.mkstemp(prefix=f".{self.path.name}.", dir=self.path.parent)
         try:
-            with os.fdopen(fd, "w", encoding="utf-8") as handle:
-                json.dump(state, handle, sort_keys=True, separators=(",", ":"))
-                handle.write("\n")
+            with os.fdopen(fd, "wb") as handle:
+                handle.write(intended)
                 handle.flush()
                 os.fsync(handle.fileno())
             os.replace(temporary, self.path)
+            self._uncertain = {intended}
+            self._sync_directory()
+            self._uncertain = None
         finally:
             try:
                 os.unlink(temporary)

@@ -1,0 +1,16 @@
+id: 20261024-140418-bind-managed-initial-workloads-to-their
+type: internal
+title: Bind managed initial workloads to their original network-service release
+description: Add an opt-in managed topology handoff that atomically stores the original
+  management parent with all initial workload intents. Preserve the released ledger,
+  service model, runtime targets, journal identities and lab generation; revalidate
+  the parent during apply, recovery, cancellation and binding publication, rejecting
+  replacement without new mutations.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

@@ -25,7 +25,7 @@ topology:
       image: vrnetlab/cisco_n9kv_v2:9300-10.5.5.M
       mgmt-ipv4: 172.20.0.11
       env:
-        CLAB_MGMT_PASSTHROUGH: "true"
+        CLAB_MGMT_PASSTHROUGH: "false"
         CLAB_MGMT_DHCP: "true"
 
     NX2:
@@ -33,7 +33,7 @@ topology:
       image: vrnetlab/cisco_n9kv_v2:9300-10.5.5.M
       mgmt-ipv4: 172.20.0.12
       env:
-        CLAB_MGMT_PASSTHROUGH: "true"
+        CLAB_MGMT_PASSTHROUGH: "false"
         CLAB_MGMT_DHCP: "true"
 
     tor:
@@ -41,7 +41,7 @@ topology:
       mgmt-ipv4: 172.20.0.200
       image: vrnetlab/juniper_vjunos-switch:25.4R1.12
       env:
-        CLAB_MGMT_PASSTHROUGH: "true"
+        CLAB_MGMT_PASSTHROUGH: "false"
         CLAB_MGMT_DHCP: "true"
 
   links:

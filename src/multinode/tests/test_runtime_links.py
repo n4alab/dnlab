@@ -17,6 +17,74 @@ class FakeClient:
         return ""
 
 
+@pytest.fixture(autouse=True)
+def bridge_dependency(monkeypatch):
+    # These tests exercise ordering and carriers. Kernel ownership is exercised
+    # with structured inventory in test_bridge_guard.py.
+    class Guard:
+        def __init__(self,client,link,bridge):self.client,self.bridge,self.created=client,bridge,True
+        def ensure(self):self.client.run(f'ip link add {self.bridge} type bridge')
+        def inspect(self):return {'ifindex':1}
+        def delete(self):self.client.run(f'ip link delete {self.bridge}')
+    monkeypatch.setattr(runtime_links,'LocalBridgeGuard',Guard)
+    class TC:
+        def __init__(self,client,link,guard):self.client,self.link=client,link
+        def preflight(self,**kwargs):pass
+        def ensure(self):
+            for iface in (self.link.host_endpoint_a,self.link.host_endpoint_b):
+                self.client.run(f'tc qdisc add dev {iface} clsact 2>/dev/null',check=False)
+            for src,dst in ((self.link.host_endpoint_a,self.link.host_endpoint_b),(self.link.host_endpoint_b,self.link.host_endpoint_a)):
+                for protocol,pref in (('0x88cc',49140),('0x8809',49141)):
+                    self.client.run(f'tc filter replace dev {src} ingress pref {pref} protocol {protocol} flower action mirred egress redirect dev {dst}')
+        def cleanup(self):
+            for iface in (self.link.host_endpoint_a,self.link.host_endpoint_b):
+                for protocol,pref in (('0x88cc',49140),('0x8809',49141)):
+                    self.client.run(f'tc filter del dev {iface} ingress pref {pref} protocol {protocol} 2>/dev/null',check=False)
+                self.client.run(f'tc qdisc del dev {iface} clsact 2>/dev/null',check=False)
+    monkeypatch.setattr(runtime_links,'LocalTCGuard',TC)
+
+
+def test_same_host_bridges_are_isolated_between_labs(topo_factory):
+    bridges=[]
+    for name in ('bridge-lab-a','bridge-lab-b'):
+        nodes={'R1':VDNode(name='R1',kind='linux',image='x'),
+               'R2':VDNode(name='R2',kind='linux',image='x')}
+        topo=topo_factory(name=name,nodes=nodes,links=[Link('R1','eth1','R2','eth1')])
+        plan=SchedulePlan(lab_name=topo.name,
+                          assignments={'master':HostAssignment('master','10.0.0.1',vd_names=['R1','R2'])},
+                          local_links=topo.links)
+        link=runtime_links.build_runtime_links(topo,plan)[0]
+        bridges.append(runtime_links._runtime_bridge_name(link))
+    assert bridges[0]!=bridges[1]
+
+
+def test_merge_preserves_persisted_bridge_and_legacy_name():
+    def link(**values):
+        return RuntimeLinkState(id='l0',link_type='same_host',lab_name='lab',
+                                endpoint_a={'node':'R1','iface':'eth1'},
+                                endpoint_b={'node':'R2','iface':'eth1'},**values)
+    prior=link(bridge_name='br-rt-persisted',resource_identities={'bridge':{'ifindex':7}})
+    rebuilt=runtime_links.merge_runtime_links([link()],[prior])[0]
+    assert rebuilt.bridge_name=='br-rt-persisted'
+    assert rebuilt.resource_identities==prior.resource_identities
+    legacy=runtime_links.merge_runtime_links([link()],[link()])[0]
+    assert legacy.bridge_name=='br-rt-b497913a'
+
+
+def test_kernel_resource_names_round_trip_in_deployment_state():
+    from dnlab_multinode.models.state import DeploymentState,RealNetState
+    state=DeploymentState(lab_name='lab',topology_file='/tmp/lab.yml')
+    state.runtime_links=[RuntimeLinkState(id='l0',link_type='same_host',lab_name='lab',
+                                         bridge_name='br-rt-persisted',resource_identities={'bridge':{'ifindex':7}})]
+    state.realnets=[RealNetState(name='access',bridge='br-example',vxlan_id=3001,
+                                vxlan_ifaces={'master':['vx-example']},router_veth='vh-example')]
+    loaded=DeploymentState.from_dict(state.to_dict())
+    assert loaded.runtime_links[0].bridge_name=='br-rt-persisted'
+    assert loaded.runtime_links[0].resource_identities==state.runtime_links[0].resource_identities
+    assert loaded.realnets[0].vxlan_ifaces=={'master':['vx-example']}
+    assert loaded.realnets[0].router_veth=='vh-example'
+
+
 def test_build_runtime_links_same_cross_and_realnet(topo_factory):
     nodes = {
         "R1": VDNode(name="R1", kind="linux", image="x"),

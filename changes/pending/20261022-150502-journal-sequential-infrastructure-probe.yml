@@ -1,0 +1,14 @@
+id: 20261022-150502-journal-sequential-infrastructure-probe
+type: internal
+title: Journal sequential infrastructure probe endpoint lifecycles
+description: Add qualified temporary probe container and veth lifecycle under the
+  original management seal, durable serial host attempts, identity-bound cleanup and
+  recovery for uncertain replies; retain separate packet readiness and workload admission.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

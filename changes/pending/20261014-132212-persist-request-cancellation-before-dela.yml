@@ -1,0 +1,21 @@
+id: 20261014-132212-persist-request-cancellation-before-dela
+type: internal
+title: Persist request cancellation before delayed node submission
+description: Add lab/node-scoped lifecycle request lookup and cancellation using the
+  original immutable request. Before submission, cancellation records a terminal tombstone
+  without allocating resources or changing node revision; a matching delayed submit
+  returns that same cancelled operation. Accepted requests retain their ID and normal
+  cancellation semantics, while completed work remains completed. Validate request
+  content and context, preserve all earlier active/recovery guards, and expose compatible
+  optional Unix API, CLI and stdin adapter methods. Unit, process-death and isolated
+  SSH gates cover lost submit acknowledgements and cancellation across daemon restart;
+  controller adoption remains pending.
+components:
+- multinode
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

@@ -1,0 +1,15 @@
+id: 20261025-202751-prepare-isolated-relay-console-and-log-q
+type: internal
+title: Prepare isolated relay console and log qualification
+description: Add an opt-in local relay gate with tracked Linux workload births, qualified
+  loopback listener ownership, nonce-bound console and log probes, authorization rejection
+  checks, late workload spawn and journal-based cleanup. Keep execution explicit and
+  preserve diagnostic evidence on failure.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

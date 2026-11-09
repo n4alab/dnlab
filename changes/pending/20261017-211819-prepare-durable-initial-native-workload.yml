@@ -1,0 +1,14 @@
+id: 20261017-211819-prepare-durable-initial-native-workload
+type: internal
+title: Prepare durable initial native workload batches
+description: Add opt-in Linux workload batch admission through the existing coordinator
+  ledger, coherent read-only node preflight, explicit recovery and tracked ordinary
+  cancellation. Placement remains caller-owned; production deploy selection is unchanged.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

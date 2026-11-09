@@ -1,0 +1,13 @@
+id: 20261019-161915-capture-dhcp-log-ownership-before-fixtur
+type: internal
+title: Capture DHCP log ownership before fixture cleanup
+description: Add a read-only isolated diagnostic for log metadata and the unchanged
+  DHCP ownership predicate, without reload or HUP.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

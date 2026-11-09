@@ -1,0 +1,14 @@
+id: 20261107-123631-persist-immutable-native-gate-scope-birt
+type: internal
+title: Persist immutable native gate scope births in coordinator operations
+description: Capture scope proofs from original Linux starts, bind opt-in fixture
+  gate context before creation, and recover the same immutable coordinator record
+  on reopen or uncertain save without recapture.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

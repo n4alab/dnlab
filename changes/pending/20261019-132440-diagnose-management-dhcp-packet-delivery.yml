@@ -1,0 +1,14 @@
+id: 20261019-132440-diagnose-management-dhcp-packet-delivery
+type: internal
+title: Diagnose management DHCP packet delivery
+description: Add an isolated diagnostic-only path with client, server and reciprocal-peer
+  captures plus endpoint, route and firewall-counter snapshots; record DHCPv6 RFC
+  qualification among remaining management gates.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

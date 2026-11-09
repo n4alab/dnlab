@@ -1,0 +1,15 @@
+id: 20261021-223003-reserve-the-configured-jumphost-ipv4-gat
+type: internal
+title: Reserve the configured jumphost IPv4 gateway in management Docker pools
+description: Include the effective jumphost IPv4 gateway alongside existing infrastructure
+  reservations. Preserve default pool intent, refuse incompatible existing network
+  proofs without adoption, and qualify dynamic allocation/retry with a custom gateway
+  while leaving the installed plugin unchanged.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

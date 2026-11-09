@@ -1,0 +1,21 @@
+id: 20261014-093002-add-opt-in-native-lifecycle-client-with
+type: internal
+title: Add opt-in native lifecycle client with SSH stdin transport
+description: Extend the experimental multinode runtime adapter with native Linux node
+  plan, submit, wait, cancel and explicit recovery. Require compatible lifecycle ownership
+  capabilities and validate accepted lab/node/request context. Send node manifests
+  through bounded SSH stdin without command-line payload fallback; drain both output
+  streams and redact request/remote error content. Preserve operation IDs on timeout
+  and never implicitly resubmit, force, reconcile or fall back to Containerlab. Existing
+  deploy controllers, scheduler and placement remain unchanged. Tests and an isolated
+  image/CLI gate qualify the optional adapter; real remote SSH and production controller
+  adoption remain pending.
+components:
+- multinode
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

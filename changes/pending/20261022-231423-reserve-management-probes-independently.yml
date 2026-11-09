@@ -1,0 +1,15 @@
+id: 20261022-231423-reserve-management-probes-independently
+type: bugfix
+title: Reserve management probes independently from DHCP
+description: Reserve infrastructure identities for every opt-in management segment
+  before VD assignment. Keep DHCP and RA disabled on static segments, limit DHCP packet
+  qualification to enabled segments, and reject partial original probe models or changes
+  to sealed intents.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

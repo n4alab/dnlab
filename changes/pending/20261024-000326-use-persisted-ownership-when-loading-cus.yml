@@ -1,0 +1,15 @@
+id: 20261024-000326-use-persisted-ownership-when-loading-cus
+type: bugfix
+title: Use persisted ownership when loading custom management status
+description: Share the owner-selected topology loader between node lifecycle and public
+  status. Validate custom segments against their original ledger before connecting,
+  retain Containerlab parsing for compatible owners and verify status through original
+  runtime generation proofs after publication and stop/start.
+components:
+- multinode
+audience:
+- operator
+visibility: public
+breaking: false
+upgrade_notes: []
+references: []

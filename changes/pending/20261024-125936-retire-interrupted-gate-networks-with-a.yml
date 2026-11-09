@@ -1,0 +1,17 @@
+id: 20261024-125936-retire-interrupted-gate-networks-with-a
+type: internal
+title: Retire interrupted gate networks with a separate postboot journal
+description: Add explicit deletion-only recovery for original local management gate
+  networks after host reboot. Bind a separate durable request to unchanged birth journals,
+  coordinator/runtime identity and current namespace; preflight all dependencies,
+  Docker ownership, IPAM and bridge witnesses before each ID-scoped deletion. Retain
+  pending state on conflict and verify absence after lost responses without blind
+  resends.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

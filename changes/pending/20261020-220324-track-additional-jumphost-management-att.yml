@@ -1,0 +1,15 @@
+id: 20261020-220324-track-additional-jumphost-management-att
+type: internal
+title: Track additional jumphost management attachments without recreating birth
+description: Add separate immutable attachment intents bound to the original jumphost
+  container and namespace. Preserve birth labels and existing links, recover partial
+  pair creation, and include every segment in qualified preflight and shutdown-before-cleanup.
+  DHCP, RA and public multi-network integration remain pending.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

@@ -1,0 +1,13 @@
+id: 20261106-223732-check-scoped-cleanup-process-and-schedul
+type: internal
+title: Check scoped cleanup process and scheduled source census
+description: Require fresh matching process generations and reviewed scheduled sources
+  within the declared coordinator scope before composing cleanup gate conditions.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

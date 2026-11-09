@@ -1,0 +1,13 @@
+id: 20261012-091814-resolve-complete-vxlan-altnames-during-l
+type: bugfix
+title: Resolve complete VXLAN altnames during legacy teardown
+description: Preserve the complete VXLAN endpoint name, verify type and allocated
+  VNI before deletion, and report incomplete teardown instead of suppressing failures.
+components:
+- multinode
+audience:
+- operator
+visibility: public
+breaking: false
+upgrade_notes: []
+references: []

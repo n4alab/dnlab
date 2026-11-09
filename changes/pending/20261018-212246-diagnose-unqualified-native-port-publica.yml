@@ -1,0 +1,17 @@
+id: 20261018-212246-diagnose-unqualified-native-port-publica
+type: internal
+title: Diagnose unqualified native port publication on dnlab-vrf
+description: 'Record the isolated WebUI gate rejection: Docker received explicit IPv4/IPv6
+  PortBindings but returned an empty published-port inventory on the remote network
+  driver. Current external-connectivity callbacks are no-ops. Preserve diagnostics
+  and qualify the remaining fixture cleanup; no publisher implementation or installed-plugin
+  change is included.'
+components:
+- multinode
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

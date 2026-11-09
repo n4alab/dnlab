@@ -1,0 +1,20 @@
+id: 20261024-184844-prepare-managed-initial-workload-publica
+type: internal
+title: Prepare managed initial workload publication gate
+description: Add inert integration coverage from the original management release to
+  durable VD binding publication and prepare an opt-in HTTP fixture for the same path.
+  Prepared-only cancellation cleanup requires the original cancelled intent and a
+  complete read-only absence observation. The managed fixture checkpoints placement
+  from the original schedule before provisioning, without publishing VD bindings.
+  Exact binding and replay comparisons now save private snapshots and readable
+  differences before cleanup. A single-host native Linux gate now qualifies the
+  managed batch, binding publication/replay and GUI HTTP proxy through SSH with
+  independent cleanup checks. The complete backend remains experimental.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

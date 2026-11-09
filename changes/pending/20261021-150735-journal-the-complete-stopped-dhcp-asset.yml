@@ -1,0 +1,16 @@
+id: 20261021-150735-journal-the-complete-stopped-dhcp-asset
+type: internal
+title: Journal the complete stopped DHCP asset set and verify partial writes
+description: Add read-only verification of original inode-bound write chunks and a
+  structural three-file asset journal. Qualify every original file before writes,
+  bind immutable targets and shutdown proof, recover partial main/reservation/option
+  updates and preserve empty files. Keep the operation private pending full service/barrier
+  integration.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

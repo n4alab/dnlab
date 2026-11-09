@@ -1,0 +1,18 @@
+id: 20261012-225410-reproduce-lab-reconciliation-replacing-t
+type: internal
+title: Preserve the shared RealNet reflector during lab reconciliation
+description: Reuse a compatible managed reflector without restart or configuration
+  writes. Verify immutable image, network, endpoint, ownership, FRR file and running
+  BGP policy. Reject incompatibility or unready state; configure only this operation's
+  newly created reflector. Add explicit one-time legacy qualification pinned to the
+  existing container ID in a private root-owned record. Accept Docker's exact
+  NET_ADMIN and CAP_NET_ADMIN spellings. Qualify isolated reflector reuse and
+  legacy adoption with ownership-checked explicit fixture shutdown and cleanup.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

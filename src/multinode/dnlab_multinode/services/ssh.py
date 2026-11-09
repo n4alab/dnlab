@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import os
 import shlex
 import threading
@@ -124,6 +125,36 @@ class SSHClient:
         finally:
             self._untrack_channel(channel)
         return rc, out, err
+
+    def run_input(self, command: str, payload: str, timeout: int = _CMD_TIMEOUT) -> str:
+        """Bounded runtime request over stdin; never log request or remote output."""
+        if not self._client:raise RuntimeError(f'[{self.name}] SSH not connected')
+        if (not isinstance(payload,str) or len(payload.encode())>1024*1024
+                or type(timeout) not in (int,float) or not math.isfinite(timeout) or timeout<=0):
+            raise ValueError('invalid runtime stdin request or timeout')
+        channel=None
+        try:
+            stdin,stdout,stderr=self._client.exec_command(command,timeout=timeout)
+            channel=stdout.channel;self._track_channel(channel)
+            deadline=time.monotonic()+timeout
+            stdin.write(payload.encode());stdin.flush();channel.shutdown_write()
+            out=bytearray();err=bytearray()
+            while True:
+                if channel.recv_ready():out.extend(channel.recv(65536))
+                if channel.recv_stderr_ready():err.extend(channel.recv_stderr(65536))
+                if len(out)+len(err)>4*1024*1024:
+                    raise SSHError(self.host,command,'runtime response exceeds limit')
+                if channel.exit_status_ready() and not channel.recv_ready() and not channel.recv_stderr_ready():break
+                if time.monotonic()>=deadline:raise SSHError(self.host,command,'runtime transport timeout')
+                time.sleep(.01)
+            rc=channel.recv_exit_status()
+            if rc!=0:raise SSHError(self.host,command,'runtime command failed',rc)
+            return out.decode(errors='replace').strip()
+        except SSHError:raise
+        except Exception:raise SSHError(self.host,command,'runtime transport failed') from None
+        finally:
+            if channel is not None:
+                self._untrack_channel(channel);channel.close()
 
     def upload_text(self, content: str, remote_path: str) -> None:
         """Write text content to a remote file via SFTP."""

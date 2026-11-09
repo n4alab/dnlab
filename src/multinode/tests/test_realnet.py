@@ -80,6 +80,9 @@ class FakeSSH:
 
     def run(self, cmd, check=True):
         self.commands.append(cmd)
+        if 'subprocess.check_output' in cmd:
+            import json
+            return json.dumps({'context':{'boot_id':'fixture','device':1,'inode':2},'links':[]})
         return ""
 
     def run_no_check(self, cmd):
@@ -87,7 +90,19 @@ class FakeSSH:
         return 0, "", ""
 
 
-def test_realnet_setup_orders_bridges_before_vxlan_and_adds_forwarding(topo_factory):
+def test_reconciling_one_lab_preserves_existing_shared_route_reflector(topo_factory):
+    from dnlab_multinode.services import realnet
+
+    from tests.test_realnet_reflector import ReflectorSSH,configured_topology
+    topo=configured_topology(topo_factory);topo.name='lab-b'
+    client=ReflectorSSH(realnet._rr_frr_config(topo.realnet_infra)).managed()
+    identity=client.container['Id']
+    realnet.deploy_route_reflector(topo,client)
+    assert client.container['Id']==identity
+    assert not client.mutations and not client.uploads
+
+
+def test_realnet_setup_orders_bridges_before_vxlan_and_adds_forwarding(topo_factory,tmp_path):
     from dnlab_multinode.models.topology import RealNet, RealNetLink
     from dnlab_multinode.services import realnet
 
@@ -101,7 +116,7 @@ def test_realnet_setup_orders_bridges_before_vxlan_and_adds_forwarding(topo_fact
     clients = {"master": FakeSSH(), "worker1": FakeSSH()}
 
     realnet.setup_bridges(
-        topo, clients, {"master": "10.0.0.10", "worker1": "10.0.0.11"}
+        topo, clients, {"master": "10.0.0.10", "worker1": "10.0.0.11"},vni_directory=tmp_path/'vni'
     )
 
     master_cmds = clients["master"].commands
@@ -109,39 +124,35 @@ def test_realnet_setup_orders_bridges_before_vxlan_and_adds_forwarding(topo_fact
     peer_idx = next(i for i, c in enumerate(master_cmds) if "type vxlan" in c)
 
     assert bridge_idx < peer_idx
-    assert any("iptables -C FORWARD -i brlabrealn" in c for c in master_cmds)
-    assert any("iptables -C FORWARD -o brlabrealn" in c for c in master_cmds)
+    from dnlab_multinode.utils import naming
+    bridge=naming.realnet_bridge_name(topo.name,'real_net1')
+    assert any(f"iptables -C FORWARD -i {bridge}" in c for c in master_cmds)
+    assert any(f"iptables -C FORWARD -o {bridge}" in c for c in master_cmds)
 
 
-def test_realnet_destroy_removes_forwarding_rules():
+def test_realnet_destroy_refuses_unqualified_legacy_without_firewall_changes():
+    import pytest
     from dnlab_multinode.models.state import RealNetState
     from dnlab_multinode.services import realnet
-
-    clients = {"master": FakeSSH(), "worker1": FakeSSH()}
-    states = [
-        RealNetState(
-            name="real_net1",
-            bridge="brlabreal",
-            vxlan_id=5001,
-            hosts=["master", "worker1"],
-            router_container="dnlab-lab-real_net1-realnet",
-        )
-    ]
-
-    realnet.destroy_realnets("lab", clients, states)
-
-    assert any("iptables -D FORWARD -i brlabreal" in c for c in clients["master"].commands)
-    assert any("iptables -D FORWARD -o brlabreal" in c for c in clients["master"].commands)
-    assert any("iptables -D FORWARD -i brlabreal" in c for c in clients["worker1"].commands)
-    assert any("iptables -C FORWARD -i brlabreal -j ACCEPT" in c for c in clients["master"].commands)
-    assert any("iptables -C FORWARD -o brlabreal -j ACCEPT" in c for c in clients["worker1"].commands)
-    assert any("--comment 'set by containerlab'" in c for c in clients["master"].commands)
+    from dnlab_multinode.services.realnet_cleanup_host import OwnershipError
+    clients={'master':FakeSSH(),'worker1':FakeSSH()}
+    state=RealNetState(name='real_net1',bridge='brlabreal',vxlan_id=5001,
+                       hosts=list(clients),router_container='dnlab-lab-real_net1-realnet')
+    with pytest.raises(OwnershipError,match='explicit qualification'):
+        realnet.destroy_realnets('lab',clients,[state])
+    assert all(not client.commands for client in clients.values())
 
 
-def test_realnet_bgp_writes_frr_config(topo_factory):
+def test_realnet_bgp_writes_frr_config(topo_factory,monkeypatch):
     from dnlab_multinode.models.state import RealNetState
     from dnlab_multinode.models.topology import RealNet
     from dnlab_multinode.services import realnet
+    from dnlab_multinode.services import realnet_bootstrap
+    bootstrap_calls=[]
+    def bootstrap(topo,rn,state,master,image,network):
+        bootstrap_calls.append((image,network))
+        return {'container_id':'a'*64,'wan_ip':rn.bgp_router_ip}
+    monkeypatch.setattr(realnet_bootstrap,'bootstrap_router',bootstrap)
 
     class DeploySSH(FakeSSH):
         def run_no_check(self, cmd):
@@ -188,7 +199,7 @@ def test_realnet_bgp_writes_frr_config(topo_factory):
     deployed = realnet.deploy_router(topo, rn, state, ssh)
 
     assert deployed.router_wan_ip == "10.0.0.21"
-    assert any("--network dnlab-realnet-bgp" in cmd and "--ip 10.0.0.21" in cmd for cmd in ssh.commands)
+    assert bootstrap_calls[0][1]=='dnlab-realnet-bgp'
     assert any("/etc/frr/frr.conf" in cmd and "router bgp 64512" in cmd for cmd in ssh.commands)
     assert any("neighbor 10.0.0.10 password rr-secret" in cmd for cmd in ssh.commands)
     assert any("neighbor VD password router-secret" in cmd for cmd in ssh.commands)
@@ -197,26 +208,10 @@ def test_realnet_bgp_writes_frr_config(topo_factory):
 def _deploy_rr_for_image_test(topo_factory):
     from dnlab_multinode.services import realnet
 
-    class DeploySSH(FakeSSH):
-        def run_no_check(self, cmd):
-            self.commands.append(cmd)
-            if "docker network inspect" in cmd:
-                return 1, "", ""
-            return 0, "", ""
-
-        def run(self, cmd, check=True):
-            self.commands.append(cmd)
-            if ".State.Pid" in cmd:
-                return "1234"
-            return ""
-
-    topo = topo_factory(num_workers=0)
-    topo.realnet_infra.rr_ip = "10.0.0.10"
-    topo.realnet_infra.host_net = "10.0.0.0/24"
-    topo.realnet_infra.wan_iface = "br-host"
-
-    ssh = DeploySSH()
-    realnet.deploy_route_reflector(topo, ssh)
+    from tests.test_realnet_reflector import ReflectorSSH,configured_topology
+    topo=configured_topology(topo_factory)
+    ssh=ReflectorSSH(realnet._rr_frr_config(topo.realnet_infra),existing=False)
+    realnet.deploy_route_reflector(topo,ssh)
     return ssh.commands
 
 
@@ -227,7 +222,7 @@ def test_realnet_rr_defaults_to_latest_image(monkeypatch, topo_factory):
     commands = _deploy_rr_for_image_test(topo_factory)
 
     assert any("docker image inspect dnlab-realnet-rr:latest" in cmd for cmd in commands)
-    assert any(cmd.endswith("dnlab-realnet-rr:latest") for cmd in commands)
+    assert any(cmd.endswith('sha256:'+'a'*64) and '--name dnlab-realnet-rr' in cmd for cmd in commands)
 
 
 def test_realnet_rr_uses_release_image(monkeypatch, topo_factory):
@@ -237,7 +232,7 @@ def test_realnet_rr_uses_release_image(monkeypatch, topo_factory):
     commands = _deploy_rr_for_image_test(topo_factory)
 
     assert any("docker image inspect dnlab-realnet-rr:0.1.0" in cmd for cmd in commands)
-    assert any(cmd.endswith("dnlab-realnet-rr:0.1.0") for cmd in commands)
+    assert any(cmd.endswith('sha256:'+'a'*64) and '--name dnlab-realnet-rr' in cmd for cmd in commands)
     assert not any("dnlab-realnet-rr:latest" in cmd for cmd in commands)
 
 
@@ -247,11 +242,26 @@ def test_realnet_router_veth_name_is_unique_per_lab():
     first = naming.realnet_router_veth_name("1a1fc20b0f7e", "net1")
     second = naming.realnet_router_veth_name("5f9eb562b4ce", "net1")
 
-    assert first == "vh1a1fcnet1"
-    assert second == "vh5f9ebnet1"
+    assert first.startswith('vh-')
+    assert second.startswith('vh-')
     assert first != second
     assert len(first) <= 15
     assert len(second) <= 15
+
+
+def test_realnet_teardown_retains_unqualified_persisted_names_on_all_hosts():
+    import pytest
+    from dnlab_multinode.models.state import RealNetState
+    from dnlab_multinode.services import realnet
+    from dnlab_multinode.services.realnet_cleanup_host import OwnershipError
+    clients={'master':FakeSSH(),'worker1':FakeSSH(),'worker2':FakeSSH()}
+    state=RealNetState(name='access',bridge='br-persisted',vxlan_id=3001,
+                       hosts=list(clients),router_container='router',router_veth='vh-persisted',
+                       vxlan_ifaces={'master':['vx-peer-one','vx-peer-two'],
+                                     'worker1':['vx-worker-one'],'worker2':['vx-worker-two']})
+    with pytest.raises(OwnershipError):realnet.destroy_realnets('lab',clients,[state])
+    assert all(not client.commands for client in clients.values())
+    assert state.bridge=='br-persisted' and state.router_veth=='vh-persisted'
 
 
 def test_realnet_lifecycle_reconcile_redeploys_router(monkeypatch, topo_factory):

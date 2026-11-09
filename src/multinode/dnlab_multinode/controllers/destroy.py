@@ -37,6 +37,7 @@ class DestroyController:
         self._state: DeploymentState | None = None
         self._clients: dict[str, SSHClient] = {}
         self._errors: list[str] = []
+        self._realnet_detach_verified = False
         self._progress = make_timer(progress)
 
     def _phase(self, phase: str, detail: str, fn, *args, **kwargs):
@@ -51,6 +52,7 @@ class DestroyController:
 
     def run(self) -> None:
         """Execute the full teardown pipeline."""
+        self._realnet_detach_verified = False
         self._progress.emit("destroy", "start", detail="Destroying lab")
         state_dir = Path(self.topology_file).parent
 
@@ -65,6 +67,10 @@ class DestroyController:
                 detail=f"No state for '{topo.name}' — nothing to destroy",
             )
             return
+
+        from dnlab_multinode.services.native_public import backend
+        if backend(self._state)=='custom':
+            raise DestroyError('Native whole-lab teardown requires complete qualified runtime intents; Containerlab fallback refused')
 
         # Persist the caller's intent before making any remote change. If a
         # host is down, lab-cleanup can safely finish this exact teardown once
@@ -87,6 +93,21 @@ class DestroyController:
                         "ssh-connect", "error",
                         host=client.name, detail=str(e),
                     )
+
+            if self._errors:
+                raise DestroyError("Complete preflight failed: an infrastructure host is unavailable; no teardown started")
+            if self._state.mgmt:
+                self._phase("management-preflight", "Verifying management ownership on every host",
+                            netsetup.preflight_management, self._state, self._clients)
+            self._phase("realnet-preflight", "Verifying RealNet ownership on every host",
+                        realnet_svc.preflight_realnets, self._state.lab_name,
+                        self._clients, self._state.realnets)
+
+            from dnlab_multinode.services.realnet_cleanup import detach_realnet_attachments
+            self._phase("detach-realnet-data", "Detaching verified RealNet data ports",
+                        detach_realnet_attachments,self._state.lab_name,self._clients,self._state.realnets,
+                        checkpoint=lambda:state_svc.save_state(self._state,state_dir),runtime_links=self._state.runtime_links)
+            self._realnet_detach_verified = True
 
             self._phase("destroy-jumphost", "Removing jump host", self._destroy_jumphost)
             self._phase("destroy-dns", "Removing DNS container", self._destroy_dns)
@@ -150,14 +171,16 @@ class DestroyController:
         jh = self._state.jumphost
         host = jh.node
         if host not in self._clients:
-            self._errors.append(f"Cannot remove jumphost: host '{host}' not connected")
-            return
+            raise DestroyError(f"Cannot remove jumphost: host '{host}' not connected; teardown retained")
 
         try:
-            jumphost.destroy_jumphost(self._state.lab_name, self._clients[host])
+            if not jh.generation: raise DestroyError("Unqualified legacy jumphost coordinator generation")
+            jumphost.preflight_jumphost_cleanup(self._state.lab_name, self._clients[host], jh.container, jh.generation)
+            jumphost.destroy_jumphost(self._state.lab_name, self._clients[host], jh.generation)
         except Exception as e:
             self._errors.append(f"Jumphost removal: {e}")
             log.error("Jumphost removal failed: %s", e)
+            raise DestroyError("Jumphost cleanup pending; dependent infrastructure retained") from e
 
     # ── Phase 1b: DNS container ─────────────────────────────────────
 
@@ -169,13 +192,14 @@ class DestroyController:
         host = self._state.dns.node
         if host not in self._clients:
             self._errors.append(f"Cannot remove DNS: host '{host}' not connected")
-            return
+            raise DestroyError("DNS host unavailable; dependent infrastructure retained")
 
         try:
-            dns_svc.destroy_dns(self._state.lab_name, self._clients[host])
+            dns_svc.destroy_dns(self._state.lab_name, self._clients[host], self._state.dns.generation)
         except Exception as e:
             self._errors.append(f"DNS removal: {e}")
             log.error("DNS removal failed: %s", e)
+            raise DestroyError("DNS cleanup pending; dependent infrastructure retained") from e
 
     def _destroy_runtime_relays(self):
         if not self._state.runtime_relays:
@@ -183,11 +207,12 @@ class DestroyController:
         log.info("Teardown: removing runtime relay sidecars")
         try:
             runtime_relay_svc.destroy_runtime_relays(
-                self._state.lab_name, self._clients,
+                self._state.lab_name, self._clients, self._state.runtime_relays,
             )
         except Exception as e:
             self._errors.append(f"Runtime relay removal: {e}")
             log.error("Runtime relay removal failed: %s", e)
+            raise DestroyError("Runtime relay cleanup pending; dependent infrastructure retained") from e
 
     def _destroy_legacy_logging(self):
         """Best-effort cleanup for labs deployed before runtime relay logging."""
@@ -290,6 +315,10 @@ class DestroyController:
             return
         log.info("Teardown: removing runtime dataplane links")
         for link in self._state.runtime_links:
+            if (self._realnet_detach_verified and link.link_type=='real_net' and link.state=='down'
+                    and link.resource_identities.get('realnet_attachment_operation',{}).get('phase')=='cleaned'):
+                # All-host guarded detach already confirmed the exact attempt.
+                continue
             try:
                 runtime_links_svc.delete_link(
                     link,
@@ -305,6 +334,7 @@ class DestroyController:
         try:
             realnet_svc.destroy_realnets(
                 self._state.lab_name, self._clients, self._state.realnets,
+                checkpoint=lambda: state_svc.save_state(self._state, Path(self.topology_file).parent),
             )
         except Exception as e:
             self._errors.append(f"real_net removal: {e}")
@@ -325,36 +355,25 @@ class DestroyController:
                 if not (node and iface and node in self._clients):
                     continue
                 try:
-                    vxlan._delete_vxlan_iface(self._clients[node], iface, node)
+                    vxlan._delete_vxlan_iface(self._clients[node], iface, node, vxlan_id=vl.id)
                 except Exception as e:
                     self._errors.append(f"VxLAN iface delete vx-{iface}@{node}: {e}")
 
     # ── Phase 4: Mgmt infrastructure ────────────────────────────────
 
     def _destroy_mgmt(self, topo):
-        if not self._state.mgmt:
-            return
-
-        log.info("Teardown: removing mgmt infrastructure")
-        bridge = self._state.mgmt.bridge
-
-        for host_name in self._clients:
-            try:
-                netsetup.teardown_mgmt_infra(
-                    self._state.lab_name, bridge,
-                    self._clients[host_name], host_name,
-                )
-            except Exception as e:
-                self._errors.append(f"Mgmt teardown {host_name}: {e}")
+        if not self._state.mgmt: return
+        if self._errors:
+            raise DestroyError("Earlier cleanup failed; management infrastructure retained")
+        netsetup.destroy_management(self._state, self._clients,
+            checkpoint=lambda: state_svc.save_state(self._state, Path(self.topology_file).parent))
 
     # ── Phase 5: Docker network ──────────────────────────────────────
 
     def _destroy_mgmt_network(self, topo):
-        for client in self._clients.values():
-            try:
-                mgmt_network_svc.destroy_mgmt_network(topo, client)
-            except Exception as exc:
-                self._errors.append(f"Docker mgmt network cleanup {client.name}: {exc}")
+        if self._errors: raise DestroyError('Earlier cleanup failed; Docker management networks retained')
+        netsetup.network_action(self._state,self._clients,'cleanup',
+            checkpoint=lambda:state_svc.save_state(self._state,Path(self.topology_file).parent))
 
     # ── Phase 6: Master /etc/hosts cleanup ──────────────────────────
 

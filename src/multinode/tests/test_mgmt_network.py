@@ -71,57 +71,31 @@ def test_expected_network_uses_stable_host_partition(topo_factory):
     assert master["host_count"] == worker["host_count"] == 2
 
 
-def test_ensure_creates_and_verifies_network(monkeypatch, topo_factory):
-    topo = topo_factory(name="lab", num_workers=0)
-    client = MagicMock(name="master")
-    client.name = "master"
-    expected = mgmt_network._expected_network(topo)
-    observed = []
-
-    monkeypatch.setattr(mgmt_network, "ensure_vrf_plugin", lambda candidate: observed.append(("plugin", candidate.name)))
-    inspections = iter([None, _actual_network(expected)])
-    monkeypatch.setattr(mgmt_network, "_inspect_network", lambda *_args: next(inspections))
-
-    mgmt_network.ensure_mgmt_network(topo, client)
-
-    assert observed == [("plugin", "master")]
-    command = client.run.call_args.args[0]
-    assert command.startswith("docker network create")
-    assert mgmt_network.IPAM_DRIVER in command
-    assert mgmt_network.NETWORK_DRIVER in command
-
-
-def test_ensure_rejects_existing_network_with_unexpected_ipam(monkeypatch, topo_factory):
-    topo = topo_factory(name="lab", num_workers=0)
-    client = MagicMock()
-    client.name = "master"
-    actual = _actual_network(mgmt_network._expected_network(topo))
-    actual["IPAM"]["Driver"] = "default"
-
-    monkeypatch.setattr(mgmt_network, "ensure_vrf_plugin", lambda _client: None)
-    monkeypatch.setattr(mgmt_network, "_inspect_network", lambda *_args: actual)
-
-    with pytest.raises(mgmt_network.MgmtNetworkError, match="ipam-driver"):
-        mgmt_network.ensure_mgmt_network(topo, client)
+def test_ensure_delegates_to_qualified_all_host_guard_and_marks_use(monkeypatch,topo_factory):
+    from dnlab_multinode.services import netsetup
+    topo=topo_factory(name='lab',num_workers=0);client=MagicMock();client.name='master';events=[]
+    monkeypatch.setattr(mgmt_network,'_qualified_context',lambda *args:{'master':client})
+    monkeypatch.setattr(netsetup,'network_action',lambda state,clients,action,**kwargs:events.append((action,kwargs['host'])))
+    mgmt_network.ensure_mgmt_network(topo,client,state=object(),mark_used=True)
+    assert events==[('ensure','master'),('mark-used','master')]
     client.run.assert_not_called()
 
 
-def test_destroy_removes_only_exact_dnlab_network(monkeypatch, topo_factory):
-    topo = topo_factory(name="lab", num_workers=0)
-    client = MagicMock()
-    client.name = "master"
-    expected = mgmt_network._expected_network(topo)
+def test_unqualified_context_fails_before_plugin_install_or_docker_calls(monkeypatch,topo_factory):
+    topo=topo_factory(name='lab',num_workers=0);client=MagicMock();client.name='master';plugin=MagicMock()
+    monkeypatch.setattr(mgmt_network,'ensure_vrf_plugin',plugin)
+    with pytest.raises(mgmt_network.MgmtNetworkError,match='coordinator context'):mgmt_network.ensure_mgmt_network(topo,client)
+    plugin.assert_not_called();client.run.assert_not_called();client.run_no_check.assert_not_called()
 
-    monkeypatch.setattr(mgmt_network, "_inspect_network", lambda *_args: _actual_network(expected))
-    mgmt_network.destroy_mgmt_network(topo, client)
-    assert client.run.call_args.args[0] == f"docker network rm {topo.mgmt.network}"
 
-    client.reset_mock()
-    unsafe = _actual_network(expected)
-    unsafe["Labels"] = {}
-    monkeypatch.setattr(mgmt_network, "_inspect_network", lambda *_args: unsafe)
-    mgmt_network.destroy_mgmt_network(topo, client)
-    client.run.assert_not_called()
+def test_destroy_delegates_to_id_guard_and_propagates_recovery(monkeypatch,topo_factory):
+    from dnlab_multinode.services import netsetup
+    topo=topo_factory(name='lab',num_workers=0);client=MagicMock();client.name='master';events=[]
+    monkeypatch.setattr(mgmt_network,'_qualified_context',lambda *args:{'master':client})
+    def fail(state,clients,action,**kwargs):events.append(action);raise RuntimeError('generation conflict')
+    monkeypatch.setattr(netsetup,'network_action',fail)
+    with pytest.raises(mgmt_network.MgmtNetworkError,match='generation conflict'):mgmt_network.destroy_mgmt_network(topo,client,state=object())
+    assert events==['cleanup'];client.run.assert_not_called()
 
 
 def test_remote_plugin_service_runs_as_stock_docker_extension():

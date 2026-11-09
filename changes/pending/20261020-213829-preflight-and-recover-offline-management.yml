@@ -1,0 +1,15 @@
+id: 20261020-213829-preflight-and-recover-offline-management
+type: internal
+title: Preflight and recover offline management acquisition cancellation
+description: Reject active workloads with a complete read-only preflight before coordinator
+  admission; bind acquisition to observed workload inventory, retire cancelled tokens
+  on every original runtime, and seal cancellation before provisioning. Preserve fences
+  through lost acknowledgements, unavailable workers and crashes.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

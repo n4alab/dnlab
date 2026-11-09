@@ -167,17 +167,17 @@ def test_mgmt_network_phase_runs_before_containerlab_and_is_rollback_tracked(mon
     destroyed = []
 
     monkeypatch.setattr(
-        "dnlab_multinode.controllers.deploy.mgmt_network_svc.ensure_mgmt_network",
-        lambda _topo, client: ensured.append(client.name),
+        "dnlab_multinode.controllers.deploy.netsetup.network_action",
+        lambda _state, clients, action, **kwargs: ensured.append((action,sorted(clients))),
     )
     monkeypatch.setattr(
         "dnlab_multinode.controllers.deploy.mgmt_network_svc.destroy_mgmt_network",
-        lambda _topo, client: destroyed.append(client.name),
+        lambda _topo, client, **kwargs: destroyed.append(client.name),
     )
 
     ctrl._deploy_mgmt_network(topo)
 
-    assert sorted(ensured) == ["master", "worker1"]
+    assert ensured == [("ensure",["master","worker1"]),("mark-used",["master","worker1"])]
     assert ctrl._state.phases_completed == ["mgmt_network"]
 
     ctrl._rollback(topo)

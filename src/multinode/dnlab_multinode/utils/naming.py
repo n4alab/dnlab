@@ -1,6 +1,7 @@
 """Interface naming utilities — Linux limit of 15 characters."""
 
 import hashlib
+import json
 import re
 
 _MAX_IFACE_LEN = 15
@@ -158,11 +159,17 @@ def mgmt_anchor_container_name(lab_name: str, host_name: str) -> str:
 
 def runtime_host_endpoint(lab_name: str, node_name: str, iface: str, link_id: str | int) -> str:
     """Host-side endpoint name for per-VD runtime links, max 15 chars."""
-    node = re.sub(r"[^A-Za-z0-9]", "", str(node_name))[:4] or "n"
-    ifs = shorten_iface(iface)[:4] or "if"
-    lid = re.sub(r"[^A-Za-z0-9]", "", str(link_id))[-3:] or "0"
-    name = f"rt-{node}-{ifs}-{lid}"
-    return name[:_MAX_IFACE_LEN]
+    return scoped_interface('rt', 'endpoint', lab_name, node_name, iface, str(link_id))
+
+
+def scoped_interface(prefix: str, role: str, *identity: str) -> str:
+    payload = json.dumps([role, *identity], ensure_ascii=True, separators=(',', ':'))
+    digest = hashlib.sha256(payload.encode()).hexdigest()
+    return prefix + '-' + digest[:_MAX_IFACE_LEN - len(prefix) - 1]
+
+
+def runtime_bridge_name(lab_name: str, link_id: str) -> str:
+    return scoped_interface('br-rt', 'local-bridge', lab_name, link_id)
 
 
 def runtime_port_endpoint(lab_name: str, node_name: str, iface: str) -> str:
@@ -174,28 +181,28 @@ def runtime_port_endpoint(lab_name: str, node_name: str, iface: str) -> str:
 
 def realnet_bridge_name(lab_name: str, real_net: str) -> str:
     """Per-lab/per-real_net Linux bridge name, max 15 chars."""
-    lab = sanitize_lab_name(lab_name)[:5]
-    rn = sanitize_lab_name(real_net).replace("-", "")[:5]
-    return f"br{lab}{rn}"[:_MAX_IFACE_LEN]
+    return scoped_interface('br', 'realnet-bridge', lab_name, real_net)
 
 
 def realnet_vxlan_iface(lab_name: str, real_net: str) -> str:
     """Per-host VXLAN interface for a real_net fabric, max 15 chars."""
-    lab = sanitize_lab_name(lab_name).replace("-", "")[:5]
-    rn = sanitize_lab_name(real_net).replace("-", "")[:5]
-    return f"vx{lab}{rn}"[:_MAX_IFACE_LEN]
+    return scoped_interface('vx', 'realnet-vxlan', lab_name, real_net)
 
 
-def realnet_bridge_iface(node_name: str, iface: str) -> str:
+def realnet_vxlan_peer_name(lab_name: str, real_net: str, host: str) -> str:
+    return scoped_interface('vx', 'realnet-vxlan-peer', lab_name, real_net, host)
+
+
+def realnet_bridge_iface(node_name: str, iface: str, lab_name: str | None = None) -> str:
     """Host-side veth name attached by clab to a real_net bridge."""
-    return f"rn-{node_name[:4]}-{shorten_iface(iface)}"[:_MAX_IFACE_LEN]
+    if lab_name is None:
+        return f"rn-{node_name[:4]}-{shorten_iface(iface)}"[:_MAX_IFACE_LEN]
+    return scoped_interface('rn', 'realnet-endpoint', lab_name, node_name, iface)
 
 
 def realnet_router_veth_name(lab_name: str, real_net: str) -> str:
     """Host-side veth for the unmanaged real_net router, unique per lab."""
-    lab = sanitize_lab_name(lab_name).replace("-", "")[:5]
-    rn = sanitize_lab_name(real_net).replace("-", "")[:5]
-    return f"vh{lab}{rn}"[:_MAX_IFACE_LEN]
+    return scoped_interface('vh', 'realnet-router-veth', lab_name, real_net)
 
 
 def realnet_router_container_name(lab_name: str, real_net: str) -> str:

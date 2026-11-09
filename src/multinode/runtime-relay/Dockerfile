@@ -1,6 +1,6 @@
 FROM python:3.12-alpine
 
-LABEL io.dnlab.runtime-relay.capabilities="lab-prefix-console-port-v1,multisession-console-v1"
+LABEL io.dnlab.runtime-relay.capabilities="lab-prefix-console-port-v1,multisession-console-v1,qualified-container-id-v1"
 
 RUN apk add --no-cache docker-cli busybox-extras util-linux \
     && mkdir -p /usr/share/doc/dnlab/third-party \

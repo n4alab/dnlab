@@ -1,0 +1,21 @@
+id: 20261013-153426-diagnose-cleaned-realnet-attachment-reje
+type: internal
+title: Track RealNet attachment attempts across qualified VD generations
+description: Separate logical links from durable attempt identifiers. Permit new
+  qualified VD generations only after verified cleanup and preserve proof and phase
+  history in the shared SQLite transaction. Reject stale or missing attempt tokens,
+  obsolete generations and replacement of active or recovery-pending attempts.
+  Recover exact-attempt receipts after lost responses and propagate them to guarded
+  teardown without repeating VD namespace access after verified detach. Completed
+  previous bridge generations remain historical and never authorize resource adoption.
+  Isolated native gate passed with two new Linux VD spawns, commit crash cases,
+  stale-request refusal, preserved control/management and complete cleanup.
+  Production proof generation, distributed and NOS qualification remain pending.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

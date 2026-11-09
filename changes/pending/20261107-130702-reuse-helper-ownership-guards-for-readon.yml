@@ -1,0 +1,14 @@
+id: 20261107-130702-reuse-helper-ownership-guards-for-readon
+type: internal
+title: Reuse helper ownership guards for readonly scope observations
+description: Add DNS, jumphost and relay scope-owner adapters bound to original service
+  births, and expose the existing jumphost cleaned-resource check without mutation
+  or recovery.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

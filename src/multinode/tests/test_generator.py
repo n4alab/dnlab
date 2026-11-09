@@ -1,5 +1,6 @@
 """Tests for per-host topology file generation."""
 
+import pytest
 import yaml
 
 from dnlab_multinode.models.topology import VDNode, Link, RealNet, RealNetLink
@@ -220,10 +221,32 @@ def test_vm_guest_dhcp_flag_is_preserved_and_runtime_identity_is_stable(topo_fac
         rendered = yaml.safe_load(generate_topology_files(topo, plan)["master"])
         env = rendered["topology"]["nodes"]["R1"]["env"]
         assert env["CLAB_MGMT_DHCP"] == "true"
-        assert env["CLAB_MGMT_PASSTHROUGH"] == "true"
+        assert env["CLAB_MGMT_PASSTHROUGH"] == "false"
         assert env["CLAB_MGMT_MAC"] == "02:00:00:00:00:11"
         assert env["CLAB_MGMT_DUID"] == "0001000112345678"
         assert env["CLAB_MGMT_IAID"] == "305419896"
+
+
+@pytest.mark.parametrize("image", ["vrnetlab/example:latest", "alpine:latest"])
+@pytest.mark.parametrize("configured", [None, "false", "true"])
+def test_management_passthrough_is_forced_false_on_both_deploy_paths(
+    topo_factory, image, configured,
+):
+    env = {"KEEP": "value"}
+    if configured is not None:
+        env["CLAB_MGMT_PASSTHROUGH"] = configured
+    node = VDNode(name="R1", kind="generic_vm", image=image, env=env)
+    topo = topo_factory(nodes={"R1": node}, links=[], num_workers=0)
+    plan = _plan_single_host(topo, "master", ["R1"])
+
+    documents = [
+        generate_topology_files(topo, plan)["master"],
+        generate_micro_topology_files(topo, plan)["master"]["R1"],
+    ]
+    for document in documents:
+        rendered = yaml.safe_load(document)["topology"]["nodes"]["R1"]["env"]
+        assert rendered["CLAB_MGMT_PASSTHROUGH"] == "false"
+        assert rendered["KEEP"] == "value"
 
 
 def test_endpoints_flow_style_in_text(topo_factory):
@@ -337,7 +360,7 @@ def test_mgmt_anchor_topology_uses_precreated_mgmt_network(topo_factory):
     assert node["kind"] == "linux"
     assert node["image"] == "dnlab-mgmt-anchor:latest"
     assert node["mgmt-ipv4"] == "172.20.0.252"
-    assert node["env"]["CLAB_MGMT_PASSTHROUGH"] == "true"
+    assert node["env"]["CLAB_MGMT_PASSTHROUGH"] == "false"
 
 
 def test_mgmt_anchor_topology_is_per_active_host_not_per_vd(topo_factory):
@@ -383,7 +406,7 @@ def test_micro_topologies_preserve_node_details(topo_factory):
 
     assert node["kind"] == "linux"
     assert node["mgmt-ipv4"] == "172.20.0.11"
-    assert node["env"] == {"FOO": "bar"}
+    assert node["env"] == {"FOO": "bar", "CLAB_MGMT_PASSTHROUGH": "false"}
     assert "8443:443/tcp" in node["ports"]
     assert any(bind.endswith(":/persist") for bind in node["binds"])
 
@@ -436,4 +459,5 @@ def test_micro_realnet_link_uses_host_endpoint(topo_factory):
     parsed = yaml.safe_load(generate_micro_topology_files(topo, plan)["master"]["R1"])
 
     assert list(parsed["topology"]["nodes"]) == ["R1"]
-    assert parsed["topology"]["links"][0]["endpoints"] == ["R1:eth1", "host:rn-R1-e1"]
+    from dnlab_multinode.utils import naming
+    assert parsed["topology"]["links"][0]["endpoints"] == ["R1:eth1", "host:"+naming.realnet_bridge_iface('R1','eth1',topo.name)]

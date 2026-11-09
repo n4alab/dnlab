@@ -1,0 +1,15 @@
+id: 20261020-130622-compile-durable-multi-segment-management
+type: internal
+title: Compile durable multi-segment management service intents
+description: Include one jumphost and DNS access model, stable per-segment interfaces,
+  DHCP selection and routing intent in native batch provenance; validate before remote
+  preflight and preserve original metadata on retries, including older batches without
+  service intents.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

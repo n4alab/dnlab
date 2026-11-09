@@ -1,0 +1,20 @@
+id: 20261014-131110-qualify-native-lifecycle-adapter-over-lo
+type: internal
+title: Qualify native lifecycle adapter over loopback SSH
+description: Add a temporary key-only loopback SSH fixture restricted to the owned
+  runtime CLI, then exercise the production SSH run/run_input methods and optional
+  lifecycle adapter against the isolated image daemon. Verify stdin manifests, plan,
+  duplicate submit, reconnect with an accepted queued operation, spawn, pinned-namespace
+  stop and queued cancellation. Record command/input-size metadata without payload
+  or key material and verify fixture process/socket cleanup. This qualifies actual
+  SSH protocol on one local host, not remote workers, production connection provisioning
+  or distributed deployment.
+components:
+- multinode
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

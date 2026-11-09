@@ -1,0 +1,15 @@
+id: 20261012-210801-scope-link-and-realnet-resource-identiti
+type: bugfix
+title: Scope link and RealNet resource identities to complete lab names
+description: Derive host endpoint, local bridge and RealNet interface names from complete
+  lab/resource identities, including worker identity for master VXLAN peers. Persist
+  local bridge and RealNet interface names for lifecycle operations. Ownership guard
+  implementation and legacy qualification remain in progress on the experimental branch.
+components:
+- multinode
+audience:
+- operator
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

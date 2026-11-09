@@ -1,0 +1,14 @@
+id: 20261019-132835-provision-full-management-infrastructure
+type: internal
+title: Provision full management infrastructure in DHCP fixture
+description: Use the existing journaled management worker for fixture VRF, bridge,
+  VXLAN and owned firewall rules, and verify cleanup after removing consumers and
+  Docker networks.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

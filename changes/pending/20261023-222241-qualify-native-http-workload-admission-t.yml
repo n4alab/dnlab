@@ -1,0 +1,16 @@
+id: 20261023-222241-qualify-native-http-workload-admission-t
+type: internal
+title: Qualify native HTTP workload admission through GUI proxy
+description: Add an isolated workload fixture using the original management ledger,
+  coordinator lifecycle, pinned runtime journal and verified container generation.
+  Verify a nonce-bound HTTP response through real GUI opening and proxy routes after
+  network-service release, with ordinary tracked shutdown and dependency preservation
+  on uncertain cleanup.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

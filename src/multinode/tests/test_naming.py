@@ -1,6 +1,27 @@
 """Tests for interface naming utilities."""
 
 from dnlab_multinode.utils import naming
+import pytest
+
+
+@pytest.mark.parametrize('resource',[
+    lambda lab:naming.runtime_host_endpoint(lab,'R1','eth1','l0'),
+    lambda lab:naming.runtime_bridge_name(lab,'l0'),
+    lambda lab:naming.realnet_bridge_name(lab,'access'),
+    lambda lab:naming.realnet_bridge_iface('R1','eth1',lab),
+    lambda lab:naming.realnet_vxlan_iface(lab,'access'),
+    lambda lab:naming.realnet_router_veth_name(lab,'access'),
+])
+def test_complete_lab_identity_distinguishes_common_prefixes(resource):
+    names=[resource(lab) for lab in ('bridge-lab-a','bridge-lab-b')]
+    assert names[0]!=names[1]
+    assert all(len(name)<=15 for name in names)
+
+
+def test_realnet_master_peer_retains_full_worker_identity():
+    first=naming.realnet_vxlan_peer_name('same-lab','access','worker1')
+    second=naming.realnet_vxlan_peer_name('same-lab','access','worker2')
+    assert first!=second and max(len(first),len(second))<=15
 
 
 def test_shorten_iface_eth():

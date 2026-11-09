@@ -1,0 +1,36 @@
+[
+  {
+    "protocol": "[34825]",
+    "pref": 49141,
+    "kind": "flower",
+    "chain": 0
+  },
+  {
+    "protocol": "[34825]",
+    "pref": 49141,
+    "kind": "flower",
+    "chain": 0,
+    "options": {
+      "handle": 1,
+      "keys": {
+        "eth_type": "8809"
+      },
+      "not_in_hw": true,
+      "actions": [
+        {
+          "order": 1,
+          "kind": "mirred",
+          "mirred_action": "redirect",
+          "direction": "egress",
+          "to_dev": "right",
+          "control_action": {
+            "type": "stolen"
+          },
+          "index": 1,
+          "ref": 1,
+          "bind": 1
+        }
+      ]
+    }
+  }
+]

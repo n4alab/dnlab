@@ -1,0 +1,14 @@
+id: 20261025-213937-fix-local-relay-qualification-transport
+type: internal
+title: Fix local relay qualification transport
+description: Use a dedicated local stdin adapter for relay guard qualification, propagate
+  the explicit subprocess timeout, and retain the existing native runtime CLI adapter
+  and runtime guards.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

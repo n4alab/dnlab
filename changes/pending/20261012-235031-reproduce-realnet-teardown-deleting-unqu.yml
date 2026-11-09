@@ -1,0 +1,18 @@
+id: 20261012-235031-reproduce-realnet-teardown-deleting-unqu
+type: internal
+title: Prototype complete RealNet cleanup preflight and recovery
+description: Refuse unqualified legacy resources before mutation. Add complete
+  cross-host ownership preflight, per-host root-owned journals with fsync and
+  locking, explicit tracked router shutdown, ordinary removal and verified
+  absence. Preserve foreign firewall rules and retain pending state for retry.
+  Unit coverage passes; the isolated kernel gate stops on a changed bridge
+  identity after port deletion. Provisioning proofs and cleanup-daemon
+  integration remain pending; this is an experimental prototype.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

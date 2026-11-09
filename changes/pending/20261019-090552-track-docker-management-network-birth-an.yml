@@ -1,0 +1,19 @@
+id: 20261019-090552-track-docker-management-network-birth-an
+type: bugfix
+title: Track Docker management network birth and explicit recovery
+description: Management Docker networks retain durable creation nonces and immutable
+  network IDs. All-host preflight rejects substitutions before VD attachment, used
+  networks require explicit tracked restoration, and cleanup removes qualified IDs
+  only after endpoint verification.
+components:
+- multinode
+audience:
+- operator
+visibility: public
+breaking: true
+upgrade_notes:
+- Management networks without a qualified coordinator and host birth journal are refused
+  for automatic reuse or cleanup. Ordinary VD start does not recreate an observed
+  or previously used network; explicit infrastructure restoration and attachment qualification
+  are required.
+references: []

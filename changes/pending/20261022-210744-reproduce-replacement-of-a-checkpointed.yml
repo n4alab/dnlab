@@ -1,0 +1,14 @@
+id: 20261022-210744-reproduce-replacement-of-a-checkpointed
+type: internal
+title: Reproduce replacement of a checkpointed probe birth during recovery
+description: Add two isolated regressions demonstrating that packet-probe recovery
+  overwrites a previously saved container ID or birth nonce after a lost acknowledgment;
+  preserve the failing evidence pending the agreed correction.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

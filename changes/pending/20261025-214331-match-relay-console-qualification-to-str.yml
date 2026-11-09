@@ -1,0 +1,14 @@
+id: 20261025-214331-match-relay-console-qualification-to-str
+type: internal
+title: Match relay console qualification to streaming protocol
+description: Qualify CONNECT directly from the console stream and nonce output without
+  requiring the LOG acknowledgement. Reject error streams and terminal echo, retain
+  bounded reads and original cleanup guards.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

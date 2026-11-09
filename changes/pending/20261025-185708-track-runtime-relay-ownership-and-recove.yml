@@ -1,0 +1,17 @@
+id: 20261025-185708-track-runtime-relay-ownership-and-recove
+type: bugfix
+title: Track runtime relay ownership and recovery
+description: Persist relay birth intent before creation and verify its Docker generation
+  and configuration before reuse or cleanup. Refuse unqualified replacements and capability
+  changes, recover uncertain responses without duplicate allocation, and preserve
+  teardown state until qualified relay cleanup is verified. Ensure preflight rejects
+  unavailable active relays and pending journals on every host before any allocation,
+  while qualified absence remains valid for cleanup.
+components:
+- multinode
+audience:
+- operator
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

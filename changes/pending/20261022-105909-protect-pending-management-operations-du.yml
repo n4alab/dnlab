@@ -1,0 +1,15 @@
+id: 20261022-105909-protect-pending-management-operations-du
+type: bugfix
+title: Protect pending management operations during lab cleanup
+description: Block teardown and state finalization for active management barriers
+  even before the first VD. Share the provisioning lock across daemon mutations, verify
+  original terminal receipts and preserve state while cancellation or service recovery
+  remains incomplete.
+components:
+- multinode
+audience:
+- operator
+visibility: public
+breaking: false
+upgrade_notes: []
+references: []

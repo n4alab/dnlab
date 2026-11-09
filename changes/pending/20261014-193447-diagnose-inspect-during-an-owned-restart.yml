@@ -1,0 +1,19 @@
+id: 20261014-193447-diagnose-inspect-during-an-owned-restart
+type: internal
+title: Inspect committed and pending native workload states coherently
+description: Keep existing node inspection fields while adding journal identity,
+  committed spec fingerprint, qualified workload generation and pending operation
+  metadata. Resolve a new birth only from its original matching start request;
+  preserve foreign workload rejection. Read metadata in a SQLite snapshot and
+  recheck Docker identity/state and metadata with bounded retries so a concurrent
+  commit cannot mix generations. Add an optional journal-bound multinode client
+  method and inspection capability; do not expose request manifests or secrets.
+components:
+- runtime
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

@@ -1,0 +1,15 @@
+id: 20261022-125011-probe-original-management-dns-and-dhcp-l
+type: internal
+title: Probe original management DNS and DHCP listeners under fence
+description: Bind a service health record before provisioning, validate question-bound
+  DNS UDP/TCP answers from the qualified jumphost namespace and collect existing DHCP
+  process/listener evidence; retain the workload fence pending packet and routing
+  qualification.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

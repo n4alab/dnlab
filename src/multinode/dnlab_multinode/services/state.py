@@ -17,6 +17,19 @@ def state_file_path(lab_name: str, directory: Path = Path(".")) -> Path:
     return directory / f".{lab_name}.multinode.json"
 
 
+def _sync_directory_chain(directory: Path) -> None:
+    # Persist both the replacement entry and any directories mkdir(parents=True)
+    # introduced. Sync existing ancestors too: a retry may see directories left
+    # behind by an earlier failed sync and cannot infer their durability.
+    directory = directory.resolve(strict=True)
+    for parent in (directory, *directory.parents):
+        fd = os.open(parent, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
+        try:
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+
+
 def save_state(state: DeploymentState, directory: Path = Path(".")) -> Path:
     path = state_file_path(state.lab_name, directory)
     data = state.to_dict()
@@ -28,6 +41,7 @@ def save_state(state: DeploymentState, directory: Path = Path(".")) -> Path:
             stream.flush()
             os.fsync(stream.fileno())
         os.replace(tmp_name, path)
+        _sync_directory_chain(path.parent)
     except Exception:
         try:
             os.unlink(tmp_name)

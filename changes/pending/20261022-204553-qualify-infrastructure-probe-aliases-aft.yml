@@ -1,0 +1,14 @@
+id: 20261022-204553-qualify-infrastructure-probe-aliases-aft
+type: bugfix
+title: Qualify infrastructure probe aliases after veth birth
+description: Journal initial veth qualification, verify original namespace MAC and
+  peer identities, then apply and verify aliases before bridge attachment; recover
+  partial alias writes and clean only the qualified original pair.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

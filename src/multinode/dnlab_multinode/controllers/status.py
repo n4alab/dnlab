@@ -22,7 +22,7 @@ from pathlib import Path
 from dnlab_multinode.models.state import DeploymentState
 from dnlab_multinode.models.topology import DistributedTopology
 from dnlab_multinode.services import state as state_svc
-from dnlab_multinode.services.config import assign_sticky_mgmt_ipv4, parse_topology
+from dnlab_multinode.services.owned_topology import load as load_owned_topology
 from dnlab_multinode.services.progress import ProgressCallback, make_timer
 from dnlab_multinode.services.ssh import SSHClient, create_clients
 
@@ -45,6 +45,7 @@ class NodeStatus:
     uptime_seconds: int = 0
     topology_file: str = ""
     last_error: str = ""
+    runtime_status: dict = field(default_factory=dict)
     can_start: bool = False
     can_stop: bool = False
     operation_active: bool = False
@@ -69,6 +70,7 @@ class NodeStatus:
             "uptime_seconds": self.uptime_seconds,
             "topology_file": self.topology_file,
             "last_error": self.last_error,
+            "runtime_status": self.runtime_status,
             "can_start": self.can_start,
             "can_stop": self.can_stop,
             "operation_active": self.operation_active,
@@ -194,15 +196,7 @@ class StatusController:
     def run(self) -> StatusReport:
         self._progress.emit("status", "start", detail="Collecting status")
 
-        topo = parse_topology(self.topology_file, hosts_file=self.hosts_file)
-        state_dir = Path(self.topology_file).parent
-        state = state_svc.load_state(topo.name, state_dir)
-        if state is not None:
-            assign_sticky_mgmt_ipv4(
-                topo.nodes,
-                topo.mgmt,
-                state.mgmt_ip_reservations,
-            )
+        topo, state = load_owned_topology(self.topology_file, hosts_file=self.hosts_file)
 
         report = StatusReport(
             lab_name=topo.name,
@@ -309,6 +303,14 @@ class StatusController:
             for vd in sched.vd:
                 vd_host[vd] = host_name
 
+        from dnlab_multinode.services import native_public
+        native_nodes=None
+        try:
+            if native_public.backend(state)=='custom':
+                native_nodes=native_public.project(state,Path(self.topology_file).parent,clients)
+        except Exception:
+            native_nodes={}
+
         # Gather `docker ps` output per host in parallel
         per_host: dict[str, dict[str, dict]] = {}
 
@@ -376,7 +378,10 @@ class StatusController:
                 host=host_name,
                 kind=vd.kind,
                 image=vd.image,
-                mgmt_ipv4=vd.mgmt_ipv4,
+                # Status projects committed identity; it never claims or
+                # transfers a reservation while resolving legacy display aliases.
+                mgmt_ipv4=(runtime.mgmt_ipv4 if runtime and runtime.mgmt_ipv4 else
+                           state.mgmt_ip_reservations.get(runtime_key) or vd.mgmt_ipv4),
                 container=container,
                 scheduled_host=scheduled_host,
                 duplicate_hosts=duplicate_hosts,
@@ -401,6 +406,25 @@ class StatusController:
                     }
                 ),
             )
+
+            if native_nodes is not None:
+                actual=native_nodes.get(runtime_key)
+                status=actual.runtime_status if actual else {'backend':'custom','qualified':False,'guest_readiness':'unknown'}
+                qualified=status.get('qualified') is True
+                op=status.get('operation') or {}
+                ns.state=actual.state if actual else 'unknown'
+                ns.host=scheduled_host
+                ns.runtime_status=status
+                ns.last_error=actual.last_error if actual else 'Native identity or status unavailable; recovery required'
+                ns.started_at=actual.started_at if actual else ''
+                ns.operation_active=bool(op)
+                ns.can_start=bool(qualified and not op and status.get('committed_state')=='stopped'
+                                  and status.get('container_state')=='absent' and not state.teardown_requested)
+                ns.can_stop=bool(qualified and status.get('container_state')=='running' and not state.teardown_requested)
+                ns.webui_ports=[{'container_port':a.container_port,'host_port':a.host_port,
+                                 'bind_ip':a.bind_ip,'proto':a.proto} for a in state.webui_allocations.get(runtime_key,[])]
+                report.nodes[name]=ns
+                continue
 
             if runtime and runtime.state in {
                 "queued", "starting", "reconciling", "cancelling", "stopping",

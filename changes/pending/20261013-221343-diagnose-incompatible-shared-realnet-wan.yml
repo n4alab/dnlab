@@ -1,0 +1,19 @@
+id: 20261013-221343-diagnose-incompatible-shared-realnet-wan
+type: internal
+title: Guard shared RealNet WAN ownership and trace provisioning recovery
+description: Replace warning-only WAN reuse with a root-local shared infrastructure
+  guard verifying network identity, ownership labels, driver, IPAM, bridge options,
+  kernel bridge identity and gateway. Persist creator nonce before creation; active
+  reuse is read-only and interrupted creation requires explicit recovery. Refuse
+  unqualified resources and never recreate a missing active network implicitly.
+  Add realnet-infra recover-wan through the existing SSH boundary. Unit suite passes;
+  native qualification stopped on empty IPAM options representation pending decision.
+  Dedicated fixture resources were removed with ownership checks and inventory restored.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

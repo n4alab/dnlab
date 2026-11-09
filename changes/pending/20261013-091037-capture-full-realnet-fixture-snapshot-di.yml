@@ -1,0 +1,18 @@
+id: 20261013-091037-capture-full-realnet-fixture-snapshot-di
+type: internal
+title: Compare RealNet fixture invariants independently of operational timers
+description: Save the control infrastructure snapshots before and after cleanup and
+  report each differing field before fixture teardown. One isolated diagnostic case
+  identifies only bridge gc_timer and port forward_delay_timer drift. Exclude only
+  numeric changes at those exact typed paths, retaining every other comparison
+  and full raw snapshots. Add negative regressions and qualify fourteen isolated
+  SIGKILL/recovery cases, retries, control-lab invariants and verified cleanup.
+  Runtime behavior remains unchanged.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

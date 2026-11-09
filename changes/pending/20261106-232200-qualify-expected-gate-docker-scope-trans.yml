@@ -1,0 +1,14 @@
+id: 20261106-232200-qualify-expected-gate-docker-scope-trans
+type: internal
+title: Qualify expected gate Docker scope transitions in cleanup census
+description: Preserve an immutable source baseline while requiring same-gate birth,
+  journal and definition proofs for exact scope additions or removals; reject unrelated
+  changes and retain actual observation digests.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

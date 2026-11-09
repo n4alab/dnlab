@@ -1,0 +1,14 @@
+id: 20261021-101031-journal-the-dhcp-daemon-exec-before-star
+type: internal
+title: Journal the DHCP daemon exec before starting it
+description: Persist original launch nonce, Docker exec identity and start intent;
+  recover lost create/start replies through original exec/process proofs, reject replacements
+  and preserve unresolved recovery without spawning another daemon.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

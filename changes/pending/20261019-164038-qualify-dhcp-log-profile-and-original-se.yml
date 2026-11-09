@@ -1,0 +1,14 @@
+id: 20261019-164038-qualify-dhcp-log-profile-and-original-se
+type: internal
+title: Qualify DHCP log profile and original service writer
+description: Bind DHCP reload logs to qualified helper image and dnsmasq binary, immutable
+  configuration, protected directories, pinned inode and actual original process writable
+  descriptor; reject replacements and incompatible metadata before signalling.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

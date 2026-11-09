@@ -1,0 +1,19 @@
+id: 20261013-135116-reproduce-daemon-finalization-before-pen
+type: internal
+title: Recover pending RealNet VNI release before daemon finalization
+description: The daemon finalizer verifies authoritative remote cleanup journals and
+  recovers generation-bound VNI release before deleting lab state. Preserve state
+  and reservations on storage errors, missing workers, changed journals or generation
+  conflicts; retry remains idempotent after release. All 626 multinode tests pass.
+  Two isolated native fixtures use real SIGKILL before/after VNI release and a fresh
+  finalizer, verifying retained state, released reservations, unaffected other-lab
+  traffic and complete fixture cleanup. This qualifies local finalizer recovery, not
+  continuous distributed service or full ownership provisioning.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

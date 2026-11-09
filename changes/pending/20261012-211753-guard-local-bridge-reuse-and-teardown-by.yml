@@ -1,0 +1,16 @@
+id: 20261012-211753-guard-local-bridge-reuse-and-teardown-by
+type: internal
+title: Guard local bridge reuse and teardown by kernel ownership
+description: Verify complete bridge ownership alias, MAC, kind, persisted kernel index
+  and host namespace before reuse or teardown. Reject foreign members, replaced endpoints
+  and unqualified legacy bridges before carriers or firewall mutation; preserve preexisting
+  bridge on attach failure. Live qualification and RealNet guard integration remain
+  pending.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

@@ -1,0 +1,15 @@
+id: 20261021-221656-diagnose-custom-management-gateway-missi
+type: internal
+title: Diagnose custom management gateway missing from Docker IPAM reservations
+description: A local isolated PluginStore regression reproduces allocation of a configured
+  custom jumphost IPv4 gateway to a dynamic endpoint, despite protection in the VD
+  ledger. Account for Docker gateway allocation and stop before correcting network
+  intent generation; no installed plugin or host operations.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

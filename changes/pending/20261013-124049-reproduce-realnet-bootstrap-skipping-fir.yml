@@ -1,0 +1,20 @@
+id: 20261013-124049-reproduce-realnet-bootstrap-skipping-fir
+type: internal
+title: Verify firewall ownership during experimental RealNet bootstrap
+description: Reuse the cleanup firewall ownership verifier during initial and repeated
+  bootstrap preflight. Reject changed or duplicate owned rules without allocation,
+  preserve unrelated rules and retain pending resources on retry/recovery conflicts.
+  Retain full firewall dumps and compare all content except valid generated/completed
+  timestamps at their metadata positions; negative regressions preserve rules, ordering,
+  policy, counters and metadata structure. Multinode tests pass (584) and runtime
+  tests pass (535); the isolated gate passes both firewall conflicts before allocation
+  and fourteen actual crash/recovery cases, preserving helper identity and foreign
+  host eth1, with verified fixture cleanup.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

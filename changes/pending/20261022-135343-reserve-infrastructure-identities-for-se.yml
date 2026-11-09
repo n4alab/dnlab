@@ -1,0 +1,15 @@
+id: 20261022-135343-reserve-infrastructure-identities-for-se
+type: internal
+title: Reserve infrastructure identities for sequential management probes
+description: Add opt-in persistent probe identities to the management model, reuse
+  the anchor IPv4 reservation and protect a dedicated IPv6 in guest ledgers and Docker
+  IPAM. Bind DHCP reservations and original service plans while rejecting conflicts
+  and preserving VD IPv4 capacity.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

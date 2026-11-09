@@ -1,0 +1,14 @@
+id: 20261016-135954-preflight-existing-native-resource-reser
+type: internal
+title: Preflight existing native resource reservations during planning
+description: Check container, endpoint and published-port reservations during read-only
+  native planning using the same ownership rules as atomic submission. Preserve the
+  admission transaction and reject conflicts before workload mutation.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

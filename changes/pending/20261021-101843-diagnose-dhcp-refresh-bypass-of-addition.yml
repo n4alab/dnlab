@@ -1,0 +1,14 @@
+id: 20261021-101843-diagnose-dhcp-refresh-bypass-of-addition
+type: internal
+title: Diagnose DHCP refresh bypass of additional attachment ownership
+description: Add unit regressions showing refresh, recovery and historical replay
+  bypass the existing additional-management attachment guard; preserve diagnostic
+  evidence before choosing a product correction.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

@@ -1,0 +1,15 @@
+id: 20261022-220823-own-management-packet-clients-through-jo
+type: bugfix
+title: Own management packet clients through journaled container execs
+description: Run the packet client in its qualified probe container with durable create/start
+  identities, a verified process permit, append-only progress and exit evidence. Preserve
+  uncertainty and reject duplicate execution or cleanup until the original exec is
+  qualified.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

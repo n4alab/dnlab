@@ -1,0 +1,13 @@
+id: 20261019-101332-reproduce-unqualified-dns-service-cleanu
+type: internal
+title: Reproduce unqualified DNS service cleanup
+description: Record no-host regressions for DNS deploy and teardown commands that
+  remove resources without an original container generation proof.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

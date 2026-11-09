@@ -1,0 +1,15 @@
+id: 20261021-223207-document-empty-jumphost-relay-inventory
+type: internal
+title: Document jumphost inventory and blocked serial console defects
+description: Record the empty jumphost relay inventory and serial console blocked
+  by a residual telnet client, with evidence, proposed fixes and acceptance checks.
+  Revert the provisional relay implementation and tests; retain only the diagnosis
+  document for these defects.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

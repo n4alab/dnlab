@@ -58,7 +58,7 @@ def test_merge_entries_keeps_first_name_mapping():
     assert by_name["clab-dnlab-lab-R1-R1"] == "172.20.0.11"
 
 
-def test_deploy_dns_uses_jumphost_network_not_lab_mgmt(topo_factory):
+def test_deploy_dns_uses_jumphost_network_not_lab_mgmt(topo_factory, monkeypatch):
     topo = topo_factory(name="lab")
     master = MagicMock()
 
@@ -84,18 +84,21 @@ def test_deploy_dns_uses_jumphost_network_not_lab_mgmt(topo_factory):
     master.run_no_check.side_effect = run_no_check
     master.run.side_effect = run
 
+    calls = []
+    def guard(client, lab, action, config=None, content=None):
+        calls.append((action, config, content))
+        return {"phase": "absent" if action == "preflight" else "active"}
+    monkeypatch.setattr("dnlab_multinode.services.dns._guard", guard)
+    monkeypatch.setattr("dnlab_multinode.services.dns.ensure_jumphost_network", lambda *args: {"status": "active", "network_id": "a"*64})
     container, resolver_ip, upstream, entries = deploy_dns(
         topo, master, {"master": master},
         extra_entries=[HostEntry("R1", "172.20.0.11", "A")],
     )
 
-    docker_run = next(
-        call.args[0] for call in master.run.call_args_list
-        if call.args and str(call.args[0]).startswith("docker run -d")
-    )
+    config = calls[-1][1]
     assert container == "dnlab-lab-dns"
     assert resolver_ip == "10.100.0.2"
     assert upstream == ["8.8.8.8"]
     assert entries == 1
-    assert f"--network {topo.jumphost_net.network}" in docker_run
-    assert f"--network {topo.mgmt.network}" not in docker_run
+    assert config["network"]["name"] == topo.jumphost_net.network
+    assert config["network"]["name"] != topo.mgmt.network

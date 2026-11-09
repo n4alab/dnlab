@@ -1,0 +1,14 @@
+id: 20261020-135040-compare-jumphost-bind-ownership-independ
+type: internal
+title: Compare jumphost bind ownership independently of Docker order
+description: Accept reordered exact read-only bind mappings only with unchanged multiplicity
+  and unique normalized destinations; reject duplicate or changed mounts and ambiguous
+  desired destinations before container creation, preserving original generation checks.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

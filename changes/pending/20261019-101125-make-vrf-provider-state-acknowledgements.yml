@@ -1,0 +1,14 @@
+id: 20261019-101125-make-vrf-provider-state-acknowledgements
+type: bugfix
+title: Make VRF provider state acknowledgements durable
+description: Synchronize ledger files and directory entries before success, verify
+  automatic recovery of uncertain commits and block shared-ledger mutations while
+  durability cannot be established.
+components:
+- multinode
+audience:
+- operator
+visibility: public
+breaking: false
+upgrade_notes: []
+references: []

@@ -1,0 +1,14 @@
+id: 20261019-154026-capture-dhcp-pid-file-identity-before-fi
+type: internal
+title: Capture DHCP PID file identity before fixture cleanup
+description: Add a read-only diagnostic mode recording PID-file lstat/stat/fstat and
+  dnsmasq process identity before cleanup, without changing runtime guards or attempting
+  DHCP reload.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

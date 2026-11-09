@@ -32,10 +32,25 @@ def test_global_dhcp_renders_dual_stack_reservations_for_every_node(topo_factory
     assert "enable-ra" in config
     assert "ra-param=eth1,60,1800" in config
     assert "dhcp-range=set:mgmt,172.20.0.0,static,12h" in config
+    assert "dhcp-range=set:mgmt,2001:db8::,static,64,12h" in config
     assert "dhcp-host=02:00:00:00:00:11,172.20.0.11" in config
     assert "dhcp-host=02:00:00:00:00:12,172.20.0.12" in config
     assert "dhcp-host=id:0001000111111111,[2001:db8::11]" in config
     assert "dhcp-host=id:0001000122222222,[2001:db8::12]" in config
+
+
+def test_ipv4_only_dhcp_configuration_is_preserved(topo_factory):
+    from dnlab_multinode.models.topology import VDNode
+
+    topo = topo_factory(nodes={'vd': VDNode(name='vd',kind='linux',image='fixture',
+        mgmt_ipv4='172.20.0.11',mgmt_mac='02:00:00:00:00:11')},links=[],num_workers=0)
+    topo.mgmt.dhcp = True
+    assert render_dhcp_config(topo,'172.20.0.53') == (
+        'interface=eth1\nbind-dynamic\ndhcp-authoritative\npid-file=/run/dnlab-dnsmasq.pid\n'
+        'dhcp-range=set:mgmt,172.20.0.0,static,12h\n'
+        'dhcp-option=tag:mgmt,option:router,172.20.0.1\n'
+        'dhcp-option=tag:mgmt,option:dns-server,172.20.0.53\n'
+        'dhcp-host=02:00:00:00:00:11,172.20.0.11\n')
 
 
 def test_parse_port_range_ok():
@@ -43,29 +58,23 @@ def test_parse_port_range_ok():
     assert parse_port_range("22-22") == (22, 22)
 
 
-def test_refresh_jumphost_inventory_updates_maps_without_restart():
+def test_refresh_jumphost_inventory_updates_maps_without_restart(monkeypatch):
+    calls = []
+    def guard(*args):
+        calls.append(args)
+        return {"phase":"active", "container_id":"a"*64, "config":{"generation":"b"*32}}
+    monkeypatch.setattr("dnlab_multinode.services.jumphost._guard", guard)
     client = MagicMock()
-    client.run_no_check.return_value = (0, "true", "")
-
-    refresh_jumphost_inventory(
-        "demo", client,
-        {"R1": "clab-dnlab-demo-R1-R1", "R2": "clab-dnlab-demo-R2-R2"},
-        {
-            "clab-dnlab-demo-R1-R1": {
-                "host": "10.0.0.10", "port": 23001, "api_key": "secret",
-            },
-            "clab-dnlab-demo-R2-R2": {
-                "host": "10.0.0.11", "port": 23001, "api_key": "secret",
-            },
-        },
-    )
-
-    command = client.run.call_args.args[0]
-    assert command.startswith("docker exec dnlab-demo-jumphost sh -c ")
-    assert "clab-dnlab-demo-R2-R2" in command
-    assert "10.0.0.11:23001:secret" in command
-    assert "mv /etc/dnlab-vds.new /etc/dnlab-vds" in command
-    assert "docker rm" not in command
+    refresh_jumphost_inventory("demo", client, {"R1":"runtime1", "R2":"runtime2"}, {
+        "runtime1":{"host":"10.0.0.10", "port":23001, "api_key":"secret"},
+        "runtime2":{"host":"10.0.0.11", "port":23001, "api_key":"secret"}})
+    assert calls[1][2] == "inventory-refresh"
+    request = calls[1][3]
+    assert request["container_id"] == "a"*64 and request["generation"] == "b"*32
+    assert request["vds"] == "R1=runtime1\nR2=runtime2\n"
+    assert request["relays"] == "runtime1=10.0.0.10:23001:secret\nruntime2=10.0.0.11:23001:secret\n"
+    client.run.assert_not_called()
+    client.run_no_check.assert_not_called()
 
 
 @pytest.mark.parametrize("bad", ["", "2200", "2200-", "-2299", "abc-def", "2300-2200"])
@@ -133,145 +142,69 @@ def test_allocate_port_exhausted():
         allocate_jumphost_ssh_port(client, "0.0.0.0", "2200-2204")
 
 
-def test_deploy_jumphost_with_runtime_relay_attaches_mgmt_network(topo_factory):
-    topo = topo_factory(name="lab")
-    client = MagicMock()
-
-    def run_no_check(cmd, *_, **__):
-        if cmd.startswith("docker ps"):
-            return 0, "", ""
-        if "docker image inspect" in cmd:
-            return 0, "", ""
-        if "docker network inspect -f" in cmd and topo.jumphost_net.network in cmd:
-            if ".IPAM.Config" in cmd:
-                return 0, topo.jumphost_net.ipv4_subnet, ""
-            if ".Containers" in cmd:
-                return 0, "", ""
-        if "docker inspect -f" in cmd:
-            return 0, "true", ""
-        if cmd.startswith("docker port dnlab-lab-jumphost 22"):
-            return 0, "0.0.0.0:2200\n", ""
-        return 0, "", ""
-
-    client.run_no_check.side_effect = run_no_check
-    client.run.return_value = ""
-
-    deploy_jumphost(
-        topo,
-        client,
-        "172.20.0.254",
-        resolver_ip="10.100.0.2",
-        relay_map={"clab-dnlab-lab-R1-R1": {"host": "10.0.0.11", "port": 23001, "api_key": "secret"}},
-    )
-
-    commands = "\n".join(call.args[0] for call in client.run.call_args_list if call.args)
-    assert f"--network {topo.jumphost_net.network}" in commands
-    assert "ip link add jh-lab type veth peer name jhc-lab" in commands
-    assert "nsenter -t \"$pid\" -n ip addr add 172.20.0.254/24 dev eth1" in commands
-    assert "docker network connect --ip 172.20.0.254" not in commands
-
-
-def test_deploy_jumphost_verifies_ssh_publish_after_mgmt_attach(topo_factory):
-    topo = topo_factory(name="lab")
-    client = MagicMock()
-
-    def run_no_check(cmd, *_, **__):
-        if cmd.startswith("docker ps"):
-            return 0, "", ""
-        if "docker image inspect" in cmd:
-            return 0, "", ""
-        if "docker network inspect -f" in cmd and topo.jumphost_net.network in cmd:
-            if ".IPAM.Config" in cmd:
-                return 0, topo.jumphost_net.ipv4_subnet, ""
-            if ".Containers" in cmd:
-                return 0, "", ""
-        if "docker inspect -f" in cmd:
-            return 0, "true", ""
-        if cmd.startswith("docker port dnlab-lab-jumphost 22"):
-            return 0, "127.0.0.1:2200\n", ""
-        return 0, "", ""
-
-    client.run_no_check.side_effect = run_no_check
-    client.run.return_value = ""
-
-    deploy_jumphost(
-        topo,
-        client,
-        "172.20.0.254",
-        ssh_bind_ip="127.0.0.1",
-    )
-
-    assert any(
-        call.args[0] == "docker port dnlab-lab-jumphost 22"
-        for call in client.run_no_check.call_args_list
-        if call.args
-    )
-
-
-def test_deploy_jumphost_cleans_up_when_ssh_publish_disappears(topo_factory, monkeypatch):
-    topo = topo_factory(name="lab")
-    client = MagicMock()
+@pytest.fixture
+def guard_deploy(monkeypatch):
+    calls = []
+    def guard(client, lab, action, config=None):
+        calls.append((action, config))
+        if action == "read": return {"phase": "absent"}
+        assert action == "ensure"
+        return {"phase": "active", "container_id": "a"*64, "config": config}
+    monkeypatch.setattr("dnlab_multinode.services.jumphost._guard", guard)
+    monkeypatch.setattr("dnlab_multinode.services.jumphost.ensure_jumphost_network", lambda *a: None)
+    monkeypatch.setattr("dnlab_multinode.services.jumphost.allocate_jumphost_ip", lambda *a: "10.100.0.2/24")
     monkeypatch.setattr("dnlab_multinode.services.jumphost.time.sleep", lambda _: None)
+    return calls
 
-    def run_no_check(cmd, *_, **__):
-        if cmd.startswith("docker ps"):
-            return 0, "", ""
-        if "docker image inspect" in cmd:
-            return 0, "", ""
-        if "docker network inspect -f" in cmd and topo.jumphost_net.network in cmd:
-            if ".IPAM.Config" in cmd:
-                return 0, topo.jumphost_net.ipv4_subnet, ""
-            if ".Containers" in cmd:
-                return 0, "", ""
-        if "docker inspect -f" in cmd:
-            return 0, "true", ""
-        if cmd.startswith("docker port dnlab-lab-jumphost 22"):
-            return 1, "", "no public port '22' published"
+
+def _deploy_client(port_output="0.0.0.0:2200\n"):
+    client = MagicMock()
+    def check(cmd, *a, **kw):
+        if cmd.startswith("docker ps"): return 0, "", ""
+        if cmd.startswith("docker port"): return (0, port_output, "") if port_output else (1, "", "missing")
+        if "State.Running" in cmd: return 0, "true", ""
         return 0, "", ""
+    client.run_no_check.side_effect = check
+    return client
 
-    client.run_no_check.side_effect = run_no_check
-    client.run.return_value = ""
 
+def test_deploy_jumphost_with_runtime_relay_attaches_mgmt_network(topo_factory, guard_deploy):
+    topo = topo_factory(name="lab"); client = _deploy_client()
+    result = deploy_jumphost(topo, client, "172.20.0.254", resolver_ip="10.100.0.2",
+        relay_map={"vd": {"host": "10.0.0.11", "port": 23001, "api_key": "secret"}})
+    cfg = guard_deploy[-1][1]
+    assert cfg["attachment"]["network"] == topo.mgmt.network
+    assert cfg["attachment"]["ipv4"] == "172.20.0.254/24"
+    assert cfg["dns"] == ["10.100.0.2"]
+    assert cfg["env"]["JUMPHOST_RELAY_MAP"] == "vd=10.0.0.11:23001:secret"
+    assert result[0] == "dnlab-lab-jumphost"
+    client.run.assert_not_called()
+
+
+def test_deploy_jumphost_verifies_ssh_publish_after_mgmt_attach(topo_factory, guard_deploy):
+    client = _deploy_client("127.0.0.1:2200\n")
+    deploy_jumphost(topo_factory(), client, "172.20.0.254", ssh_bind_ip="127.0.0.1")
+    assert any(call.args[0] == "docker port " + "a"*64 + " 22" for call in client.run_no_check.call_args_list)
+
+
+def test_deploy_jumphost_retains_journal_when_ssh_publish_disappears(topo_factory, guard_deploy):
+    client = _deploy_client("")
     with pytest.raises(RuntimeError, match="did not restore SSH port publishing"):
-        deploy_jumphost(topo, client, "172.20.0.254")
-
-    cleanup_cmd = "docker rm -f dnlab-lab-jumphost 2>/dev/null"
-    commands = [call.args[0] for call in client.run.call_args_list if call.args]
-    assert commands.count(cleanup_cmd) == 2
+        deploy_jumphost(topo_factory(), client, "172.20.0.254")
+    assert [action for action, cfg in guard_deploy] == ["read", "ensure"]
+    client.run.assert_not_called()
 
 
-def test_deploy_jumphost_retries_transient_ssh_publish_after_mgmt_attach(topo_factory, monkeypatch):
-    topo = topo_factory(name="lab")
-    client = MagicMock()
-    monkeypatch.setattr("dnlab_multinode.services.jumphost.time.sleep", lambda _: None)
-    port_checks = 0
-
-    def run_no_check(cmd, *_, **__):
-        nonlocal port_checks
-        if cmd.startswith("docker ps"):
-            return 0, "", ""
-        if "docker image inspect" in cmd:
-            return 0, "", ""
-        if "docker network inspect -f" in cmd and topo.jumphost_net.network in cmd:
-            if ".IPAM.Config" in cmd:
-                return 0, topo.jumphost_net.ipv4_subnet, ""
-            if ".Containers" in cmd:
-                return 0, "", ""
-        if cmd.startswith("docker port dnlab-lab-jumphost 22"):
-            port_checks += 1
-            if port_checks == 1:
-                return 1, "", "no public port '22' published"
-            return 0, "0.0.0.0:2200\n", ""
-        if "docker inspect -f" in cmd:
-            return 0, "true", ""
-        return 0, "", ""
-
-    client.run_no_check.side_effect = run_no_check
-    client.run.return_value = ""
-
-    deploy_jumphost(topo, client, "172.20.0.254")
-
-    assert port_checks == 2
+def test_deploy_jumphost_retries_transient_ssh_publish_after_mgmt_attach(topo_factory, guard_deploy):
+    client = _deploy_client(); original = client.run_no_check.side_effect; checks = []
+    def check(cmd, *args, **kwargs):
+        if cmd.startswith("docker port"):
+            checks.append(cmd)
+            if len(checks) == 1: return 1, "", "missing"
+        return original(cmd, *args, **kwargs)
+    client.run_no_check.side_effect = check
+    deploy_jumphost(topo_factory(), client, "172.20.0.254")
+    assert len(checks) == 2
 
 
 def test_vd_log_requires_runtime_relay_for_logical_name():

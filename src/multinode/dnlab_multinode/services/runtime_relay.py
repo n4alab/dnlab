@@ -9,7 +9,12 @@ from __future__ import annotations
 import logging
 import shlex
 import secrets
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import json
+from pathlib import Path
+import uuid
+
+from .paths import PATHS
+from .jumphost import _WORKER_BOOTSTRAP
 
 from dnlab_multinode.models.schedule import SchedulePlan
 from dnlab_multinode.models.topology import DistributedTopology
@@ -51,157 +56,105 @@ def _allowed_prefix(lab_name: str) -> str:
     return f"clab-dnlab-{lab_name}-"
 
 
-def _deploy_runtime_relay(
-    topo: DistributedTopology,
-    host_name: str,
-    containers: list[str],
-    client: SSHClient,
-    bind_ip: str,
-    api_key: str,
-) -> dict:
-    port = runtime_relay_port(topo.name)
-    relay_container = runtime_relay_container_name(topo.name)
-    image = image_for("runtime-relay")
-
-    rc, _, _ = client.run_no_check(f"docker image inspect {image} >/dev/null 2>&1")
-    if rc != 0:
-        raise RuntimeError(
-            f"[{host_name}] Runtime relay image '{image}' not found. "
-            "Preload release images with `docker compose --profile "
-            "release-images pull` on the master, then verify image-sync "
-            "to workers."
-        )
-
-    client.run(f"docker rm -f {relay_container} 2>/dev/null", check=False)
-    allowed = " ".join(containers)
-    run_cmd = (
-        "docker run -d "
-        f"--name {relay_container} "
-        "--restart unless-stopped "
-        "--network host "
-        "-v /var/run/docker.sock:/var/run/docker.sock "
-        f"-e RELAY_BIND={shlex.quote(bind_ip)} "
-        f"-e RELAY_PORT={port} "
-        f"-e RELAY_API_KEY={shlex.quote(api_key)} "
-        f"-e RELAY_ALLOWED_CONTAINERS={shlex.quote(allowed)} "
-        f"-e RELAY_ALLOWED_PREFIX={shlex.quote(_allowed_prefix(topo.name))} "
-        f"{image}"
-    )
-    client.run(run_cmd)
-    rc, out, _ = client.run_no_check(
-        f"docker inspect -f '{{{{.State.Running}}}}' {relay_container}"
-    )
-    if rc != 0 or out.strip() != "true":
-        _, logs, _ = client.run_no_check(
-            f"docker logs {relay_container} 2>&1 | tail -40"
-        )
-        client.run(f"docker rm -f {relay_container} 2>/dev/null", check=False)
-        raise RuntimeError(
-            f"[{host_name}] Runtime relay '{relay_container}' failed to start.\n{logs}"
-        )
-    return {
-        "container": relay_container,
-        "bind_ip": bind_ip,
-        "port": port,
-        "api_key": api_key,
-        "allowed": containers,
-    }
+def _guard(client,lab,host,action,config=None,generation=None):
+    base=Path(__file__).with_name('jumphost_host.py').read_text()
+    worker=Path(__file__).with_name('relay_host.py').read_text()
+    source="_primitives={'__name__':'_relay_primitives'}\nexec("+repr(base)+",_primitives)\n"
+    source+="_BaseWorker=_primitives['Worker']\nDockerExecHTTP=_primitives['DockerExecHTTP']\ncanonical=_primitives['canonical']\ndigest=_primitives['digest']\n"+worker
+    request={'lab':lab,'host':host,'action':action,'config':config,'generation':generation,'directory':PATHS.relay_journal_dir,
+             'socket_path':PATHS.docker_socket.removeprefix('unix://')}
+    try:
+        result=json.loads(client.run_input(shlex.join(['python3','-c',_WORKER_BOOTSTRAP]),
+                         json.dumps({'source':source,'request':request}),timeout=60))
+    except Exception as error:raise RuntimeError('relay operation rejected or recovery required; journal retained') from error
+    if not isinstance(result,dict) or 'phase' not in result:raise RuntimeError('invalid relay acknowledgement')
+    return result
 
 
-def deploy_runtime_relays(
-    topo: DistributedTopology,
-    plan: SchedulePlan,
-    clients: dict[str, SSHClient],
-    underlay_ips: dict[str, str],
-    api_key: str,
-) -> dict[str, dict]:
-    results: dict[str, dict] = {}
+def _config(topo,host,containers,bind_ip,api_key,previous):
+    prior=previous.get('config',{}) if previous['phase']!='cleaned' else {}
+    socket=PATHS.docker_socket.removeprefix('unix://')
+    return {'lab':topo.name,'host':host,'generation':prior.get('generation') or uuid.uuid4().hex,
+            'name':runtime_relay_container_name(topo.name),'image':image_for('runtime-relay'),
+            'bind_ip':bind_ip,'port':runtime_relay_port(topo.name),'api_key':api_key,
+            'allowed':prior.get('allowed',containers),'prefix':_allowed_prefix(topo.name),'docker_socket':socket}
 
-    def _deploy_one(host_name: str):
-        containers = _containers_for_host(topo.name, plan, host_name)
-        client = clients[host_name]
-        relay_container = runtime_relay_container_name(topo.name)
+
+def _metadata(record,containers):
+    if record['phase']!='active' or not record.get('container_id'):raise RuntimeError('qualified active relay required')
+    c=record['config']
+    return {'container':c['name'],'bind_ip':c['bind_ip'],'port':c['port'],'api_key':c['api_key'],
+            'allowed':containers,'generation':c['generation'],'container_id':record['container_id']}
+
+
+def _deploy_runtime_relay(topo,host_name,containers,client,bind_ip,api_key):
+    previous=_guard(client,topo.name,host_name,'preflight')
+    config=_config(topo,host_name,containers,bind_ip,api_key,previous)
+    _guard(client,topo.name,host_name,'preflight',config)
+    return _metadata(_guard(client,topo.name,host_name,'provision' if previous['phase']=='cleaned' else 'ensure',config),containers)
+
+
+def deploy_runtime_relays(topo,plan,clients,underlay_ips,api_key):
+    return _reconcile(topo,plan,clients,underlay_ips,api_key,{})
+
+
+def _reconcile(topo,plan,clients,underlay_ips,api_key,current):
+    planned=[]
+    # Complete every host's read-only preflight before the first allocation.
+    for host,client in sorted(clients.items()):
+        containers=_containers_for_host(topo.name,plan,host)
+        previous=_guard(client,topo.name,host,'preflight')
+        saved=current.get(host)
+        if saved and (not getattr(saved,'generation','') or previous.get('config',{}).get('generation')!=saved.generation
+                      or previous.get('container_id')!=getattr(saved,'container_id','')):
+            raise RuntimeError('relay coordinator generation unqualified or replaced')
         if not containers:
-            client.run(f"docker rm -f {relay_container} 2>/dev/null", check=False)
-            return host_name, None
-        bind_ip = underlay_ips[host_name]
-        return host_name, _deploy_runtime_relay(
-            topo, host_name, containers, client, bind_ip, api_key,
-        )
-
-    with ThreadPoolExecutor(max_workers=max(1, len(clients))) as pool:
-        futures = {pool.submit(_deploy_one, h): h for h in clients}
-        for future in as_completed(futures):
-            host = futures[future]
-            try:
-                host_name, info = future.result()
-            except Exception as exc:
-                raise RuntimeError(f"[{host}] runtime relay deploy failed: {exc}") from exc
-            if info:
-                results[host_name] = info
-    return results
-
-
-def reconcile_runtime_relays(
-    topo: DistributedTopology,
-    plan: SchedulePlan,
-    clients: dict[str, SSHClient],
-    underlay_ips: dict[str, str],
-    api_key: str,
-    current: dict[str, object],
-) -> dict[str, dict]:
-    """Refresh relay metadata without interrupting existing consoles.
-
-    New relays authorize the whole lab's per-VD container namespace, so adding
-    a node only changes persisted inventory. A relay from an older release is
-    recreated once when it lacks a required protocol/runtime capability.
-    """
-    results: dict[str, dict] = {}
-    relay_container = runtime_relay_container_name(topo.name)
-    port = runtime_relay_port(topo.name)
-
-    for host_name, client in clients.items():
-        containers = _containers_for_host(topo.name, plan, host_name)
-        previous = current.get(host_name)
-        if not containers:
-            if previous:
-                client.run(f"docker rm -f {relay_container} 2>/dev/null", check=False)
+            if previous['phase'] not in ('absent','cleaned'):
+                if not saved:raise RuntimeError('unassigned relay requires qualified cleanup intent')
+                _guard(client,topo.name,host,'preflight-delete',generation=saved.generation)
+                planned.append((host,client,None,previous,containers))
             continue
-
-        running = False
-        if previous:
-            rc, out, _ = client.run_no_check(
-                f"docker inspect -f '{{{{.State.Running}}}}' {relay_container}"
-            )
-            running = rc == 0 and out.strip() == "true"
-        if previous and running:
-            rc, capability, _ = client.run_no_check(
-                "docker inspect -f "
-                f"'{{{{index .Config.Labels \"{_CAPABILITY_LABEL}\"}}}}' "
-                f"{relay_container}"
-            )
-            supported = _capabilities(capability) if rc == 0 else set()
-            if _REQUIRED_CAPABILITIES <= supported:
-                results[host_name] = {
-                    "container": getattr(previous, "container", relay_container),
-                    "bind_ip": getattr(previous, "bind_ip", underlay_ips[host_name]),
-                    "port": getattr(previous, "port", port),
-                    "api_key": getattr(previous, "api_key", api_key),
-                    "allowed": containers,
-                }
-                continue
-
-        results[host_name] = _deploy_runtime_relay(
-            topo, host_name, containers, client, underlay_ips[host_name], api_key,
-        )
+        config=_config(topo,host,containers,underlay_ips[host],api_key,previous)
+        _guard(client,topo.name,host,'preflight',config)
+        planned.append((host,client,config,previous,containers))
+    results={}
+    for host,client,config,previous,containers in planned:
+        if config is None:
+            _guard(client,topo.name,host,'delete',generation=previous['config']['generation']);continue
+        record=_guard(client,topo.name,host,'provision' if previous['phase']=='cleaned' else 'ensure',config)
+        results[host]=_metadata(record,containers)
     return results
 
 
-def destroy_runtime_relays(lab_name: str, clients: dict[str, SSHClient]) -> None:
-    container = runtime_relay_container_name(lab_name)
-    for host_name, client in clients.items():
-        try:
-            client.run(f"docker rm -f {container} 2>/dev/null", check=False)
-            log.info("[%s] Runtime relay removed: %s", host_name, container)
-        except Exception as exc:
-            log.error("[%s] Failed to remove runtime relay: %s", host_name, exc)
+def reconcile_runtime_relays(topo,plan,clients,underlay_ips,api_key,current):
+    """Re-observe the original generation; prefix capability admits new VD names."""
+    return _reconcile(topo,plan,clients,underlay_ips,api_key,current)
+
+
+def recover_runtime_relay(lab_name,host,client):
+    return _guard(client,lab_name,host,'recover')
+
+
+def preflight_relay_cleanup(lab_name,host,client,generation):
+    if not generation:raise RuntimeError('qualified relay coordinator generation required')
+    return _guard(client,lab_name,host,'preflight-delete',generation=generation)
+
+
+def verify_relay_cleaned(lab_name,host,client,generation):
+    if not generation:raise RuntimeError('qualified relay coordinator generation required')
+    return _guard(client,lab_name,host,'verify-cleaned',generation=generation)
+
+
+def destroy_runtime_relays(lab_name,clients,current=None):
+    current=current or {}
+    for host in current:
+        if host not in clients:raise RuntimeError('relay host unavailable; cleanup retained')
+    for host,client in sorted(clients.items()):
+        previous=_guard(client,lab_name,host,'preflight')
+        if previous['phase']=='absent':continue
+        saved=current.get(host)
+        if not saved or getattr(saved,'container_id','')!=previous.get('container_id'):
+            raise RuntimeError('relay cleanup requires original coordinator proof')
+        preflight_relay_cleanup(lab_name,host,client,getattr(saved,'generation',''))
+    for host,saved in current.items():
+        _guard(clients[host],lab_name,host,'delete',generation=saved.generation)

@@ -1,0 +1,15 @@
+id: 20261016-133721-diagnose-initial-endpoint-preflight-miss
+type: internal
+title: Preflight native data endpoint ownership before workload allocation
+description: Validate permanent and staging data endpoint names during read-only
+  planning and before workload allocation. Persist original namespace and kernel
+  pair evidence for retry and recovery, reserve temporary names, and reject
+  foreign or substituted pairs without allocating a VD or cleaning foreign ports.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

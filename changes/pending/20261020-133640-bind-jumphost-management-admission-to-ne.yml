@@ -1,0 +1,15 @@
+id: 20261020-133640-bind-jumphost-management-admission-to-ne
+type: internal
+title: Bind jumphost management admission to network birth proofs
+description: Verify expected management IPAM, network ID and creator nonce against
+  the existing root-local management intent and bridge/VRF proofs before birth and
+  on lifecycle/recovery; reject unqualified networks and preserve original state on
+  conflict.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

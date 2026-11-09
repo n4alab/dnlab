@@ -1,0 +1,15 @@
+id: 20261021-095224-prepare-qualified-dhcp-structural-lifecy
+type: internal
+title: Prepare qualified DHCP structural lifecycle primitives
+description: Add container-bound stdin syntax preflight, exact daemon launch nonce
+  validation and generation-bound graceful PIDFD shutdown with explicit exit verification;
+  keep structural operations unexposed until journal and recovery integration are
+  implemented.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

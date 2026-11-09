@@ -12,6 +12,7 @@ The GUI stores a cloud-like pseudo-node. At deploy time we translate it into:
 from __future__ import annotations
 
 import ipaddress
+import copy
 import hashlib
 import logging
 import shlex
@@ -88,24 +89,8 @@ def _remove_bridge_forwarding(client: SSHClient, bridge: str) -> None:
 
 
 def ensure_realnet_wan_network(client: SSHClient, topo: DistributedTopology) -> None:
-    cfg = topo.realnet_infra
-    rc, out, _ = client.run_no_check(
-        f"docker network inspect -f '{{{{range .IPAM.Config}}}}{{{{.Subnet}}}}{{{{end}}}}' {cfg.network}"
-    )
-    if rc == 0:
-        current = (out or "").strip()
-        if current and current != cfg.ipv4_subnet:
-            log.warning(
-                "realnet WAN network %s already exists with subnet %s, expected %s",
-                cfg.network, current, cfg.ipv4_subnet,
-            )
-        return
-    client.run(
-        f"docker network create {cfg.network} "
-        f"--driver bridge "
-        f"-o com.docker.network.bridge.name={cfg.bridge} "
-        f"--subnet {cfg.ipv4_subnet} --gateway {cfg.ipv4_gw}"
-    )
+    from .realnet_wan import ensure_wan
+    ensure_wan(client,topo.realnet_infra)
 
 
 def ensure_realnet_bgp_network(client: SSHClient, topo: DistributedTopology) -> str:
@@ -141,58 +126,62 @@ def setup_bridges(
     topo: DistributedTopology,
     clients: dict[str, SSHClient],
     underlay_ips: dict[str, str],
+    *, vni_directory=None, existing_states=(), checkpoint=None,
 ) -> list[RealNetState]:
+    from .realnet_vni import reserve_realnets
     states: list[RealNetState] = []
-    master_ip = underlay_ips["master"]
-    for idx, (rn_name, rn) in enumerate(topo.real_nets.items()):
-        hosts = participating_hosts(topo, rn_name)
-        if not hosts:
-            continue
-        hosts.add("master")
-        bridge = naming.realnet_bridge_name(topo.name, rn_name)
-        vx_iface = naming.realnet_vxlan_iface(topo.name, rn_name)
-        vni = ids.realnet_vxlan_id(topo.name, idx)
-        for host in hosts:
-            client = clients[host]
-            client.run(
-                f"ip link show {bridge} >/dev/null 2>&1 || ip link add {bridge} type bridge; "
-                f"ip link set {bridge} up"
-            )
-            _ensure_bridge_forwarding(client, bridge)
-        for host in sorted(h for h in hosts if h != "master"):
-            client = clients[host]
-            client.run(
-                f"ip link del {vx_iface} 2>/dev/null || true; "
-                f"ip link add {vx_iface} type vxlan id {vni} remote {master_ip} "
-                f"local {underlay_ips[host]} dstport 14789 dev {topo.underlay_iface}; "
-                f"ip link set {vx_iface} master {bridge}; "
-                f"ip link set {vx_iface} up"
-            )
-            master = clients["master"]
-            peer_iface = f"{vx_iface}-{host}"[:15]
-            master.run(
-                f"ip link del {peer_iface} 2>/dev/null || true; "
-                f"ip link add {peer_iface} type vxlan id {vni} remote {underlay_ips[host]} "
-                f"local {master_ip} dstport 14789 dev {topo.underlay_iface}; "
-                f"ip link set {peer_iface} master {bridge}; "
-                f"ip link set {peer_iface} up"
-            )
-        states.append(RealNetState(
-            name=rn_name,
-            bridge=bridge,
-            vxlan_id=vni,
-            hosts=sorted(hosts),
-            router_container=naming.realnet_router_container_name(topo.name, rn_name),
-            lan_ipv4=rn.ipv4,
-            nat=rn.nat and not rn.bgp,
-            bgp=rn.bgp,
-            bgp_as=rn.bgp_as,
+    previous={state.name:state for state in existing_states}
+    for rn_name, rn in topo.real_nets.items():
+        hosts=participating_hosts(topo,rn_name)
+        if not hosts:continue
+        hosts.add('master')
+        workers=sorted(host for host in hosts if host!='master')
+        vx_iface=naming.realnet_vxlan_iface(topo.name,rn_name)
+        state=RealNetState(
+            name=rn_name,bridge=naming.realnet_bridge_name(topo.name,rn_name),vxlan_id=0,
+            hosts=sorted(hosts),router_container=naming.realnet_router_container_name(topo.name,rn_name),
+            lan_ipv4=rn.ipv4,nat=rn.nat and not rn.bgp,bgp=rn.bgp,bgp_as=rn.bgp_as,
             bgp_router_ip=rn.bgp_router_ip,
-        ))
+            vxlan_ifaces={**{host:[vx_iface] for host in workers},
+                          'master':[naming.realnet_vxlan_peer_name(topo.name,rn_name,host) for host in workers]},
+            router_veth=naming.realnet_router_veth_name(topo.name,rn_name))
+        if rn_name in previous:state.resource_identities=copy.deepcopy(previous[rn_name].resource_identities)
+        states.append(state)
+    reserve_realnets(topo,clients,underlay_ips,states,directory=vni_directory)
+    # Persist VNI intent and the complete named inventory before host mutations.
+    if checkpoint:checkpoint(states)
+    for state in states:
+        bridge=state.bridge
+        proofs=state.resource_identities.get('realnet_cleanup_v1',{})
+        for host in state.hosts:
+            client=clients[host]
+            if bridge in proofs.get(host,{}).get('links',{}):continue
+            client.run(f'ip link add {bridge} type bridge && ip link set {bridge} up')
+            _ensure_bridge_forwarding(client,bridge)
+        workers=sorted(host for host in state.hosts if host!='master')
+        for worker,peer_iface in zip(workers,state.vxlan_ifaces['master']):
+            for host,iface,remote in ((worker,state.vxlan_ifaces[worker][0],'master'),('master',peer_iface,worker)):
+                if iface in proofs.get(host,{}).get('links',{}):continue
+                clients[host].run(
+                    f'ip link add {iface} type vxlan id {state.vxlan_ids[worker]} '
+                    f'remote {underlay_ips[remote]} local {underlay_ips[host]} '
+                    f'dstport 14789 dev {topo.underlay_iface} && '
+                    f'ip link set {iface} master {bridge} && ip link set {iface} up')
+        if checkpoint:checkpoint(states)
     return states
 
 
 def deploy_route_reflector(topo: DistributedTopology, master: SSHClient) -> None:
+    _ensure_route_reflector(topo,master)
+
+
+def qualify_route_reflector(topo: DistributedTopology, master: SSHClient) -> dict:
+    """Explicitly qualify an existing compatible legacy reflector, without restart."""
+    return _ensure_route_reflector(topo,master,qualify_legacy=True)
+
+
+def _ensure_route_reflector(topo: DistributedTopology, master: SSHClient, *, qualify_legacy=False) -> dict:
+    from dnlab_multinode.services.realnet_reflector import ReflectorGuard,ReflectorError
     cfg = topo.realnet_infra
     if not cfg.rr_ip or not cfg.host_net:
         raise ValueError("RealNet BGP requires infrastructure.realnet.rr_ip and host_net")
@@ -206,15 +195,21 @@ def deploy_route_reflector(topo: DistributedTopology, master: SSHClient) -> None
             f"RealNet RR image '{image}' not found on master. "
             "Run: docker compose --profile release-images pull"
         )
-    master.run("docker rm -f dnlab-realnet-rr 2>/dev/null", check=False)
-    master.run(
-        f"docker run -d --name dnlab-realnet-rr --hostname realnet-rr "
-        f"--privileged --cap-add NET_ADMIN "
-        f"--network {ensure_realnet_bgp_network(master, topo)} "
-        f"--ip {cfg.rr_ip} "
-        f"{image}"
-    )
-    _write_frr_config(master, "dnlab-realnet-rr", _rr_frr_config(cfg))
+    guard=ReflectorGuard(master)
+    container=guard.inspect()
+    if qualify_legacy and container is None:raise ReflectorError('no existing reflector to qualify')
+    selected=guard.image(image)
+    parent=(cfg.wan_iface or '').strip() or _detect_host_iface(master,_host_net_probe_ip(host_net,cfg.rr_ip))
+    if not parent:raise ValueError('RealNet BGP requires a qualified WAN parent')
+    network_name=_bgp_network_name(topo)
+    if container is None:ensure_realnet_bgp_network(master,topo)
+    network=guard.network(network_name,str(host_net),parent)
+    configuration=_rr_frr_config(cfg)
+    expected=guard.expected(selected,network,cfg.rr_ip,configuration)
+    if container is not None:return guard.verify(container,selected,expected,qualify=qualify_legacy)
+    identity=guard.create(selected,expected)
+    guard.configure_new(identity,configuration)
+    return guard.wait_ready(selected,expected)
 
 
 def deploy_router(
@@ -229,65 +224,19 @@ def deploy_router(
     image = image_for("realnet-router")
     container = state.router_container
     bridge = state.bridge
-    veth_host = naming.realnet_router_veth_name(topo.name, rn.name)
-    veth_cont = "eth1"
-    nat = "false" if rn.bgp else "true"
-    bgp = "true" if rn.bgp else "false"
-
-    rc, _, _ = master.run_no_check(f"docker image inspect {image} >/dev/null 2>&1")
-    if rc != 0:
-        raise RuntimeError(
-            f"RealNet router image '{image}' not found on master. "
-            "Run: docker compose --profile release-images pull"
-        )
-
-    master.run(f"docker rm -f {container} 2>/dev/null", check=False)
+    veth_host = state.router_veth or naming.realnet_router_veth_name(topo.name, rn.name)
+    state.router_veth = veth_host
     if rn.bgp:
         if not rn.bgp_as or not rn.bgp_router_ip:
             raise ValueError(f"real_net {rn.name}: missing BGP AS/router IP")
         host_net = ipaddress.ip_network(topo.realnet_infra.host_net, strict=False)
         if ipaddress.ip_address(rn.bgp_router_ip) not in host_net:
             raise ValueError(f"real_net {rn.name}: BGP router IP {rn.bgp_router_ip} is outside host_net {host_net}")
-        master.run(
-            f"docker run -d --name {container} --hostname {container} "
-            f"--privileged --cap-add NET_ADMIN "
-            f"--network {ensure_realnet_bgp_network(master, topo)} "
-            f"--ip {rn.bgp_router_ip} "
-            f"-e REALNET_IPV4={rn.ipv4} "
-            f"-e NAT_ENABLED={nat} "
-            f"-e BGP_ENABLED={bgp} "
-            f"-e BGP_ROUTER_ID={rn.bgp_router_ip} "
-            f"{image}"
-        )
-    else:
-        master.run(
-            f"docker run -d --name {container} --hostname {container} "
-            f"--privileged --cap-add NET_ADMIN "
-            f"--network {topo.realnet_infra.network} "
-            f"-e REALNET_IPV4={rn.ipv4} "
-            f"-e NAT_ENABLED={nat} "
-            f"-e BGP_ENABLED={bgp} "
-            f"-e BGP_ROUTER_ID={rn.bgp_router_ip} "
-            f"{image}"
-        )
-    pid = master.run(f"docker inspect -f '{{{{.State.Pid}}}}' {container}").strip()
-    master.run(
-        f"ip link del {veth_host} 2>/dev/null || true; "
-        f"ip link add {veth_host} type veth peer name {veth_cont}; "
-        f"ip link set {veth_host} master {bridge}; "
-        f"ip link set {veth_host} up; "
-        f"ip link set {veth_cont} netns {pid}; "
-        f"nsenter -t {pid} -n ip link set {veth_cont} name eth1; "
-        f"nsenter -t {pid} -n ip link set eth1 up"
-    )
+    from .realnet_bootstrap import bootstrap_router
+    result=bootstrap_router(topo,rn,state,master,image,_bgp_network_name(topo) if rn.bgp else topo.realnet_infra.network)
+    state.router_wan_ip=result['wan_ip']
     if rn.bgp:
-        state.router_wan_ip = rn.bgp_router_ip
-        _write_frr_config(master, container, _router_frr_config(topo, rn))
-    else:
-        wan = master.run(
-            f"docker inspect -f '{{{{range .NetworkSettings.Networks}}}}{{{{.IPAddress}}}}{{{{end}}}}' {container}"
-        ).strip()
-        state.router_wan_ip = wan
+        _write_frr_config(master,result['container_id'],_router_frr_config(topo,rn))
     return state
 
 
@@ -429,31 +378,11 @@ def _write_frr_config(master: SSHClient, container: str, config: str) -> None:
     )
 
 
-def destroy_realnets(lab_name: str, clients: dict[str, SSHClient], states: list[RealNetState]) -> None:
-    for rn in states:
-        master = clients.get("master")
-        if master:
-            master.run(f"docker rm -f {rn.router_container} 2>/dev/null", check=False)
-        for host in rn.hosts:
-            client = clients.get(host)
-            if not client:
-                continue
-            bridge = rn.bridge
-            vx = naming.realnet_vxlan_iface(lab_name, rn.name)
-            veth = naming.realnet_router_veth_name(lab_name, rn.name)
-            legacy_veth = f"vh-{rn.name[:10]}"[:15]
-            _remove_bridge_forwarding(client, bridge)
-            client.run(
-                f"ip link del {veth} 2>/dev/null || true; "
-                f"legacy_master=$(basename $(readlink /sys/class/net/{legacy_veth}/master 2>/dev/null) "
-                f"2>/dev/null || true); "
-                f"if [ \"$legacy_master\" = \"{bridge}\" ]; then "
-                f"ip link del {legacy_veth} 2>/dev/null || true; "
-                f"fi; "
-                f"ip link del {vx} 2>/dev/null || true; "
-                f"ip link del {bridge} 2>/dev/null || true",
-                check=False,
-            )
-            if host != "master" and master:
-                peer = f"{vx}-{host}"[:15]
-                master.run(f"ip link del {peer} 2>/dev/null || true", check=False)
+def preflight_realnets(lab_name: str, clients: dict[str, SSHClient], states: list[RealNetState]) -> None:
+    from .realnet_cleanup import preflight_realnets as preflight
+    preflight(lab_name,clients,states)
+
+
+def destroy_realnets(lab_name: str, clients: dict[str, SSHClient], states: list[RealNetState], *, checkpoint=None) -> None:
+    from .realnet_cleanup import destroy_realnets as cleanup
+    cleanup(lab_name,clients,states,checkpoint=checkpoint)

@@ -20,7 +20,7 @@ from types import SimpleNamespace
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StrictBool
 
 from dnlab_multinode.controllers.deploy import DeployController
 from dnlab_multinode.controllers.destroy import DestroyController
@@ -64,6 +64,11 @@ class PlanRequest(LabRequest):
 
 class NodeRequest(LabRequest):
     node: str = Field(min_length=1)
+    request_id: str | None = Field(default=None,pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$",description="Optional lab-scoped idempotency key for qualified native lifecycle requests; replay preserves the original action and workload generation.")
+
+
+class NodeStopRequest(NodeRequest):
+    force: StrictBool = False
 
 
 class LinkRequest(LabRequest):
@@ -412,7 +417,7 @@ async def lab_node_start(req: NodeRequest) -> dict[str, Any]:
                     phase_callback=_phase,
                 )
                 operation.controller = ctrl
-                return ctrl.start(req.node)
+                return ctrl.start(req.node,**({"request_id":req.request_id} if req.request_id else {}))
 
             state = await asyncio.to_thread(_run)
             result = state.to_dict()
@@ -422,6 +427,10 @@ async def lab_node_start(req: NodeRequest) -> dict[str, Any]:
             return result
     except Exception as exc:
         if operation.cancel.is_set():
+            controller=operation.controller
+            runtime=controller.state.node_runtime.get(req.node) if controller and getattr(controller,'state',None) else None
+            if runtime and getattr(runtime,'runtime_binding',{}):
+                raise HTTPException(422,'Native cancellation requires recovery; verified cleanup is not complete') from exc
             return {
                 "_operation_outcome": "cancelled",
                 "cancelled": True,
@@ -434,7 +443,7 @@ async def lab_node_start(req: NodeRequest) -> dict[str, Any]:
 
 
 @app.post("/labs/nodes/stop")
-async def lab_node_stop(req: NodeRequest) -> dict[str, Any]:
+async def lab_node_stop(req: NodeStopRequest) -> dict[str, Any]:
     operation = _active_node_starts.get(_node_operation_key(req))
     cancelled_start = False
     if operation and not operation.done.is_set():
@@ -449,20 +458,23 @@ async def lab_node_stop(req: NodeRequest) -> dict[str, Any]:
             operation.phase = "stopped"
         else:
             operation.phase = "cancelling"
+        runtime=controller.state.node_runtime.get(req.node) if controller and getattr(controller,'state',None) else None
+        if runtime and getattr(runtime,'runtime_binding',{}):
+            return {"_operation_outcome":"cancellation_requested","cancelled":False,"node":req.node}
         return {
             "_operation_outcome": "cancelled",
             "cancelled": True,
             "node": req.node,
         }
-    result = await _node_mutation(req, "stop", force=True)
+    result = await _node_mutation(req, "stop", force=req.force)
     if cancelled_start:
         result["cancelled"] = True
     return result
 
 
 @app.post("/labs/nodes/remove")
-async def lab_node_remove(req: NodeRequest) -> dict[str, Any]:
-    return await _node_mutation(req, "remove", force=True)
+async def lab_node_remove(req: NodeStopRequest) -> dict[str, Any]:
+    return await _node_mutation(req, "remove", force=req.force)
 
 
 @app.post("/labs/nodes/restart")
@@ -618,13 +630,13 @@ async def _node_mutation(
             def _run():
                 ctrl = NodeLifecycleController(req.topology_file, hosts_file=req.hosts_file)
                 if action == "start":
-                    return ctrl.start(req.node)
+                    return ctrl.start(req.node,**({"request_id":req.request_id} if req.request_id else {}))
                 if action == "stop":
-                    return ctrl.stop(req.node, force=force)
+                    return ctrl.stop(req.node, force=force,**({"request_id":req.request_id} if req.request_id else {}))
                 if action == "restart":
-                    return ctrl.restart(req.node)
+                    return ctrl.restart(req.node,**({"request_id":req.request_id} if req.request_id else {}))
                 if action == "remove":
-                    return ctrl.remove(req.node)
+                    return ctrl.remove(req.node, force=force,**({"request_id":req.request_id} if req.request_id else {}))
                 return ctrl.reconcile(req.node)
 
             state = await asyncio.to_thread(_run)
@@ -803,21 +815,10 @@ def _jumphost_password(req: LabRequest) -> str:
 
 
 def _runtime_relay(req: NodeRequest) -> dict[str, Any]:
+    from dnlab_multinode.services.relay_resolution import resolve
     state = _lab_state(req)
     runtime_key = _resolve_runtime_node_key(state, req.node)
-    runtime = (state.node_runtime or {}).get(runtime_key)
-    relay = (state.runtime_relays or {}).get(runtime.host)
-    if relay is None:
-        raise RuntimeError(f"runtime relay missing for host {runtime.host!r}")
-    if runtime.container not in set(relay.allowed or []):
-        raise RuntimeError(f"container {runtime.container!r} is not allowed on relay {runtime.host!r}")
-    return {
-        "container": runtime.container,
-        "host": relay.bind_ip,
-        "port": relay.port,
-        "api_key": relay.api_key,
-        "relay_host": runtime.host,
-    }
+    return resolve(state,runtime_key,Path(req.topology_file).parent,req.hosts_file)
 
 
 def _clean_persist_dirs(req: LabRequest) -> dict[str, Any]:

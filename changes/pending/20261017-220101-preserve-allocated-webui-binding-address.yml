@@ -1,0 +1,15 @@
+id: 20261017-220101-preserve-allocated-webui-binding-address
+type: bugfix
+title: Preserve allocated WebUI binding addresses
+description: Keep the configured IPv4 or IPv6 bind address when generating WebUI port
+  publications for initial deployment and VD start. Reject missing or malformed addresses
+  instead of implicitly publishing on wildcard interfaces; allocation, proxy and API
+  contracts remain unchanged.
+components:
+- multinode
+audience:
+- operator
+visibility: public
+breaking: false
+upgrade_notes: []
+references: []

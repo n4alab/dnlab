@@ -11,13 +11,15 @@ inspecting the docker network for IPs already in use.
 from __future__ import annotations
 
 import ipaddress
+import json
 import logging
 import secrets
 import shlex
 import string
 import time
+import uuid
 
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 
 from dnlab_multinode.models.topology import DistributedTopology, JumphostNet
 from dnlab_multinode.services.images import image_for
@@ -54,37 +56,73 @@ def refresh_jumphost_inventory(
     client: SSHClient,
     vd_map: dict[str, str],
     relay_map: dict[str, dict],
+    *, generation: str | None = None,
 ) -> None:
-    """Atomically refresh the live jumphost VD/relay maps and login banner."""
-    container = jumphost_container_name(lab_name)
-    vd_content = "".join(f"{name}={runtime}\n" for name, runtime in vd_map.items())
-    relay_content = "".join(
-        f"{runtime}={meta['host']}:{int(meta['port'])}:{meta['api_key']}\n"
-        for runtime, meta in relay_map.items()
-    )
-    motd = _render_inventory_motd(lab_name, list(vd_map))
-
-    rc, out, _ = client.run_no_check(
-        f"docker inspect -f '{{{{.State.Running}}}}' {container}"
-    )
-    if rc != 0 or out.strip() != "true":
-        raise RuntimeError(f"Jumphost container '{container}' is not running")
-
-    command = (
-        "set -e; "
-        f"printf %s {shlex.quote(vd_content)} > /etc/dnlab-vds.new; "
-        f"printf %s {shlex.quote(relay_content)} > /etc/dnlab-relays.new; "
-        f"printf %s {shlex.quote(motd)} > /etc/motd.new; "
-        "chown root:labuser /etc/dnlab-vds.new /etc/dnlab-relays.new; "
-        "chmod 644 /etc/dnlab-vds.new; chmod 640 /etc/dnlab-relays.new; "
-        "mv /etc/dnlab-vds.new /etc/dnlab-vds; "
-        "mv /etc/dnlab-relays.new /etc/dnlab-relays; "
-        "mv /etc/motd.new /etc/motd"
-    )
-    client.run(
-        f"docker exec {container} sh -c {shlex.quote(command)}"
-    )
+    """Refresh VD/relay maps and banner through the original tracked generation."""
+    record = _guard(client, lab_name, "read")
+    if record.get("phase") != "active":
+        raise RuntimeError("Jumphost inventory requires an active qualified generation")
+    if generation is not None and record["config"]["generation"] != generation:
+        raise RuntimeError("Jumphost inventory coordinator generation differs")
+    vd_content, relay_content = render_relay_inventory(vd_map, relay_map)
+    _guard(client, lab_name, "inventory-refresh", {
+        "lab": lab_name, "generation": record["config"]["generation"],
+        "container_id": record["container_id"], "request_id": uuid.uuid4().hex,
+        "vds": vd_content, "relays": relay_content,
+        "motd": _render_inventory_motd(lab_name, sorted(vd_map)),
+    })
     log.info("Jumphost inventory refreshed: %d VDs", len(vd_map))
+
+
+def render_relay_inventory(vd_map, relay_map):
+    """Validate complete relay coverage before publishing either inventory."""
+    import re
+    token = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*")
+    if (not isinstance(vd_map, dict) or not isinstance(relay_map, dict)
+            or any(not isinstance(v, str) or not token.fullmatch(v) for pair in vd_map.items() for v in pair)
+            or len(set(vd_map.values())) != len(vd_map)):
+        raise RuntimeError("Invalid VD inventory")
+    if not set(vd_map.values()) <= set(relay_map):
+        raise RuntimeError("Runtime relay missing for VD inventory")
+    rows = []
+    for runtime in sorted(vd_map.values()):
+        meta = relay_map[runtime]
+        native_fields={"host","port","api_key","runtime_backend","container_id"}
+        if (not isinstance(meta, dict) or set(meta) not in ({"host", "port", "api_key"},native_fields)
+                or not isinstance(meta["host"], str) or not token.fullmatch(meta["host"])
+                or type(meta["port"]) is not int or not 1 <= meta["port"] <= 65535
+                or not isinstance(meta["api_key"], str) or not token.fullmatch(meta["api_key"])):
+            raise RuntimeError("Invalid runtime relay inventory")
+        suffix=''
+        if set(meta)==native_fields:
+            if meta['runtime_backend']!='custom' or not isinstance(meta['container_id'],str) or not re.fullmatch('[0-9a-f]{64}',meta['container_id']):
+                raise RuntimeError('Invalid native relay identity')
+            suffix=':custom:'+meta['container_id']
+        rows.append(f"{runtime}={meta['host']}:{meta['port']}:{meta['api_key']}{suffix}\n")
+    return "".join(f"{name}={vd_map[name]}\n" for name in sorted(vd_map)), "".join(rows)
+
+
+def relay_inventory_from_state(state, *, verified_bindings=None):
+    """Bind allowlist entries to each VD's current placement; never guess."""
+    from . import native_public
+    mode=getattr(state,'runtime_mode','')
+    if mode not in ('','legacy','per-vd','custom'):raise RuntimeError('Unknown persisted runtime backend')
+    native=bool(mode=='custom' or any(getattr(r,'runtime_binding',{}) for r in
+                [*state.node_runtime.values(),*getattr(state,'retired_native_nodes',{}).values()]))
+    if native:
+        native_public.backend(state)
+        if verified_bindings!={k:r.runtime_binding for k,r in state.node_runtime.items()}:
+            raise RuntimeError('Native relay inventory requires verified bindings')
+    result = {}
+    for runtime in state.node_runtime.values():
+        relay = state.runtime_relays.get(runtime.host)
+        if (relay is None or relay.host != runtime.host or runtime.container not in relay.allowed):
+            raise RuntimeError("Runtime relay placement or allowlist differs")
+        result[runtime.container] = {"host": relay.bind_ip, "port": relay.port, "api_key": relay.api_key}
+        if native:
+            result[runtime.container].update(runtime_backend='custom',container_id=runtime.runtime_binding['container_id'])
+    render_relay_inventory({r.node: r.container for r in state.node_runtime.values()}, result)
+    return result
 
 
 def generate_password(length: int = 12) -> str:
@@ -93,35 +131,32 @@ def generate_password(length: int = 12) -> str:
     return "".join(secrets.choice(alphabet) for _ in range(length))
 
 
-def ensure_jumphost_network(client: SSHClient, net: JumphostNet) -> None:
-    """Create the shared jumphost docker network if missing (idempotent).
+def ensure_jumphost_network(client: SSHClient, net: JumphostNet, *, action: str = "ensure") -> dict:
+    """Qualify persistent shared infrastructure; never delete it per lab.
 
-    If a network with the same name exists but with a different subnet we
-    log a warning and do NOT recreate it — active lab jumphosts may be
-    attached. The operator must tear down all labs and re-run.
+    Unqualified existing networks and incomplete births require an explicit
+    infrastructure decision/recovery. No shell error is interpreted as absence.
     """
-    rc, existing, _ = client.run_no_check(
-        f"docker network inspect -f '{{{{range .IPAM.Config}}}}{{{{.Subnet}}}}{{{{end}}}}' {net.network}"
-    )
-    if rc == 0 and existing.strip():
-        if existing.strip() != net.ipv4_subnet:
-            log.warning(
-                "Jumphost network '%s' exists with subnet %s, "
-                "hosts.yml declares %s. Leaving the existing one; "
-                "destroy all labs to reset.",
-                net.network, existing.strip(), net.ipv4_subnet,
-            )
-        return
-
-    log.info("Creating shared jumphost network: %s (subnet=%s, gw=%s, bridge=%s)",
-             net.network, net.ipv4_subnet, net.ipv4_gw, net.bridge)
-    client.run(
-        f"docker network create {net.network} "
-        f"  --driver bridge "
-        f"  -o com.docker.network.bridge.name={net.bridge} "
-        f"  --subnet {net.ipv4_subnet} "
-        f"  --gateway {net.ipv4_gw}"
-    )
+    from .jumphost_network_host import config
+    value = config(dict(network=net.network, bridge=net.bridge, subnet=net.ipv4_subnet, gateway=net.ipv4_gw))
+    if action not in ("ensure", "preflight", "recover"):
+        raise RuntimeError("Unsupported jumphost network action")
+    socket_path = PATHS.docker_socket
+    if not socket_path.startswith("unix://"):
+        raise RuntimeError("Jumphost network requires a Docker Unix socket")
+    request = dict(config=value, action=action, directory=PATHS.jumphost_network_journal_dir, socket=socket_path[7:])
+    program = Path(__file__).with_name("jumphost_network_host.py").read_text()
+    try:
+        ack = json.loads(client.run_input(shlex.join(["python3", "-c", program]), json.dumps(request), timeout=120))
+    except Exception as error:
+        raise RuntimeError("Shared jumphost network rejected or requires explicit infrastructure recovery") from error
+    expected = "verified" if action == "preflight" else "active"
+    if (not isinstance(ack, dict) or ack.get("status") != expected
+            or (action != "preflight" or ack.get("network_id") is not None)
+               and (not isinstance(ack.get("network_id"), str) or len(ack["network_id"]) != 64
+                    or any(ch not in "0123456789abcdef" for ch in ack["network_id"]))):
+        raise RuntimeError("Invalid shared jumphost network acknowledgement")
+    return ack
 
 
 _JUMPHOST_NAME_PREFIX = "dnlab-"
@@ -274,8 +309,10 @@ def render_dhcp_config(topo: DistributedTopology, resolver_ip: str | None = None
     if resolver_ip:
         lines.append(f"dhcp-option=tag:mgmt,option:dns-server,{resolver_ip}")
     if topo.mgmt.ipv6_subnet:
-        prefix6 = ipaddress.IPv6Network(topo.mgmt.ipv6_subnet, strict=False).prefixlen
-        lines.extend(["enable-ra", f"dhcp-range=tag:mgmt,::,static,{prefix6},12h", "ra-param=eth1,60,1800"])
+        network6 = ipaddress.IPv6Network(topo.mgmt.ipv6_subnet, strict=False)
+        lines.extend(["enable-ra",
+            f"dhcp-range=set:mgmt,{network6.network_address},static,{network6.prefixlen},12h",
+            "ra-param=eth1,60,1800"])
     for name in sorted(topo.nodes):
         node = topo.nodes[name]
         lines.append(f"dhcp-host={node.mgmt_mac},{node.mgmt_ipv4}")
@@ -286,15 +323,57 @@ def render_dhcp_config(topo: DistributedTopology, resolver_ip: str | None = None
 
 def refresh_dhcp_config(
     topo: DistributedTopology, client: SSHClient, container: str, resolver_ip: str | None = None,
+    *, generation: str | None = None, request_id: str | None = None,
 ) -> None:
-    """Atomically refresh jumphost reservations after a node lifecycle change."""
+    """Update only generation-qualified dynamic DHCP assets; recover on error."""
     if not topo.mgmt.dhcp:
         return
-    path = f"/tmp/dnlab-{topo.name}-dhcp.conf"
-    client.upload_text(render_dhcp_config(topo, resolver_ip), path)
-    client.run(
-        f"docker exec {shlex.quote(container)} sh -c " + shlex.quote("kill -HUP $(cat /run/dnlab-dnsmasq.pid)")
-    )
+    if not generation:
+        raise RuntimeError('DHCP refresh requires the original coordinator generation')
+    _guard(client, topo.name, 'dhcp-refresh', {'container': container, 'generation': generation,
+        'content': render_dhcp_config(topo, resolver_ip), 'request_id': request_id or uuid.uuid4().hex})
+
+
+# Keep argv independent of worker size. Both source and request travel through
+# the existing stdin transport; no remote temporary file or shell expansion.
+_WORKER_BOOTSTRAP = """import io,json,sys
+message=json.load(sys.stdin)
+source=message['source']
+sys.stdin=io.StringIO(json.dumps(message['request']))
+exec(compile(source,'<dnlab-jumphost-worker>','exec'),{'__name__':'__main__'})
+"""
+
+
+def _guard(client, lab_name, action, config=None):
+    """Run the root-local journal worker over the existing SSH boundary."""
+    program = "INVENTORY_PROGRAM = " + repr((Path(__file__).resolve().parents[2] / "jumphost/inventory.py").read_text()) + "\n" + Path(__file__).with_name("jumphost_host.py").read_text()
+    request = {"lab": lab_name, "action": action, "config": config,
+               "directory": PATHS.jumphost_journal_dir, "management_directory": PATHS.management_journal_dir}
+    try:
+        value = json.loads(client.run_input(shlex.join(["python3", "-c", _WORKER_BOOTSTRAP]),
+            json.dumps({"source":program,"request":request}, sort_keys=True, separators=(",", ":")), timeout=60))
+    except Exception as error:
+        raise RuntimeError("Jumphost operation rejected or recovery required; root-local journal retained") from error
+    if not isinstance(value, dict) or "phase" not in value:
+        raise RuntimeError("Invalid jumphost worker acknowledgement")
+    return value
+
+
+def add_jumphost_management_segment(lab_name, client, *, container_id, generation,
+                                    request_id, attachment, management_intent, recover=False):
+    """Internal append-only attachment operation; caller owns the offline barrier.
+
+    Persist request_id and original parent binding before invocation. This does
+    not alter the container birth configuration, DHCP structure, or public API.
+    """
+    request = dict(request_id=request_id, container_id=container_id, generation=generation,
+                   attachment=attachment, management_intent=management_intent)
+    return _guard(client, lab_name, 'segment-recover' if recover else 'segment-add', request)
+
+
+def recover_jumphost(lab_name, client):
+    """Explicitly continue the recorded operation, never recreate a lost generation."""
+    return _guard(client, lab_name, "recover")
 
 
 def deploy_jumphost(
@@ -309,162 +388,70 @@ def deploy_jumphost(
     relay_map: dict[str, dict] | None = None,
     ssh_bind_ip: str = "0.0.0.0",
     ssh_port_range: str = "2200-2299",
+    generation: str | None = None,
 ) -> tuple[str, str, str, str, int]:
-    """Deploy the jump host container on the master.
+    """Provision or verify one journal-owned jumphost without implicit replacement.
 
-    The jumphost starts on the shared jumphost network for SSH port publishing
-    and external reachability, then it is also attached to the lab mgmt
-    network as the default gateway seen by VDs. VD console/log access may go
-    through runtime relays, but those relays do not replace mgmt reachability.
-
-    It also publishes its SSH port on the master so users outside the
-    shared jumphost network can reach it by ``ssh -p <port> labuser@<master>``.
-    The host-side port is allocated from ``ssh_port_range`` bound to
-    ``ssh_bind_ip``.
-
-    Args:
-        topo: topology config (provides ``jumphost_net``)
-        client: SSH client for master
-        mgmt_ip: IP for the jumphost on the lab's mgmt network
-        resolver_ip: if set, passed as ``--dns`` to docker run so the jumphost
-            uses the centralized DNS container as its resolver
-        vd_names: if set, passed as ``JUMPHOST_VD_LIST`` so the jumphost
-            login banner lists the lab's VDs
-        vd_map: optional logical VD name → runtime container name map
-        authorized_keys: if set, passed as ``JUMPHOST_AUTHORIZED_KEYS`` so
-            the master can reach labuser@jumphost without a password
-        relay_map: optional runtime container → relay endpoint/auth metadata
-        ssh_bind_ip: master-side IP the SSH port is published on
-            (``0.0.0.0`` = all interfaces)
-        ssh_port_range: inclusive ``<low>-<high>`` range to pick the
-            host-side SSH port from
-
-    Returns: (container_name, password, ext_network_name, assigned_ip_cidr, ssh_port)
+    Pending operations require recover_jumphost(). A new explicit deploy after
+    verified cleanup archives the previous generation before allocating another.
+    The external Docker bridge continues to publish SSH; management is a manual
+    veth on the lab bridge and does not change Docker's default endpoint.
     """
     container = jumphost_container_name(topo.name)
-    image = image_for("jumphost")
+    previous = _guard(client, topo.name, "read")
+    if previous["phase"] not in ("absent", "active", "cleaned"):
+        raise RuntimeError("Explicit jumphost recovery required before deploy")
+    active = previous["phase"] == "active"
     jh_net = topo.jumphost_net
-    password = generate_password()
-    ssh_port = allocate_jumphost_ssh_port(client, ssh_bind_ip, ssh_port_range)
-
-    log.info(
-        "Deploying jump host: %s (image=%s, resolver=%s)",
-        container, image, resolver_ip or "default",
-    )
-
-    # Pre-flight: image exists locally?
-    rc, _, _ = client.run_no_check(f"docker image inspect {image} >/dev/null 2>&1")
-    if rc != 0:
-        raise RuntimeError(
-            f"Jumphost image '{image}' not found on master. "
-            "Run: docker compose --profile release-images pull"
-        )
-
-    # Remove any stale container
-    client.run(f"docker rm -f {container} 2>/dev/null", check=False)
-
-    # Ensure the shared jumphost network exists and pick a free IP.
     ensure_jumphost_network(client, jh_net)
-    jh_ip_cidr = allocate_jumphost_ip(client, jh_net)
-    jh_ip = jh_ip_cidr.split("/")[0]
-
-    # Start container on the shared jumphost network so docker's -p
-    # DNAT targets the externally-routable IP (see docstring).
-    dns_flag = f"--dns {resolver_ip} " if resolver_ip else ""
-    dhcp_flag = ""
-    if dhcp_config:
-        dhcp_path = f"/tmp/dnlab-{topo.name}-dhcp.conf"
-        client.upload_text(dhcp_config, dhcp_path)
-        dhcp_flag = f"-v {dhcp_path}:/etc/dnsmasq.d/dnlab-mgmt.conf:ro "
-
-    env_flags = [
-        f"-e JUMPHOST_PASSWORD={shlex.quote(password)}",
-        f"-e JUMPHOST_LAB_NAME={shlex.quote(topo.name)}",
-    ]
-    if vd_names:
-        env_flags.append(
-            f"-e JUMPHOST_VD_LIST={shlex.quote(' '.join(vd_names))}"
-        )
-    if vd_map:
-        encoded = " ".join(f"{name}={container}" for name, container in vd_map.items())
-        env_flags.append(
-            f"-e JUMPHOST_VD_MAP={shlex.quote(encoded)}"
-        )
+    if active:
+        password = previous["config"]["env"]["JUMPHOST_PASSWORD"]
+        ssh_port = previous["config"]["port"]
+        jh_ip = previous["config"]["ip"]
+        lo, hi = parse_port_range(ssh_port_range)
+        if not lo <= ssh_port <= hi:
+            raise RuntimeError("Existing jumphost SSH port outside requested range")
+    else:
+        password = generate_password()
+        ssh_port = allocate_jumphost_ssh_port(client, ssh_bind_ip, ssh_port_range)
+        jh_ip = allocate_jumphost_ip(client, jh_net).split("/")[0]
+    env = {"JUMPHOST_PASSWORD": password, "JUMPHOST_LAB_NAME": topo.name}
+    if vd_names: env["JUMPHOST_VD_LIST"] = " ".join(vd_names)
+    if vd_map: env["JUMPHOST_VD_MAP"] = " ".join(f"{name}={runtime}" for name, runtime in vd_map.items())
     if relay_map:
-        encoded = " ".join(
-            f"{container}={meta['host']}:{int(meta['port'])}:{meta['api_key']}"
-            for container, meta in relay_map.items()
-        )
-        env_flags.append(
-            f"-e JUMPHOST_RELAY_MAP={shlex.quote(encoded)}"
-        )
-    if authorized_keys:
-        env_flags.append(
-            f"-e JUMPHOST_AUTHORIZED_KEYS={shlex.quote(authorized_keys)}"
-        )
-    env_block = " ".join(env_flags)
+        _,content=render_relay_inventory(vd_map or {name:name for name in relay_map},relay_map)
+        env["JUMPHOST_RELAY_MAP"] = " ".join(content.splitlines())
+    if authorized_keys: env["JUMPHOST_AUTHORIZED_KEYS"] = authorized_keys
+    if active:
+        # Docker env is an immutable birth proof. Live inventory has its own
+        # journal and must never rewrite this proof to follow placement changes.
+        for key in ("JUMPHOST_VD_LIST", "JUMPHOST_VD_MAP", "JUMPHOST_RELAY_MAP"):
+            env.pop(key, None)
+            if key in previous["config"]["env"]: env[key] = previous["config"]["env"][key]
 
-    port_flag = f"-p {ssh_bind_ip}:{ssh_port}:22 "
-    run_cmd = (
-        f"docker run -d "
-        f"--name {container} "
-        f"--network {jh_net.network} "
-        f"--ip {jh_ip} "
-        f"{dns_flag}"
-        f"{port_flag}"
-        f"--cap-add NET_ADMIN "
-        f"--sysctl net.ipv4.ip_forward=1 "
-        f"--cap-add NET_RAW "
-        f"--sysctl net.ipv6.conf.all.forwarding=1 "
-        f"{dhcp_flag}"
-        f"{env_block} "
-        f"{image}"
-    )
-    client.run(run_cmd)
-
-    rc, out, _ = client.run_no_check(
-        f"docker inspect -f '{{{{.State.Running}}}}' {container}"
-    )
-    if rc != 0 or out.strip() != "true":
-        _, logs, _ = client.run_no_check(f"docker logs {container} 2>&1 | tail -40")
-        client.run(f"docker rm -f {container} 2>/dev/null", check=False)
-        raise RuntimeError(
-            f"Jumphost container '{container}' failed to start.\n"
-            f"--- docker logs (last 40 lines) ---\n{logs}\n"
-            f"-----------------------------------"
-        )
-    log.info("Jump host container started: %s", container)
-
-    try:
-        attach_jumphost_to_mgmt_bridge(
-            client,
-            container=container,
-            lab_name=topo.name,
-            bridge=topo.mgmt.bridge,
-            mgmt_ip=mgmt_ip,
-            mgmt_subnet=topo.mgmt.ipv4_subnet,
-            mgmt_ipv6=topo.mgmt.ipv6_gw,
-            mgmt_ipv6_subnet=topo.mgmt.ipv6_subnet,
-        )
-        log.info(
-            "Jumphost %s attached to mgmt bridge '%s' with IP %s",
-            container, topo.mgmt.bridge, mgmt_ip,
-        )
-        _verify_jumphost_ssh_publish(
-            client,
-            container=container,
-            ssh_bind_ip=ssh_bind_ip,
-            ssh_port=ssh_port,
-        )
-    except Exception:
-        client.run(f"docker rm -f {container} 2>/dev/null", check=False)
-        raise
-
-    log.info(
-        "Jumphost %s SSH port published on master: %s:%d → :22",
-        container, ssh_bind_ip, ssh_port,
-    )
-    return container, password, jh_net.network, jh_ip_cidr, ssh_port
+    attachment = {
+        "segment": "default", "network": topo.mgmt.network, "bridge": topo.mgmt.bridge, "interface": "eth1",
+        "ipv4": str(ipaddress.ip_interface(f"{mgmt_ip}/{ipaddress.ip_network(topo.mgmt.ipv4_subnet, strict=False).prefixlen}")),
+        "ipv6": str(ipaddress.ip_interface(f"{topo.mgmt.ipv6_gw}/{ipaddress.ip_network(topo.mgmt.ipv6_subnet, strict=False).prefixlen}"))
+                  if topo.mgmt.ipv6_gw and topo.mgmt.ipv6_subnet else "",
+    }
+    generation = generation or (previous["config"]["generation"] if active else uuid.uuid4().hex)
+    config = {"lab": topo.name, "generation": generation, "name": container, "image": image_for("jumphost"),
+              "network": {"name": jh_net.network, "bridge": jh_net.bridge, "subnet": jh_net.ipv4_subnet, "gateway": jh_net.ipv4_gw},
+              "ip": jh_ip, "bind_ip": ssh_bind_ip, "port": ssh_port, "env": env,
+              "dns": [resolver_ip] if resolver_ip else [], "binds": [], "dhcp": dhcp_config, "attachment": attachment}
+    if not active or "management_intent" in previous["config"]:
+        from .mgmt_network import _expected_network
+        config["management_intent"] = _expected_network(topo, "master")
+    record = _guard(client, topo.name, "provision" if previous["phase"] == "cleaned" else "ensure", config)
+    if record["phase"] != "active": raise RuntimeError("Jumphost operation is not active")
+    # Read-only qualification of the original ID, followed by SSH publication.
+    # A publication error retains the journal and resources for explicit recovery.
+    _verify_jumphost_ssh_publish(client, container=record["container_id"], ssh_bind_ip=ssh_bind_ip, ssh_port=ssh_port)
+    if vd_map is not None and relay_map is not None and set(vd_map.values()) <= set(relay_map):
+        refresh_jumphost_inventory(topo.name, client, vd_map, relay_map, generation=generation)
+    prefix = ipaddress.ip_network(jh_net.ipv4_subnet, strict=False).prefixlen
+    return container, password, jh_net.network, f"{jh_ip}/{prefix}", ssh_port
 
 
 def _verify_jumphost_ssh_publish(
@@ -509,69 +496,47 @@ def _verify_jumphost_ssh_publish(
     raise RuntimeError(
         f"Jumphost container '{container}' did not restore SSH port publishing after "
         f"management network attach: expected {expected}->22/tcp but docker reported "
-        f"{detail!r}. The lab was not left with an unreachable jumphost."
+        f"{detail!r}. Journal and resources retained for explicit recovery."
     )
 
 
 def attach_jumphost_to_mgmt_bridge(
-    client: SSHClient,
-    *,
-    container: str,
-    lab_name: str,
-    bridge: str,
-    mgmt_ip: str,
-    mgmt_subnet: str,
-    mgmt_ipv6: str = "",
-    mgmt_ipv6_subnet: str = "",
+    client: SSHClient, *, container: str, lab_name: str, bridge: str,
+    mgmt_ip: str, mgmt_subnet: str, mgmt_ipv6: str = "", mgmt_ipv6_subnet: str = "",
 ) -> None:
-    """Attach jumphost to the lab mgmt bridge without a Docker endpoint.
+    """Verify an attachment already admitted by the container's birth intent.
 
-    Docker remote-driver endpoints can take over external connectivity and
-    revoke the bridge-published SSH port, so the jumphost gets only a manual
-    veth on the lab bridge. Inside the container this is ``eth1``, matching
-    the jumphost image's forwarding rules.
+    The old standalone name-based allocator is deliberately unavailable. Retry
+    of an incomplete birth/attachment uses recover_jumphost(), not this method.
     """
-    prefix = ipaddress.ip_network(mgmt_subnet, strict=False).prefixlen
-    prefix6 = ipaddress.ip_network(mgmt_ipv6_subnet, strict=False).prefixlen if mgmt_ipv6 and mgmt_ipv6_subnet else 0
-    ipv6_cmd = ("nsenter -t \"$pid\" -n ip -6 addr add " + shlex.quote(f"{mgmt_ipv6}/{prefix6}") + " dev eth1; ") if mgmt_ipv6 else ""
-    suffix = "".join(ch for ch in lab_name if ch.isalnum())[:8] or "lab"
-    host_if = f"jh-{suffix}"
-    peer_if = f"jhc-{suffix}"
-
-    client.run(
-        "set -e; "
-        f"pid=$(docker inspect -f '{{{{.State.Pid}}}}' {shlex.quote(container)}); "
-        f"test -n \"$pid\"; "
-        f"ip link show {shlex.quote(bridge)} >/dev/null; "
-        f"ip link del {shlex.quote(host_if)} 2>/dev/null || true; "
-        f"nsenter -t \"$pid\" -n ip link del eth1 2>/dev/null || true; "
-        f"ip link add {shlex.quote(host_if)} type veth peer name {shlex.quote(peer_if)}; "
-        f"ip link set {shlex.quote(host_if)} master {shlex.quote(bridge)}; "
-        f"ip link set {shlex.quote(host_if)} up; "
-        f"ip link set {shlex.quote(peer_if)} netns \"$pid\"; "
-        f"nsenter -t \"$pid\" -n ip link set {shlex.quote(peer_if)} name eth1; "
-        f"nsenter -t \"$pid\" -n ip addr add {shlex.quote(f'{mgmt_ip}/{prefix}')} dev eth1; "
-        f"{ipv6_cmd}"
-        f"nsenter -t \"$pid\" -n ip link set eth1 up",
-        timeout=30,
-    )
+    record = _guard(client, lab_name, "read")
+    if record.get("config", {}).get("name") != container:
+        raise RuntimeError("Jumphost birth record missing or container differs")
+    attachment = dict(record["config"]["attachment"])
+    attachment.update(bridge=bridge,
+        ipv4=str(ipaddress.ip_interface(f"{mgmt_ip}/{ipaddress.ip_network(mgmt_subnet, strict=False).prefixlen}")),
+        ipv6=str(ipaddress.ip_interface(f"{mgmt_ipv6}/{ipaddress.ip_network(mgmt_ipv6_subnet, strict=False).prefixlen}"))
+              if mgmt_ipv6 and mgmt_ipv6_subnet else "")
+    _guard(client, lab_name, "attach", attachment)
 
 
-def destroy_jumphost(
-    lab_name: str,
-    client: SSHClient,
-) -> None:
-    """Remove the jump host container.
+def preflight_jumphost_cleanup(lab_name, client, container, generation=None):
+    proof = {"container": container}
+    if generation is not None: proof["generation"] = generation
+    return _guard(client, lab_name, "preflight-delete", proof)
 
-    The shared jumphost network is **not** removed — other labs may have
-    their jumphosts attached. Removal only happens if the site operator
-    manually tears it down (e.g. ``docker network rm dnlab-jumphost``
-    after destroying all labs).
-    """
-    container = jumphost_container_name(lab_name)
-    log.info("Removing jump host: %s", container)
-    client.run(f"docker rm -f {container} 2>/dev/null", check=False)
-    log.info("Jump host removed")
+
+def verify_jumphost_cleaned(lab_name, client, container, generation=None):
+    proof = {"container": container}
+    if generation is not None: proof["generation"] = generation
+    return _guard(client, lab_name, "verify-cleaned", proof)
+
+
+def destroy_jumphost(lab_name: str, client: SSHClient, generation: str | None = None) -> None:
+    """Cleanup only the generation in the root-local journal, without force."""
+    record = _guard(client, lab_name, "delete", {"generation": generation} if generation is not None else None)
+    if record["phase"] != "cleaned":
+        raise RuntimeError("Jumphost cleanup is incomplete; journal retained")
 
 
 def ensure_master_pubkey(client: SSHClient) -> str:

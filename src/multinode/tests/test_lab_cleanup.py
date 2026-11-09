@@ -182,7 +182,7 @@ def test_parse_artifact_lab_known_patterns():
     assert cleanup.parse_artifact_lab("network", "dnlab-jumphost", known) == ""
 
 
-def test_running_vd_without_state_is_cleaned_after_grace():
+def test_running_vd_without_state_is_protected_after_grace():
     inv = {
         "master": cleanup.HostCleanupInventory(
             name="master",
@@ -197,14 +197,12 @@ def test_running_vd_without_state_is_cleaned_after_grace():
     plans = cleanup.build_cleanup_plan(inv, {}, grace_seconds=0)
     commands = {action.command for action in plans["demo"].actions}
 
-    assert plans["demo"].protected is False
-    assert commands == {
-        "docker rm -f clab-dnlab-demo-R1-R1",
-        "docker network rm mgmt-demo",
-    }
+    assert plans["demo"].protected is True
+    assert "vd-ownership-unqualified" in plans["demo"].reasons
+    assert plans["demo"].actions == []
 
 
-def test_running_runtime_relay_without_running_vd_is_cleaned():
+def test_running_runtime_relay_without_running_vd_requires_owned_cleanup():
     inv = {
         "worker1": cleanup.HostCleanupInventory(
             name="worker1",
@@ -226,10 +224,11 @@ def test_running_runtime_relay_without_running_vd_is_cleaned():
     commands = [a.command for a in plans["demo"].actions]
 
     assert plans["demo"].protected is False
-    assert commands == ["docker rm -f dnlab-demo-runtime-relay"]
+    assert commands == [""]
+    assert plans["demo"].actions[0].action == 'cleanup-relay'
 
 
-def test_running_vd_without_state_does_not_protect_runtime_relay():
+def test_running_vd_without_state_protects_runtime_relay():
     inv = {
         "worker1": cleanup.HostCleanupInventory(
             name="worker1",
@@ -257,11 +256,9 @@ def test_running_vd_without_state_does_not_protect_runtime_relay():
     plans = cleanup.build_cleanup_plan(inv, {}, grace_seconds=0)
     commands = {action.command for action in plans["demo"].actions}
 
-    assert plans["demo"].protected is False
-    assert commands == {
-        "docker rm -f clab-dnlab-demo-R1-R1",
-        "docker rm -f dnlab-demo-runtime-relay",
-    }
+    assert plans["demo"].protected is True
+    assert "vd-ownership-unqualified" in plans["demo"].reasons
+    assert plans["demo"].actions == []
 
 
 def test_running_vd_from_state_protects_lab_with_running_runtime_relay(tmp_path):
@@ -302,7 +299,7 @@ def test_running_vd_from_state_protects_lab_with_running_runtime_relay(tmp_path)
     assert plans["demo"].actions == []
 
 
-def test_requested_teardown_removes_running_vds_without_grace(tmp_path):
+def test_requested_teardown_preserves_unqualified_running_vds(tmp_path):
     st = _state(tmp_path)
     st.teardown_requested = True
     inv = {
@@ -328,10 +325,9 @@ def test_requested_teardown_removes_running_vds_without_grace(tmp_path):
 
     plan = cleanup.build_cleanup_plan(inv, {"demo": st}, grace_seconds=600)["demo"]
 
-    assert plan.protected is False
-    assert "lab-runtime-running" not in plan.reasons
-    assert "artifact-inside-grace" not in plan.reasons
-    assert any(action.command == "docker rm -f clab-dnlab-demo-R1-R1" for action in plan.actions)
+    assert plan.protected is True
+    assert "vd-ownership-unqualified" in plan.reasons
+    assert plan.actions == []
 
 
 def test_requested_teardown_waits_for_unreachable_worker(tmp_path):
@@ -356,7 +352,7 @@ def test_requested_teardown_waits_for_unreachable_worker(tmp_path):
     assert "lab-runtime-running" not in plan.reasons
 
 
-def test_requested_teardown_state_is_finalized_only_after_all_artifacts_are_absent(tmp_path):
+def test_requested_teardown_legacy_management_state_is_retained_even_when_names_are_absent(tmp_path):
     st = _state(tmp_path)
     st.teardown_requested = True
     state_svc.save_state(st, tmp_path)
@@ -366,8 +362,8 @@ def test_requested_teardown_state_is_finalized_only_after_all_artifacts_are_abse
         {"demo": st}, tmp_path, _hosts(), clients=clients,
     )
 
-    assert status["demo"] == "pending teardown state finalized"
-    assert state_svc.load_state("demo", tmp_path) is None
+    assert "legacy management infrastructure" in status["demo"]
+    assert state_svc.load_state("demo", tmp_path) is not None
 
 
 def test_requested_teardown_state_is_retained_when_an_artifact_remains(tmp_path):
@@ -458,11 +454,8 @@ def test_running_service_containers_without_running_vd_are_cleaned():
     commands = {a.command for a in plans["demo"].actions}
 
     assert plans["demo"].protected is False
-    assert commands == {
-        "docker rm -f dnlab-demo-dns",
-        "docker rm -f dnlab-demo-jumphost",
-        "docker rm -f dnlab-demo-runtime-relay",
-    }
+    assert commands == {""}
+    assert {a.action for a in plans['demo'].actions} == {'cleanup-relay','cleanup-dns','cleanup-jumphost'}
 
 
 def test_state_derived_running_service_containers_without_running_vd_are_cleaned(tmp_path):
@@ -513,14 +506,11 @@ def test_state_derived_running_service_containers_without_running_vd_are_cleaned
     commands = {a.command for a in plans["demo"].actions}
 
     assert plans["demo"].protected is False
-    assert commands == {
-        "docker rm -f dnlab-demo-dns",
-        "docker rm -f dnlab-demo-jumphost",
-        "docker rm -f dnlab-demo-runtime-relay",
-    }
+    assert commands == {""}
+    assert {a.action for a in plans['demo'].actions} == {'cleanup-relay','cleanup-dns','cleanup-jumphost'}
 
 
-def test_running_mgmt_anchor_does_not_protect_stopped_lab():
+def test_running_mgmt_anchor_protects_stopped_lab():
     inv = {
         "master": cleanup.HostCleanupInventory(
             name="master",
@@ -542,12 +532,12 @@ def test_running_mgmt_anchor_does_not_protect_stopped_lab():
     plans = cleanup.build_cleanup_plan(inv, {}, grace_seconds=0)
     commands = [a.command for a in plans["demo"].actions]
 
-    assert plans["demo"].protected is False
-    assert "docker rm -f clab-dnlab-demo-R1-R1" in commands
-    assert "docker rm -f clab-dnlab-demo-mgmt-master-mgmt-anchor" in commands
+    assert plans["demo"].protected is True
+    assert "vd-ownership-unqualified" in plans["demo"].reasons
+    assert plans["demo"].actions == []
 
 
-def test_running_vd_without_state_does_not_protect_mgmt_anchor():
+def test_running_vd_without_state_protects_mgmt_anchor():
     inv = {
         "master": cleanup.HostCleanupInventory(
             name="master",
@@ -569,11 +559,9 @@ def test_running_vd_without_state_does_not_protect_mgmt_anchor():
     plans = cleanup.build_cleanup_plan(inv, {}, grace_seconds=0)
     commands = {action.command for action in plans["demo"].actions}
 
-    assert plans["demo"].protected is False
-    assert commands == {
-        "docker rm -f clab-dnlab-demo-R1-R1",
-        "docker rm -f clab-dnlab-demo-mgmt-master-mgmt-anchor",
-    }
+    assert plans["demo"].protected is True
+    assert "vd-ownership-unqualified" in plans["demo"].reasons
+    assert plans["demo"].actions == []
 
 
 def test_state_derived_running_mgmt_anchor_is_cleaned(tmp_path):
@@ -657,7 +645,7 @@ def test_empty_per_lab_network_is_cleaned_but_shared_and_attached_are_skipped():
     assert all("dnlab-jumphost" not in cmd for cmd in commands)
 
 
-def test_state_derived_vxlan_and_mgmt_interfaces_are_cleaned(tmp_path):
+def test_management_names_never_authorize_generic_interface_cleanup(tmp_path):
     st = _state(tmp_path)
     inv = {
         "master": cleanup.HostCleanupInventory(name="master", host="10.0.0.10", reachable=True),
@@ -665,9 +653,9 @@ def test_state_derived_vxlan_and_mgmt_interfaces_are_cleaned(tmp_path):
     }
     plans = cleanup.build_cleanup_plan(inv, {"demo": st}, grace_seconds=0)
     commands = [a.command for a in plans["demo"].actions]
-    assert "ip link delete vx-demo-mgmt" in commands
-    assert "ip link delete br-demo" in commands
-    assert "ip link delete vrf-demo" in commands
+    assert "ip link delete vx-demo-mgmt" not in commands
+    assert "ip link delete br-demo" not in commands
+    assert "ip link delete vrf-demo" not in commands
     assert "ip link delete vx-vxabc-R1-e1"[:30] in " ".join(commands)
 
 
@@ -690,7 +678,7 @@ def test_state_mgmt_network_is_removed_only_when_live_and_empty(tmp_path):
     plans = cleanup.build_cleanup_plan(inv, {"demo": st}, grace_seconds=0)
     commands = [action.command for action in plans["demo"].actions]
 
-    assert "docker network rm demo" in commands
+    assert "docker network rm demo" not in commands
     assert any("network skipped: demo" in warning for warning in plans["demo"].warnings)
 
 
@@ -716,7 +704,7 @@ def test_cleanup_inventory_requires_remote_driver_ownership_for_mgmt_network(tmp
 
     plan = cleanup.build_cleanup_plan(inventories, {"demo": st}, grace_seconds=0)["demo"]
     commands = [action.command for action in plan.actions]
-    assert "docker network rm demo" in commands
+    assert "docker network rm demo" not in commands
 
 
 def test_cleanup_refuses_unowned_mgmt_network_and_keeps_its_infrastructure(tmp_path):
@@ -810,7 +798,7 @@ def test_cleanup_network_failure_blocks_dependent_mgmt_interfaces():
 
     cleanup._execute_plans({"demo": plan}, {"master": client}, own_clients=False)
 
-    assert client.commands == ["docker network rm demo"]
+    assert [cmd for cmd in client.commands if cmd.startswith(("docker network rm", "ip link delete"))] == ["docker network rm demo"]
     assert network_action.executed is True
     assert network_action.ok is False
     assert bridge_action.executed is False
@@ -854,12 +842,12 @@ def test_reconcile_once_dry_run_writes_report_without_mutating(tmp_path):
     )
     assert report.dry_run is True
     assert state_file.exists()
-    assert any(a.command == "docker rm -f dnlab-demo-dns" for a in report.labs["demo"].actions)
+    assert any(a.action == "cleanup-dns" for a in report.labs["demo"].actions)
     assert all(not any(cmd.startswith("docker rm -f") for cmd in c.commands) for c in clients.values())
     assert json.loads(state_file.read_text())["labs"]["demo"]["protected"] is False
 
 
-def test_reconcile_once_execute_runs_cleanup_commands(tmp_path):
+def test_reconcile_once_protects_unqualified_dns_before_mutations(tmp_path):
     _state(tmp_path)
     clients = {
         "master": FakeClient("master", containers="dnlab-demo-dns\texited\t2020-01-01 00:00:00 +0000 UTC"),
@@ -873,8 +861,9 @@ def test_reconcile_once_execute_runs_cleanup_commands(tmp_path):
         dry_run=False,
         grace_seconds=0,
     )
-    assert any(cmd == "docker rm -f dnlab-demo-dns" for cmd in clients["master"].commands)
-    assert any(a.executed and a.ok for a in report.labs["demo"].actions)
+    assert not any(cmd.startswith("docker rm") or cmd.startswith("ip link delete") for c in clients.values() for cmd in c.commands)
+    assert report.labs["demo"].protected
+    assert "dns-preflight-failed" in report.labs["demo"].reasons
 
 
 def test_cli_cleanup_labs_json(monkeypatch):
@@ -894,3 +883,68 @@ def test_cli_cleanup_labs_json(monkeypatch):
 
     assert result.exit_code == 0
     assert '"dry_run": true' in result.output
+
+
+def test_management_daemon_delegates_after_all_host_preflight_and_before_finalization(tmp_path,monkeypatch):
+    from dnlab_multinode.services import netsetup
+    st=_state(tmp_path);st.teardown_requested=True
+    clients={h:FakeClient(h) for h in ('master','worker1')};events=[]
+    def preflight(state, available):
+        assert state is st and set(available)==set(clients)
+        assert not any(c.commands for c in clients.values())
+        events.append('preflight')
+    def cleanup_mgmt(state,available,**kwargs):events.append('cleanup');kwargs['checkpoint']()
+    monkeypatch.setattr(netsetup,'preflight_management',preflight)
+    monkeypatch.setattr(netsetup,'destroy_management',cleanup_mgmt)
+    monkeypatch.setattr(cleanup,'_vd_preflight',lambda *args,**kwargs:events.append('vd'))
+    plans={'demo':cleanup.LabCleanupPlan(lab='demo')}
+    cleanup._execute_plans(plans,clients,own_clients=False,states={'demo':st},state_directory=tmp_path)
+    assert events==['preflight','vd','cleanup']
+    assert not any(cmd.startswith('ip link delete') for c in clients.values() for cmd in c.commands)
+    events.clear()
+    monkeypatch.setattr(netsetup,'release_management',lambda *args,**kwargs:events.append('verify-release'))
+    status=cleanup._finalize_requested_teardowns({'demo':st},tmp_path,_hosts(),clients=clients)
+    assert events==['vd','verify-release'] and status['demo']=='pending teardown state finalized'
+
+
+def test_management_daemon_preflight_failure_prevents_vd_or_other_mutations(tmp_path,monkeypatch):
+    from dnlab_multinode.services import netsetup
+    st=_state(tmp_path);st.teardown_requested=True
+    clients={h:FakeClient(h) for h in ('master','worker1')};events=[]
+    def fail(*args):raise RuntimeError('foreign bridge on worker1')
+    monkeypatch.setattr(netsetup,'preflight_management',fail)
+    monkeypatch.setattr(cleanup,'_vd_preflight',lambda *args,**kwargs:events.append('vd-mutation'))
+    plans={'demo':cleanup.LabCleanupPlan(lab='demo')}
+    cleanup._execute_plans(plans,clients,own_clients=False,states={'demo':st},state_directory=tmp_path)
+    assert plans['demo'].protected and 'management-preflight-failed' in plans['demo'].reasons
+    assert not events and not any(c.commands for c in clients.values())
+
+
+def test_relay_daemon_refuses_unqualified_orphan_before_any_delete(tmp_path,monkeypatch):
+    client=FakeClient('master');artifact=cleanup.CleanupArtifact('container','dnlab-demo-runtime-relay','master','demo',state='running')
+    inventory={'master':cleanup.HostCleanupInventory(name='master',host=client.host,reachable=True,artifacts=[artifact])}
+    plans=cleanup.build_cleanup_plan(inventory,{},grace_seconds=0)
+    cleanup._execute_plans(plans,{'master':client},own_clients=False,state_directory=tmp_path)
+    assert plans['demo'].protected and 'relay-preflight-failed' in plans['demo'].reasons
+    assert client.commands==[]
+
+
+def test_relay_daemon_delegates_cleanup_and_retains_state_on_unverified_journal(tmp_path,monkeypatch):
+    from dnlab_multinode.services import runtime_relay
+    st=DeploymentState(lab_name='demo',topology_file='fixture.yml',teardown_requested=True,runtime_mode='per-vd')
+    relay=RuntimeRelayState(host='master',container='dnlab-demo-runtime-relay',bind_ip='127.0.0.1',port=18080,
+                            generation='a'*32,container_id='b'*64)
+    st.runtime_relays={'master':relay};state_svc.save_state(st,tmp_path)
+    client=FakeClient('master');events=[]
+    artifact=cleanup.CleanupArtifact('container',relay.container,'master','demo',state='running')
+    inventory={'master':cleanup.HostCleanupInventory(name='master',host=client.host,reachable=True,artifacts=[artifact])}
+    plans=cleanup.build_cleanup_plan(inventory,{'demo':st},grace_seconds=0)
+    monkeypatch.setattr(runtime_relay,'preflight_relay_cleanup',lambda *a:events.append('preflight'))
+    monkeypatch.setattr(runtime_relay,'destroy_runtime_relays',lambda lab,clients,current:events.append(('delete',current['master'].container_id)))
+    monkeypatch.setattr(cleanup,'_vd_preflight',lambda *a,**kw:None)
+    cleanup._execute_plans(plans,{'master':client},own_clients=False,states={'demo':st},state_directory=tmp_path)
+    assert events==['preflight',('delete','b'*64)] and client.commands==[]
+    def incomplete(*args):raise RuntimeError('relay recovery required')
+    monkeypatch.setattr(runtime_relay,'verify_relay_cleaned',incomplete)
+    status=cleanup._finalize_requested_teardowns({'demo':st},tmp_path,_hosts(),clients={'master':client})
+    assert 'relay journal' in status['demo'] and state_svc.load_state('demo',tmp_path) is not None

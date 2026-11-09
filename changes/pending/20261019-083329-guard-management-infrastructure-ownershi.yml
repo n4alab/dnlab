@@ -1,0 +1,18 @@
+id: 20261019-083329-guard-management-infrastructure-ownershi
+type: bugfix
+title: Guard management infrastructure ownership and recovery
+description: Management setup and cleanup preflight every host, reserve segment VNIs
+  durably, journal kernel and firewall operations, preserve shared VRFs until segment
+  cleanup, and reject unqualified replacements. Routed shortcuts through the host
+  VRF are blocked while management routing through the jumphost remains available.
+components:
+- multinode
+audience:
+- operator
+visibility: public
+breaking: true
+upgrade_notes:
+- Existing management resources without durable infrastructure birth records are retained
+  and refused for automatic reuse or cleanup. No legacy adoption or automatic host
+  migration is performed.
+references: []

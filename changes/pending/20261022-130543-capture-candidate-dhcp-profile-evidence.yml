@@ -1,0 +1,15 @@
+id: 20261022-130543-capture-candidate-dhcp-profile-evidence
+type: none
+title: Capture candidate DHCP profile evidence before fixture cleanup
+description: Add a diagnostic-only fixture observer that records readonly process
+  and log proofs before invoking the unchanged DHCP profile guard.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
+reason: Only isolated diagnostic fixture and regression coverage change; no runtime
+  guard, qualified image profiles or installed plugin behavior changes.

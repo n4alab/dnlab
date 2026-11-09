@@ -1,0 +1,16 @@
+id: 20261023-223519-qualify-management-release-and-initial-w
+type: internal
+title: Qualify management release and initial workload recovery together
+description: Compose the original coordinator and runtime journals in inert integration
+  tests. Verify that a lost release acknowledgement blocks all batch admission across
+  coordinator reopen, that re-observation precedes recovery, and that cancellation
+  after a lost first spawn acknowledgement stops only the original generation without
+  force.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

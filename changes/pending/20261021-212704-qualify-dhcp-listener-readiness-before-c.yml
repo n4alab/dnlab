@@ -1,0 +1,16 @@
+id: 20261021-212704-qualify-dhcp-listener-readiness-before-c
+type: internal
+title: Qualify DHCP listener readiness before committing structural updates
+description: Bind read-only DHCPv4/v6 and RA socket ownership to the original daemon,
+  files and qualified management attachments. Commit service identity and nonce with
+  durable history, recover uncertain final commits and permit dynamic reservations
+  against the committed main config. Keep workload barrier release coordinator-owned
+  and packet readiness distinct.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

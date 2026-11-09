@@ -1,0 +1,16 @@
+id: 20261013-084720-pin-experimental-realnet-bridge-mac-duri
+type: internal
+title: Pin experimental RealNet bridge MAC during creation
+description: Add a shared bridge creation helper with an explicit local unicast MAC
+  derived from the creator nonce and use it in the isolated RealNet cleanup fixture.
+  Preserve strict MAC ownership checks. Diagnostics prove automatic bridge MAC becomes
+  zero after port removal; explicit creation reaches cleaned recovery, while the broader
+  gate remains stopped on a differing control-lab snapshot.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

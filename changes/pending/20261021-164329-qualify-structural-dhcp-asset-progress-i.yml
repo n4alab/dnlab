@@ -1,0 +1,15 @@
+id: 20261021-164329-qualify-structural-dhcp-asset-progress-i
+type: internal
+title: Qualify structural DHCP asset progress inside the jumphost worker
+description: Bind the private writing stage to the original request, jumphost generation,
+  shutdown receipt and file matrix. Recognize only journal-authorized partial writes
+  during complete attachment preflight, recover all three assets on their original
+  inodes and retain pending state until service launch and readiness are implemented.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

@@ -1,0 +1,15 @@
+id: 20261016-130812-diagnose-native-initial-management-prefl
+type: internal
+title: Bind native management apply and recovery to read-only preflight
+description: Validate management networks during planning without mutation and
+  return a request-bound network proof. Persist the original observation in the
+  coordinator and runtime request, reject missing or changed proofs before
+  allocation, and retain the same proof on retry, lost acknowledgements and recovery.
+components:
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
