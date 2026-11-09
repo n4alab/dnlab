@@ -446,10 +446,27 @@ and artifact responses, fsync failure, conflict preservation and replay.
 The first test run had eight passes and one incorrect expected exception for a
 second prepare without resume. Only that expectation was corrected to Conflict,
 with preservation checks on journal changes, artifact bytes and inodes. The
-runtime refusal stayed unchanged. Native journal opening, observer assembly,
-frozen recipe and operational qualification remain separate work. No live
-journal prepare, recovery, runtime directory, account operation or daemon/VM
-action occurred.
+runtime refusal stayed unchanged.
+
+`open_postboot_journal` now opens an existing journal without general runtime
+schema initialization. Under the journal execution gate and a supplied
+administrative-window verifier, the first open requires the archived database
+hash and no pending WAL/rollback journal. Original logical identity and installed
+record are checked before enabling metadata transactions. The caller must
+durably retain the original source/directory/database binding first; failure
+prevents metadata preparation. Explicit resume requires that same binding,
+including device/inode, rather than reusing a database hash made stale by the
+prepare itself. Missing files, symlinks, changed source/identity and replacement
+files with identical bytes are refused. Window/path checks bracket transactions;
+a failed final check rolls the transaction back. This is an administrative
+window contract, not exclusion of unrelated root writers.
+
+Ten journal tests pass, including composition with prepare delivery and an
+explicit reopen. Together with the nine delivery tests, the targeted run has
+19 passes. All databases, journals, observers and output directories used by
+these tests are temporary or synthetic. Native observer assembly, frozen recipe
+and operational qualification remain separate work. No live journal prepare,
+recovery, runtime directory, account operation or daemon/VM action occurred.
 
 ### Current-boot /run parent: explicit dependency binding, synthetic verification
 

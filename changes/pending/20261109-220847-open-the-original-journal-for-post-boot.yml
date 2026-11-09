@@ -1,0 +1,14 @@
+id: 20261109-220847-open-the-original-journal-for-post-boot
+type: internal
+title: Open the original journal for post-boot metadata prepare
+description: Validate an existing journal and original installation before enabling
+  post-boot metadata writes, retaining physical identity for explicit resume after
+  the initial database hash changes.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
