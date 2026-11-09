@@ -526,6 +526,18 @@ an observation, not a prepared journal record or daemon readiness. A separate
 metadata-only recipe is derived from those archived facts; it requires its own
 operational authorization and must recheck them before writing metadata.
 
+The separately authorized metadata-only prepare from that new recipe completed
+successfully in about three seconds. The original journal binding and prepared
+reference were durably retained; both directory intents remain prepared with
+no birth proof. All 24 readonly service queries succeeded and all 18 recorded
+context comparisons matched. This prepares metadata only: qualification remains
+false for daemon readiness, neither runtime directory was created, and no
+account/unit/service/VM action was performed. Subsequent work must use this
+original prepared reference and physical journal binding. The initial database
+hash is historical after these metadata writes and must not be reused as a
+fresh whole-database acceptance criterion. Directory recovery and activation
+still require their distinct qualified entry and operational authorization.
+
 ### Current-boot /run parent: explicit dependency binding, synthetic verification
 
 New post-boot requests may explicitly supply `run_parent=bind_run_parent(...)`.
