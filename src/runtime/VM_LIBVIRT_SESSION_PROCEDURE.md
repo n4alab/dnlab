@@ -418,6 +418,16 @@ by packaging the recipe.
 
 ### Offline dpkg diagnosis prepared; host diagnosis still pending
 
+The single separately authorized recipe02 attempt saved the initial comparison
+and refused before status/status-old reads. The expected boot ID differs from
+the observed boot ID; mount, network and PID namespace inode numbers also
+differ. The user namespace proof and namespace device numbers match. Only
+intent, the initial context pair and failure result were saved. No retry or
+qualification occurred. The changed context is now evidenced; the package
+digest delta remains unresolved. A separate explicitly approved context binding
+is needed before another diagnostic, without changing the historical reference
+or adopting any volatile resource/process from it.
+
 Context diagnostics are now implemented and pass40 targeted synthetic tests.
 Each of the original four observations is saved as expected/observed/matches,
 with pass and before/after phase, before applying the unchanged comparison.

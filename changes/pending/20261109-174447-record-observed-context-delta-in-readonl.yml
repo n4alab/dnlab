@@ -1,0 +1,16 @@
+id: 20261109-174447-record-observed-context-delta-in-readonl
+type: none
+title: Record observed context delta in readonly dpkg diagnostic
+description: 'The single diagnostic retained expected and observed context: boot ID
+  and mount/network/PID namespace inodes differ. Refused before dpkg reads with no
+  retry, qualification or acceptance change.'
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
+reason: Experimental readonly diagnostic evidence and documentation only; no installed
+  resource or package state changed.
