@@ -130,7 +130,9 @@ class VolatileDirectories:
                     item['phase']='create_requested';value['phase']='applying'
                     with self.journal.transaction():self._save(value)
                     self._preflight(value)
-                    current=self.files.create(deepcopy(item),value['id'],window=self.window)
+                    qualified=self._binding(value)
+                    parent_args={'run_parent':deepcopy(qualified['run_parent']['identity'])} if 'run_parent' in qualified else {}
+                    current=self.files.create(deepcopy(item),value['id'],window=self.window,**parent_args)
                     if self._preflight(value)[item['spec']['key']]!=current:
                         raise Conflict('current directory birth not independently observed')
                 elif current is None:

@@ -13,6 +13,7 @@ from pathlib import PurePosixPath
 import stat
 
 from .manifest import Conflict, canonical, fingerprint
+from .libvirt_run_parent import run_parent_identity
 
 MARKER = 'user.dnlab.libvirt-install'
 
@@ -67,17 +68,24 @@ class InstallationFiles:
         return receipt
 
     @contextmanager
-    def _parent(self, path):
+    def _parent(self, path, *, run_parent=None):
         parts = PurePosixPath(path).parts
         if not isinstance(path, str) or not path.startswith('/') or '..' in parts or len(parts) < 2:
             raise Conflict('absolute installation path required')
+        if run_parent is not None:
+            run_parent=run_parent_identity(run_parent)
+            if parts[1]!='run' or len(parts)<3:raise Conflict('bound /run descendant required')
         descriptors = []
         try:
             fd = os.open(self.root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
             descriptors.append(fd)
-            for name in parts[1:-1]:
+            for index,name in enumerate(parts[1:-1]):
                 fd = os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=fd)
                 descriptors.append(fd)
+                if run_parent is not None and index==0:
+                    info=os.fstat(fd)
+                    observed=dict(device=info.st_dev,inode=info.st_ino,uid=info.st_uid,gid=info.st_gid,mode=stat.S_IMODE(info.st_mode))
+                    if observed!=run_parent:raise Conflict('bound current-boot /run parent replaced or changed')
             yield fd, parts[-1]
         finally:
             for fd in reversed(descriptors):os.close(fd)
@@ -207,7 +215,7 @@ class InstallationFiles:
                     return self.observe(item, operation_id)
                 finally:os.close(fd)
 
-    def create(self, item, operation_id, *, window=None):
+    def create(self, item, operation_id, *, window=None, run_parent=None):
         if self.readonly:raise Conflict('readonly installation file observer cannot create')
         spec = item['spec']
         if spec['kind'] not in ('file', 'directory'):raise Conflict('filesystem target kind required')
@@ -216,7 +224,7 @@ class InstallationFiles:
         # Directory mkdir/open requires the agreed exclusive administration window.
         # A crash before its original FD identity is saved cannot be adopted.
         # No cleanup on failure: the installer retains create_requested.
-        with self.journal.execution_lock, self._parent(spec['path']) as (parent, name):
+        with self.journal.execution_lock, self._parent(spec['path'],run_parent=run_parent) as (parent, name):
             if self._birth(item, operation_id) is not None:
                 raise Conflict('original installation file birth held; use durability recovery')
             birth = None

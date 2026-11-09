@@ -12,6 +12,7 @@ import uuid
 from .libvirt_install import targets,proof
 from .libvirt_service_profile import render_profile,require_installable
 from .libvirt_package_policy import INSTALLED_PACKAGES,prerequisites_for_policy
+from .libvirt_run_parent import validate_run_parent
 from .manifest import Conflict,canonical,fingerprint,identifier
 
 
@@ -82,6 +83,7 @@ class PostBootQualification:
         if 'package_policy' in value and value['package_policy']!=INSTALLED_PACKAGES:
             raise Conflict('original installed package policy differs')
         prerequisites_for_policy(value['installation']['prerequisites'],value.get('package_policy'))
+        if 'run_parent' in value:validate_run_parent(value['run_parent'],value['installation'],value['context'])
         if value['phase']=='persistent_qualified':self._receipt(value,value['receipt'])
         return value
 
@@ -89,6 +91,7 @@ class PostBootQualification:
     def _receipt(cls,value,receipt):
         fields={'qualification_id','nonce','source_sha256','context','observation','account_history','qualified','pending_volatile'}
         if 'package_policy' in value:fields.add('package_policy')
+        if 'run_parent' in value:fields.add('run_parent_sha256')
         if (not isinstance(receipt,dict) or set(receipt)!=fields
                 or receipt['qualification_id']!=value['id'] or receipt['nonce']!=value['nonce']
                 or receipt['source_sha256']!=value['source_sha256'] or receipt['context']!=value['context']
@@ -96,13 +99,16 @@ class PostBootQualification:
             raise Conflict('original post-boot receipt differs')
         if 'package_policy' in value and receipt['package_policy']!=value['package_policy']:
             raise Conflict('original installed package receipt differs')
+        if 'run_parent' in value and receipt['run_parent_sha256']!=fingerprint(value['run_parent']):
+            raise Conflict('original current-boot /run parent receipt differs')
         cls._validate_observation(value,receipt['observation'])
         cls._histories(value,receipt['account_history'])
         return deepcopy(receipt)
 
-    def prepare(self,operation,installation,current,*,package_policy=None):
+    def prepare(self,operation,installation,current,*,package_policy=None,run_parent=None):
         identifier(operation,'post-boot operation_id');layout=plan(installation,current)
         prerequisites_for_policy(installation['prerequisites'],package_policy)
+        if run_parent is not None:run_parent=validate_run_parent(run_parent,installation,current)
         with self.journal.execution_lock:
             if self.source_reader(installation['id'])!=installation:raise Conflict('original installation reference differs')
             key=fingerprint([installation['id'],current])
@@ -111,12 +117,13 @@ class PostBootQualification:
             if prior:
                 value=self.read(prior['id'])
                 if (value['id']!=operation or value['installation']!=installation or value['context']!=current
-                        or value.get('package_policy')!=package_policy):
+                        or value.get('package_policy')!=package_policy or value.get('run_parent')!=run_parent):
                     raise Conflict('original post-boot request differs')
                 return value
             value=dict(id=operation,nonce=uuid.uuid4().hex,installation=deepcopy(installation),source_sha256=fingerprint(installation),
                 context=deepcopy(current),plan=layout,phase='prepared',receipt=None)
             if package_policy is not None:value['package_policy']=package_policy
+            if run_parent is not None:value['run_parent']=deepcopy(run_parent)
             with self.journal.transaction():
                 self.journal.db.execute('INSERT INTO libvirt_postboot_qualifications VALUES(?,?,?,?)',
                     (operation,key,canonical(value),fingerprint(value)))
@@ -127,6 +134,9 @@ class PostBootQualification:
         original=value['installation']
         policy=value.get('package_policy')
         baseline=prerequisites_for_policy(original['prerequisites'],policy);baseline.pop('provisioning_window_sha256',None)
+        if 'run_parent' in value:
+            parent=validate_run_parent(value['run_parent'],original,value['context'])
+            baseline['os_parents']['/run']=parent['identity']
         if isinstance(observed,dict) and isinstance(observed.get('prerequisites'),dict):
             observed=deepcopy(observed)
             observed['prerequisites']=prerequisites_for_policy(observed['prerequisites'],policy)
@@ -180,6 +190,7 @@ class PostBootQualification:
             candidate=dict(qualification_id=operation,nonce=value['nonce'],source_sha256=value['source_sha256'],
                 context=value['context'],observation=observed,account_history=histories,qualified=False,pending_volatile=value['plan']['volatile'])
             if 'package_policy' in value:candidate['package_policy']=value['package_policy']
+            if 'run_parent' in value:candidate['run_parent_sha256']=fingerprint(value['run_parent'])
             receipt=self._receipt(value,candidate)
             if value['phase']=='persistent_qualified':
                 if receipt!=value['receipt']:raise Conflict('original post-boot observation changed; no implicit requalification')

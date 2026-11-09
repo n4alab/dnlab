@@ -416,6 +416,30 @@ updates or host reboot; stable guests can continue running. No prepare/apply,
 resource recovery/recreation, libvirt connection or daemon start is authorized
 by packaging the recipe.
 
+### Current-boot /run parent: explicit dependency binding, synthetic verification
+
+New post-boot requests may explicitly supply `run_parent=bind_run_parent(...)`.
+The binding fixes the original installation fingerprint, current boot and four
+namespace identities, path/run, and root-owned0755 device/inode metadata. It
+does not claim a dNLab resource birth or qualify the installation by itself.
+Full current observations must match that identity twice; all other OS parents
+and independent prerequisites remain tied to the original installation.
+
+The request and receipt retain the binding; retry cannot replace it in the same
+context. Directory recovery rechecks it after checkpoints and passes the identity
+to the filesystem adapter, which compares the pinned /run FD before recording
+a birth or creating a directory. Current session preflight retains the same
+parent identity. Historical requests without this binding remain unchanged.
+
+Eighty-five targeted tests pass, including20 new contract/temporary-file tests,
+checkpoint conflicts and descriptor-level rejection of a replaced parent. The
+two existing temporary ownership tests requiring a different UID mapping were
+not repeated. The already saved observation satisfies the new contract in a
+pure offline assessment. No new host observation, journal qualification, actual
+runtime directory recovery, configuration revision or daemon/VM action occurred.
+Operational composition and execution still require separate preparation and
+consent; old native recipes remain historical after these source changes.
+
 ### Current package policy: selected installed packages, Debian dependencies
 
 The single separately authorized current observation completed in0.821s with

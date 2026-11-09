@@ -1,0 +1,15 @@
+id: 20261109-183139-qualify-the-libvirt-volatile-parent-sepa
+type: internal
+title: Qualify the libvirt volatile parent separately for each boot
+description: Bind /run to the original installation and current boot/namespaces, preserve
+  historical and persistent parents, and check the pinned directory descriptor before
+  recovery births. Reject replacements on replay or after checkpoints; no host operation
+  included.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

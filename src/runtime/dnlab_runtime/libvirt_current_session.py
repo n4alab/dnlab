@@ -44,6 +44,7 @@ class CurrentSessionView:
                 recovery_id=recovered['id'],recovery_sha256=fingerprint(recovered),creators=creators,
                 observation_required=True)
             if 'package_policy' in qualified:result['postboot']['package_policy']=qualified['package_policy']
+            if 'run_parent' in qualified:result['postboot']['run_parent_sha256']=fingerprint(qualified['run_parent'])
             qualifier._source(qualified)
             return result
 
