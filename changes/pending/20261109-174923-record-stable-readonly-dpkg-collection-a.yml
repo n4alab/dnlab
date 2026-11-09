@@ -1,0 +1,17 @@
+id: 20261109-174923-record-stable-readonly-dpkg-collection-a
+type: none
+title: Record stable readonly dpkg collection and missing historical baseline
+description: The single collection completed with two stable passes and 17 matching
+  selected facts. status-old is not the historical baseline; its differences from
+  current status concern bubblewrap installation and pending triggers. No guard or
+  qualification changed.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
+reason: Experimental readonly evidence and documentation only; package state, installed
+  resources and original acceptance rules remain unchanged.

@@ -418,6 +418,21 @@ by packaging the recipe.
 
 ### Offline dpkg diagnosis prepared; host diagnosis still pending
 
+One separately authorized recipe03 collection completed with two stable passes,
+all17 selected package facts matching and1210 records in each captured database.
+The current digest matches the explicitly expected observed digest. The saved
+status-old digest does not match the original historical digest, so it is not
+adopted as that baseline; the original full delta remains unreconstructable from
+the captured data. The result remains qualified=false.
+
+Offline comparison of those two captured files shows only the completion of
+bubblewrap installation and pending triggers for man-db, procps and systemd;
+package versions and record order match between them. This is consistent with
+the user's reported apt installation, not proof of the entire historical delta.
+No further host collection, package action, original journal write or resource
+qualification was performed. Any explicit replacement package baseline requires
+a separate decision and qualification, preserving original evidence and guards.
+
 Following explicit preparation-only approval, recipe03 is bound to the context
 saved by the failed recipe02 observation. Only the expected context and nonce
 change; both dpkg digests and all17 original selected package facts remain
