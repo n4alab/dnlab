@@ -11,6 +11,7 @@ from .libvirt_configuration_adapter import ConfigurationFileAdapter
 from .libvirt_configuration_preflight import ConfigurationPreflight
 from .libvirt_configuration_session import ConfigurationSession
 from .libvirt_provisioning import account_request
+from .libvirt_package_policy import prerequisites_for_policy
 from .manifest import Conflict,fingerprint
 
 
@@ -29,7 +30,7 @@ class CurrentSessionView:
                 raise Conflict('original post-boot source lineage differs')
             original=qualified['installation'];result=deepcopy(original)
             result['context']=deepcopy(qualified['context'])
-            result['prerequisites'].pop('provisioning_window_sha256',None)
+            result['prerequisites']=deepcopy(qualified['receipt']['observation']['prerequisites'])
             replacements={item['spec']['key']:item for item in recovered['items']}
             creators={}
             for index,item in enumerate(result['items']):
@@ -42,6 +43,7 @@ class CurrentSessionView:
                 qualification_id=qualified['id'],qualification_sha256=fingerprint(qualified),
                 recovery_id=recovered['id'],recovery_sha256=fingerprint(recovered),creators=creators,
                 observation_required=True)
+            if 'package_policy' in qualified:result['postboot']['package_policy']=qualified['package_policy']
             qualifier._source(qualified)
             return result
 
@@ -90,6 +92,9 @@ class CurrentSessionPreflight(ConfigurationPreflight):
             if view.read()!=self.installation:raise Conflict('bound current session lineage changed')
             result=snapshot()
             if view.read()!=self.installation:raise Conflict('current session lineage changed during snapshot')
+            if isinstance(result,dict) and isinstance(result.get('prerequisites'),dict):
+                result=deepcopy(result)
+                result['prerequisites']=prerequisites_for_policy(result['prerequisites'],self.installation['postboot'].get('package_policy'))
             return result
         self.snapshot=current
 

@@ -11,6 +11,7 @@ import uuid
 
 from .libvirt_install import targets,proof
 from .libvirt_service_profile import render_profile,require_installable
+from .libvirt_package_policy import INSTALLED_PACKAGES,prerequisites_for_policy
 from .manifest import Conflict,canonical,fingerprint,identifier
 
 
@@ -78,22 +79,30 @@ class PostBootQualification:
             raise Conflict('original post-boot qualification binding differs')
         if value['phase']=='prepared' and value['receipt'] is not None:
             raise Conflict('unexpected post-boot qualification receipt')
+        if 'package_policy' in value and value['package_policy']!=INSTALLED_PACKAGES:
+            raise Conflict('original installed package policy differs')
+        prerequisites_for_policy(value['installation']['prerequisites'],value.get('package_policy'))
         if value['phase']=='persistent_qualified':self._receipt(value,value['receipt'])
         return value
 
     @classmethod
     def _receipt(cls,value,receipt):
-        if (not isinstance(receipt,dict) or set(receipt)!={'qualification_id','nonce','source_sha256','context','observation','account_history','qualified','pending_volatile'}
+        fields={'qualification_id','nonce','source_sha256','context','observation','account_history','qualified','pending_volatile'}
+        if 'package_policy' in value:fields.add('package_policy')
+        if (not isinstance(receipt,dict) or set(receipt)!=fields
                 or receipt['qualification_id']!=value['id'] or receipt['nonce']!=value['nonce']
                 or receipt['source_sha256']!=value['source_sha256'] or receipt['context']!=value['context']
                 or receipt['qualified'] is not False or receipt['pending_volatile']!=value['plan']['volatile']):
             raise Conflict('original post-boot receipt differs')
+        if 'package_policy' in value and receipt['package_policy']!=value['package_policy']:
+            raise Conflict('original installed package receipt differs')
         cls._validate_observation(value,receipt['observation'])
         cls._histories(value,receipt['account_history'])
         return deepcopy(receipt)
 
-    def prepare(self,operation,installation,current):
+    def prepare(self,operation,installation,current,*,package_policy=None):
         identifier(operation,'post-boot operation_id');layout=plan(installation,current)
+        prerequisites_for_policy(installation['prerequisites'],package_policy)
         with self.journal.execution_lock:
             if self.source_reader(installation['id'])!=installation:raise Conflict('original installation reference differs')
             key=fingerprint([installation['id'],current])
@@ -101,11 +110,13 @@ class PostBootQualification:
                 (operation,key)).fetchone()
             if prior:
                 value=self.read(prior['id'])
-                if value['id']!=operation or value['installation']!=installation or value['context']!=current:
+                if (value['id']!=operation or value['installation']!=installation or value['context']!=current
+                        or value.get('package_policy')!=package_policy):
                     raise Conflict('original post-boot request differs')
                 return value
             value=dict(id=operation,nonce=uuid.uuid4().hex,installation=deepcopy(installation),source_sha256=fingerprint(installation),
                 context=deepcopy(current),plan=layout,phase='prepared',receipt=None)
+            if package_policy is not None:value['package_policy']=package_policy
             with self.journal.transaction():
                 self.journal.db.execute('INSERT INTO libvirt_postboot_qualifications VALUES(?,?,?,?)',
                     (operation,key,canonical(value),fingerprint(value)))
@@ -114,7 +125,11 @@ class PostBootQualification:
     @staticmethod
     def _validate_observation(value,observed):
         original=value['installation']
-        baseline=deepcopy(original['prerequisites']);baseline.pop('provisioning_window_sha256',None)
+        policy=value.get('package_policy')
+        baseline=prerequisites_for_policy(original['prerequisites'],policy);baseline.pop('provisioning_window_sha256',None)
+        if isinstance(observed,dict) and isinstance(observed.get('prerequisites'),dict):
+            observed=deepcopy(observed)
+            observed['prerequisites']=prerequisites_for_policy(observed['prerequisites'],policy)
         expected={item['spec']['key']:item['proof'] for item in original['items'] if item['spec']['key'] in value['plan']['persistent']}
         if (not isinstance(observed,dict) or set(observed)!={'context','prerequisites','persistent','volatile'}
                 or observed['context']!=value['context'] or observed['prerequisites']!=baseline
@@ -162,8 +177,10 @@ class PostBootQualification:
             observed=self._observation(value)
             if self._observation(value)!=observed:raise Conflict('post-boot resources changed during observation')
             self._source(value)
-            receipt=self._receipt(value,dict(qualification_id=operation,nonce=value['nonce'],source_sha256=value['source_sha256'],
-                context=value['context'],observation=observed,account_history=histories,qualified=False,pending_volatile=value['plan']['volatile']))
+            candidate=dict(qualification_id=operation,nonce=value['nonce'],source_sha256=value['source_sha256'],
+                context=value['context'],observation=observed,account_history=histories,qualified=False,pending_volatile=value['plan']['volatile'])
+            if 'package_policy' in value:candidate['package_policy']=value['package_policy']
+            receipt=self._receipt(value,candidate)
             if value['phase']=='persistent_qualified':
                 if receipt!=value['receipt']:raise Conflict('original post-boot observation changed; no implicit requalification')
                 return receipt

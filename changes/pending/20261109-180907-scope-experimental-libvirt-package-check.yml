@@ -1,0 +1,15 @@
+id: 20261109-180907-scope-experimental-libvirt-package-check
+type: internal
+title: Scope experimental libvirt package checks to installed components
+description: Add an explicit persisted post-boot policy checking selected package
+  presence, version, architecture and installed state. Treat the global dpkg digest
+  as diagnostic, propagate the policy through current-session preflight, and preserve
+  historical requests and all independent resource guards.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

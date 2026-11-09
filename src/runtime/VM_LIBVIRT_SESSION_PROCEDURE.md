@@ -416,7 +416,34 @@ updates or host reboot; stable guests can continue running. No prepare/apply,
 resource recovery/recreation, libvirt connection or daemon start is authorized
 by packaging the recipe.
 
-### Offline dpkg diagnosis prepared; host diagnosis still pending
+### Current package policy: selected installed packages, Debian dependencies
+
+The user superseded the proposed replacement global dpkg baseline. For new
+post-boot qualifications use `package_policy='installed-packages-v1'`: check
+presence, version, architecture and `install ok installed` for the original
+explicit package inventory. Debian's package manager resolves declared
+dependencies; no separate dependency-compatibility campaign or historical dpkg
+reconstruction is required for this step. The global database digest remains
+diagnostic, including changes between observations or subsequent retries.
+
+The policy is persisted in the separate request and its receipt. Its normalized
+prerequisites exclude only `dpkg_status_sha256`; all other resource, binary,
+configuration, account, context and inactive-service guards remain unchanged.
+The current session view carries the policy into directory recovery and
+configuration preflight. Original installation records and historical requests
+without this policy retain their original interpretation; retries cannot
+convert them silently. This changes package verification, not the requirement
+to test KVM/device/TAP behavior on the target platform.
+
+Forty-five targeted synthetic tests pass, covering unrelated database changes,
+relevant package/version/state changes, resource refusals, replay, historical
+compatibility and downstream session preflight. The two existing temporary
+ownership tests requiring a different UID mapping were not repeated. No new
+host observation, journal prepare/apply, package command or daemon/VM action
+was performed. Prior diagnostic recipes/evidence remain immutable; their
+source inventories are historical after this code change.
+
+### Historical dpkg diagnosis and superseded baseline proposal
 
 One separately authorized recipe03 collection completed with two stable passes,
 all17 selected package facts matching and1210 records in each captured database.
