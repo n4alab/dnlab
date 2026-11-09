@@ -1,0 +1,15 @@
+id: 20261109-093202-assemble-libvirt-unit-revision-from-orig
+type: internal
+title: Assemble libvirt unit revision from original provisioning
+description: Bind configuration preparation, apply and recovery to the completed original
+  provisioning journal and a distinct unit-only window. Recheck the source record
+  around snapshots and preserve prepared references. Verify nine complete temporary-filesystem
+  cases with simulated NSS/account workers; no native operational recipe executed.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

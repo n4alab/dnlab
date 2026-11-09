@@ -227,6 +227,26 @@ combined suite passes 135 tests. A concrete native assembly/recipe, operational
 observation and update remain pending. No new master inventory, account command,
 installed file change, daemon start or VM was performed.
 
+`ConfigurationSession` assembles the revision from the original completed
+`SessionProvisioning` instance and an explicit installed reference. It checks
+journal identity, request, context, dependencies and the separate unit-only
+revision window. Construction performs no snapshot/NSS/filesystem observation;
+explicit prepare records the revision without staging or changing the unit.
+Apply and recovery require the original prepared reference, and recheck the
+authoritative installation record around every snapshot, including observations
+after revision checkpoints. No fallback prepares a new intent on retry.
+
+The assembly reuses the concrete snapshot, account identity/completion,
+filesystem and dependency readers through their existing interfaces. It does
+not execute the original provisioning adapter's create/recovery paths or require
+the old installation window to remain active. Nine targeted assembly cases pass
+on a complete temporary filesystem; NSS and worker execution are simulated.
+They ran outside the UID-restricted sandbox solely to assign UID1001/GID1002 to
+fixture directories. No real account, package, service or master inventory
+operation occurred. This is additional evidence alongside the earlier 135-test
+run, not a combined full native qualification. The concrete host recipe and its
+separately authorized prepare/update remain pending.
+
 `ServiceGenerationObserver` prepares typed validation of an already acknowledged
 daemon generation. It binds the original activation nonce and command completion
 to the installed unit/configuration, systemd invocation ID, nonroot process
