@@ -416,6 +416,38 @@ updates or host reboot; stable guests can continue running. No prepare/apply,
 resource recovery/recreation, libvirt connection or daemon start is authorized
 by packaging the recipe.
 
+### Offline dpkg diagnosis prepared; host diagnosis still pending
+
+`tools/libvirt_dpkg_diagnosis.py` accepts supplied bytes and explicit SHA256
+references only. It has no filesystem/command transport or host mode. It checks
+the observed artifact against its saved digest, compares the original four-field
+selected package projection, and optionally compares every record/field against
+baseline bytes authenticated by the historical digest. Package+architecture is
+the record identity; ambiguous records fail. Multiline fields are retained and
+field deltas contain hashes/lengths rather than a dump of their contents.
+
+Without baseline bytes, the report explicitly leaves the changes unknown.
+Matching selected facts does not qualify the full dependency closure, QEMU or
+host compatibility. Reordering can leave parsed records equal while the global
+digest still differs; neither that case nor a fully matching report changes the
+original prerequisite guard. All reports remain qualified=false.
+
+Twenty-one synthetic tests cover missing baseline, digest mismatch, selected
+and unselected package changes, added/removed records, architecture ambiguity,
+continuations, serialization order and rejected malformed data. No new host
+collection or comparison against newly read host data was performed.
+
+The next operational diagnostic, if separately authorized, must preserve the
+current raw status artifact with its digest and stable context before/after.
+A historical raw artifact must match the original digest to be a baseline:
+`status-old`, logs or a similar version list are candidates, not substitutes.
+If no authenticated baseline exists, current facts can be recorded but the
+historical field delta cannot be reconstructed from its digest. Logs may help
+explain chronology but do not authenticate missing baseline bytes. Acquisition
+scope and any eventual change to acceptance policy remain separate decisions;
+no package command, installation, service action or automatic baseline adoption
+belongs to this offline component.
+
 ### First readonly post-boot collection completed; prerequisite delta unresolved
 
 The single authorized master collection completed in0.885s (exit0), with two

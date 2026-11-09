@@ -1,0 +1,16 @@
+id: 20261109-111108-prepare-offline-dpkg-prerequisite-diagno
+type: none
+title: Prepare offline dpkg prerequisite diagnosis
+description: Compare supplied authenticated dpkg status artifacts and selected package
+  facts without host access or changing prerequisite acceptance. Preserve unknown
+  historical changes when baseline bytes are missing.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
+reason: Experimental diagnostic and synthetic tests only; no installed runtime, host
+  collection or acceptance policy changed.
