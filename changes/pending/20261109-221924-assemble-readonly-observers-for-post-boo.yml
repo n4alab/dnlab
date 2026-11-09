@@ -1,0 +1,14 @@
+id: 20261109-221924-assemble-readonly-observers-for-post-boo
+type: internal
+title: Assemble readonly observers for post-boot prepare
+description: Compose existing installation, account history and readonly resource
+  observers with an explicit metadata-only session capability that rejects directory
+  apply and recovery.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

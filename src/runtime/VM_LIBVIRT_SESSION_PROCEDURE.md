@@ -464,9 +464,26 @@ window contract, not exclusion of unrelated root writers.
 Ten journal tests pass, including composition with prepare delivery and an
 explicit reopen. Together with the nine delivery tests, the targeted run has
 19 passes. All databases, journals, observers and output directories used by
-these tests are temporary or synthetic. Native observer assembly, frozen recipe
-and operational qualification remain separate work. No live journal prepare,
-recovery, runtime directory, account operation or daemon/VM action occurred.
+these tests are temporary or synthetic.
+
+`PostBootPrepareAssembly` now wires the original installation reader, readonly
+file observer, current account identity, historical account creation, selected
+dependencies, installation activity/snapshot and full post-boot observer to the
+session. Query and NSS transports, context, window and profiles are explicit;
+construction does not query live resources. `prepare_only=True` requires a
+readonly filesystem adapter and refuses both directory apply and recovery
+before entering their operation. The default directory-capable session remains
+separate and retains its prior behavior.
+
+The targeted composition/session/journal/delivery suite has 38 passes. The new
+wiring tests use synthetic leaf observations, not native systemd/NSS or actual
+installation resources. Their first run had 36 passes and two refusals because
+the fixture added account-tool inputs after calculating its /run source binding.
+With user approval, only the fixture was corrected to calculate that binding
+after its synthetic inputs were complete; runtime guards stayed unchanged.
+Frozen recipe and operational qualification remain separate work. No live
+journal prepare, recovery, runtime directory, account operation or daemon/VM
+action occurred.
 
 ### Current-boot /run parent: explicit dependency binding, synthetic verification
 

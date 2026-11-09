@@ -18,16 +18,18 @@ from .manifest import Conflict,fingerprint,identifier
 
 class PostBootRecoverySession:
     def __init__(self,journal,installation,current,*,qualification_id,recovery_id,run_parent,
-                 source_reader,observer,account_history,files,window,journal_identity):
+                 source_reader,observer,account_history,files,window,journal_identity,prepare_only=False):
         identifier(qualification_id,'post-boot qualification_id');identifier(recovery_id,'post-boot recovery_id')
         self.journal,self.original,self.context=journal,deepcopy(installation),context(current)
         self.qualification_id,self.recovery_id=qualification_id,recovery_id
         self.source_reader,self.window,self.journal_identity=source_reader,window,journal_identity
         if not all(callable(fn) for fn in (source_reader,observer,account_history)):
             raise Conflict('explicit post-boot session observers required')
-        if (files.journal is not journal or getattr(files,'readonly',False)
+        if (type(prepare_only) is not bool or files.journal is not journal
+                or getattr(files,'readonly',False) is not prepare_only
                 or len({installation['id'],qualification_id,recovery_id})!=3):
-            raise Conflict('one writable original journal and separate post-boot operations required')
+            raise Conflict('original journal, explicit filesystem capability and separate post-boot operations required')
+        self.prepare_only=prepare_only
         self.layout=plan(self.original,self.context)
         self.parent=validate_run_parent(run_parent,self.original,self.context)
         self.window_sha256=window.sha256
@@ -99,11 +101,13 @@ class PostBootRecoverySession:
         return current
 
     def apply_original(self,reference):
+        if self.prepare_only:raise Conflict('metadata-only post-boot session cannot apply directories')
         with self.journal.execution_lock:
             self._binding(reference)
             return self.recovery.apply(self.recovery_id)
 
     def recover_original(self,reference):
+        if self.prepare_only:raise Conflict('metadata-only post-boot session cannot recover directories')
         with self.journal.execution_lock:
             self._binding(reference)
             return self.recovery.recover(self.recovery_id)
