@@ -1,0 +1,16 @@
+id: 20261109-101047-track-current-boot-libvirt-volatile-dire
+type: internal
+title: Track current-boot libvirt volatile directory recovery
+description: Prepare separate absent-only session directory recovery with fresh births,
+  full persistent/context/window preflight and explicit durability recovery. Reject
+  occupied paths and repeated uncertain creation while preserving historical qualification.
+  Verify24 synthetic cases and one temporary native-directory case; no installed resources,
+  operational prepare or service changed.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

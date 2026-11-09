@@ -176,3 +176,22 @@ class PostBootQualification:
     def require_revision_ready(self,operation):
         self.read(operation)
         raise Conflict('persistent qualification cannot authorize revision: current-boot volatile resources remain pending')
+
+    def observe_persistent(self,operation):
+        """Recheck persistent evidence without adopting changes to volatile paths.
+
+        A separate recovery must explain each volatile delta with its own births.
+        This method neither rewrites the original observation nor makes it ready.
+        """
+        with self.journal.execution_lock:
+            value=self.read(operation)
+            if value['phase']!='persistent_qualified':raise Conflict('original persistent qualification required')
+            self._source(value)
+            histories={item['spec']['key']:self.account_history(deepcopy(item)) for item in value['installation']['items']
+                if item['spec']['kind'] in ('group','account')}
+            self._histories(value,histories)
+            if histories!=value['receipt']['account_history']:raise Conflict('original account history changed')
+            observed=self._observation(value)
+            if self._observation(value)!=observed:raise Conflict('post-boot resources changed during observation')
+            self._source(value)
+            return dict(qualification_sha256=fingerprint(value),receipt=deepcopy(value['receipt']),observation=observed)

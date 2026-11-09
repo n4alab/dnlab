@@ -318,6 +318,30 @@ recreation or service operation occurred. Concrete current-boot observation,
 volatile recovery and integration remain pending; this persistent-only receipt
 cannot bypass the original boot guard or authorize the next operational step.
 
+`VolatileDirectories` prepares a distinct recovery intent for the session's
+explicit `/run` directories, bound to the persistent qualification and current
+boot/window. It observes all targets before creating any, records a fresh nonce
+and create request for each directory, then requires its original filesystem
+birth and durability proof. An existing unqualified directory is a conflict;
+there is no delete, adoption or recreation of an occupied path. Replaying an
+uncertain absent create cannot repeat it. Explicit recovery may only synchronize
+an already recorded original birth before continuing the remaining planned steps.
+
+`observe_persistent` rechecks the immutable persistent/account history while
+reporting volatile path changes separately. The recovery must explain those
+changes with its own new births. It does not rewrite the earlier pending receipt
+or reuse the old boot's directory proof. Every checkpoint rechecks context,
+window, unchanged resources and the whole target inventory. Conflicts retain
+already created resources and the pending journal; no automatic cleanup runs.
+
+The completed result covers session directories only (`daemon_ready=False`).
+Revision/activation integration and a qualified current-boot native provider
+remain pending; the legacy boot guard is unchanged. Twenty-four synthetic tests
+pass, plus one separate test with real private temporary directories. The latter
+used reviewed escalation solely for fixture UID1001/GID1002 ownership; account,
+service and host context remained simulated. No installed directory, master
+inventory, operational prepare, account command, daemon or VM was touched.
+
 `ServiceGenerationObserver` prepares typed validation of an already acknowledged
 daemon generation. It binds the original activation nonce and command completion
 to the installed unit/configuration, systemd invocation ID, nonroot process
