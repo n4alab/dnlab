@@ -569,6 +569,16 @@ user approval; no runtime guard changed. The frozen native recipe still requires
 separate authorization. No operational directory action, unit change or service
 activation has occurred.
 
+The subsequently authorized single directory apply completed successfully in
+about 18 seconds. Both original directory intents now have durable birth proofs
+for UID1001/GID1002, mode0700 and their distinct original nonces. All 160 fixed
+readonly queries succeeded and all 38 recorded context comparisons matched.
+The effective derived source was saved with scope `session-directories-only`,
+`daemon_ready=false`, phase `installed_not_started`. No retry, account/unit
+change, reload, service activation, libvirt connection or VM occurred. The next
+step is the separate current-session unit-revision preparation: the installed
+historical Requires unit has not yet been replaced by Requisite+After.
+
 ### Current-boot /run parent: explicit dependency binding, synthetic verification
 
 New post-boot requests may explicitly supply `run_parent=bind_run_parent(...)`.

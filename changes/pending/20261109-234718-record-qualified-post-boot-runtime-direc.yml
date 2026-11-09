@@ -1,0 +1,16 @@
+id: 20261109-234718-record-qualified-post-boot-runtime-direc
+type: none
+title: Record qualified post-boot runtime directory creation
+description: Record the single authorized apply of the two original prepared runtime
+  directories with durable birth proofs, scoped effective source and no account/unit/service
+  or VM action.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
+reason: Experimental operational evidence and procedure update only; no new runtime
+  implementation or rollout.
