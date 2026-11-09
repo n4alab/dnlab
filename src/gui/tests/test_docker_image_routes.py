@@ -60,4 +60,14 @@ def test_builtin_catalog_defines_hpe_vsr1000():
     assert entry["interfaces"]["vendor_names"] == {
         str(index): f"GigabitEthernet{index}/0" for index in range(1, 9)
     }
-    assert "CLAB_MGMT_PASSTHROUGH" not in entry["env"]
+    assert entry["env"]["CLAB_MGMT_PASSTHROUGH"] == "false"
+
+
+def test_builtin_catalog_explicitly_disables_management_passthrough_for_every_kind():
+    import json
+
+    catalog = json.loads(device_catalog.builtin_path().read_text(encoding="utf-8"))
+    assert all(
+        entry["env"]["CLAB_MGMT_PASSTHROUGH"] == "false"
+        for entry in catalog["kinds"].values()
+    )

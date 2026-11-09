@@ -56,6 +56,7 @@ class _LocalNodeStart:
     cancel: threading.Event
     done: asyncio.Event
     phase: str = "queued"
+    controller: object | None = None
 
 
 _local_node_starts: dict[tuple[str, str], _LocalNodeStart] = {}
@@ -381,7 +382,7 @@ class MultinodeService:
             if netname != lab.netname or operation.done.is_set():
                 continue
             info = (report.get("nodes") or {}).get(node)
-            if info is not None:
+            if info is not None and (info.get('runtime_status') or {}).get('backend')!='custom':
                 active = operation.phase != "stopped"
                 info.update({
                     "state": operation.phase,
@@ -514,27 +515,12 @@ class MultinodeService:
 
         def _read() -> dict:
             from dnlab_multinode.services import state as state_svc
+            from dnlab_multinode.services.relay_resolution import resolve
             state = state_svc.load_state(lab.netname, topo_path.parent)
             if state is None:
                 raise MultinodeServiceError(f"lab {lab.netname} not deployed")
             runtime_key = _resolve_runtime_node_key(state, node_name)
-            runtime = (state.node_runtime or {}).get(runtime_key)
-            relay = (state.runtime_relays or {}).get(runtime.host)
-            if relay is None:
-                raise MultinodeServiceError(
-                    f"runtime relay missing for host {runtime.host!r}"
-                )
-            if runtime.container not in set(relay.allowed or []):
-                raise MultinodeServiceError(
-                    f"container {runtime.container!r} is not allowed on relay {runtime.host!r}"
-                )
-            return {
-                "container": runtime.container,
-                "host": relay.bind_ip,
-                "port": relay.port,
-                "api_key": relay.api_key,
-                "relay_host": runtime.host,
-            }
+            return resolve(state,runtime_key,topo_path.parent,self._hosts_file)
         return await asyncio.to_thread(_read)
 
     # ── deploy / destroy (serialised) ─────────────────────────────
@@ -733,11 +719,13 @@ class MultinodeService:
                 def _start() -> dict:
                     from dnlab_multinode import NodeLifecycleController
 
-                    state = NodeLifecycleController(
+                    controller = NodeLifecycleController(
                         str(topo_path), hosts_file=self._hosts_file,
                         cancel_event=operation.cancel,
                         phase_callback=_phase,
-                    ).start(node_name)
+                    )
+                    operation.controller=controller
+                    state=controller.start(node_name)
                     result = state.to_dict() if hasattr(state, "to_dict") else {}
                     result["_operation_outcome"] = (
                         "cancelled" if operation.cancel.is_set() else "completed"
@@ -746,29 +734,38 @@ class MultinodeService:
                 return await asyncio.to_thread(_start)
         except Exception:
             if operation.cancel.is_set():
+                controller=operation.controller
+                runtime=controller.state.node_runtime.get(node_name) if controller and getattr(controller,'state',None) else None
+                if runtime and getattr(runtime,'runtime_binding',{}):
+                    raise MultinodeServiceError('Native cancellation requires recovery; verified cleanup is not complete')
                 return {"_operation_outcome": "cancelled", "cancelled": True}
             raise
         finally:
             operation.done.set()
             _local_node_starts.pop(key, None)
 
-    async def node_stop(self, lab: ResolvedLab, node_name: str) -> dict:
+    async def node_stop(self, lab: ResolvedLab, node_name: str, *, force: bool = False) -> dict:
         topo_path = _require_file(lab)
         if self._use_api:
             return await self._api_post(
                 "/labs/nodes/stop",
-                self._lab_payload(lab, topology_file=topo_path, node=node_name),
+                self._lab_payload(lab, topology_file=topo_path, node=node_name, force=force),
             )
         operation = _local_node_starts.get((lab.netname, node_name))
         cancelled_start = False
         if operation and not operation.done.is_set():
             cancelled_start = True
-            operation.cancel.set()
+            controller=operation.controller
+            if controller is not None and callable(getattr(controller,'request_cancel',None)):controller.request_cancel()
+            else:operation.cancel.set()
             previous_phase = operation.phase
             if previous_phase == "queued":
                 operation.phase = "stopped"
             else:
                 operation.phase = "cancelling"
+            runtime=controller.state.node_runtime.get(node_name) if controller and getattr(controller,'state',None) else None
+            if runtime and getattr(runtime,'runtime_binding',{}):
+                return {"_operation_outcome":"cancellation_requested","cancelled":False}
             return {"_operation_outcome": "cancelled", "cancelled": True}
         async with _deploy_lock:
             def _stop() -> dict:
@@ -776,7 +773,7 @@ class MultinodeService:
 
                 state = NodeLifecycleController(
                     str(topo_path), hosts_file=self._hosts_file,
-                ).stop(node_name, force=True)
+                ).stop(node_name, force=force)
                 result = state.to_dict() if hasattr(state, "to_dict") else {}
                 if cancelled_start:
                     result["cancelled"] = True
@@ -800,12 +797,12 @@ class MultinodeService:
                 return state.to_dict() if hasattr(state, "to_dict") else {}
             return await asyncio.to_thread(_restart)
 
-    async def node_remove(self, lab: ResolvedLab, node_name: str) -> dict:
+    async def node_remove(self, lab: ResolvedLab, node_name: str, *, force: bool = False) -> dict:
         topo_path = _require_file(lab)
         if self._use_api:
             return await self._api_post(
                 "/labs/nodes/remove",
-                self._lab_payload(lab, topology_file=topo_path, node=node_name),
+                self._lab_payload(lab, topology_file=topo_path, node=node_name, force=force),
             )
         async with _deploy_lock:
             def _remove() -> dict:
@@ -813,7 +810,7 @@ class MultinodeService:
 
                 state = NodeLifecycleController(
                     str(topo_path), hosts_file=self._hosts_file,
-                ).remove(node_name)
+                ).remove(node_name, force=force)
                 return state.to_dict() if hasattr(state, "to_dict") else {}
             return await asyncio.to_thread(_remove)
 

@@ -31,6 +31,7 @@ from app.auth.deps import get_current_user
 from app.auth.labs import can_create_lab, can_write_lab, list_all_labs
 from app.auth.models import User
 from app.controllers.lab_controller import LabController
+from app.models.lifecycle import NodeStopOptions
 from app.services.lab_resolver import (
     ResolvedLab, resolve_for_read, resolve_for_write,
 )
@@ -248,16 +249,19 @@ async def stop_node(
     request: Request,
     db: Annotated[AsyncSession, Depends(get_session)],
     user: Annotated[User, Depends(get_current_user)],
+    options: NodeStopOptions | None = None,
 ):
     lab = await _resolve_write(lab_id, db, user)
     log.info("POST /api/labs/%s/nodes/%s/stop (user=%s)", lab_id, node_name, user.username)
-    result = await _ctrl.node_stop(lab, node_name)
+    force = options.force if options else False
+    result = await _ctrl.node_stop(lab, node_name, force=force)
     await audit.record(
         db, event="lab.node_stop", user=user, request=request,
         resource=str(lab.id),
         detail={
             "display_name": lab.display_name,
             "node": node_name,
+            "force": force,
             "success": result.get("success"),
         },
     )

@@ -76,7 +76,7 @@ topology:
     assert node.kind == "juniper_apstra"
 
 
-def test_mgmt_passthrough_is_not_globally_injected_for_unknown_kind(tmp_path):
+def test_mgmt_passthrough_is_explicitly_disabled_for_unknown_kind(tmp_path):
     topo = Topology(
         name="lab",
         nodes=[
@@ -93,10 +93,12 @@ def test_mgmt_passthrough_is_not_globally_injected_for_unknown_kind(tmp_path):
 
     data = yaml.safe_load(path.read_text())
     node = data["topology"]["nodes"]["r1"]
-    assert "env" not in node
+    assert node["env"]["CLAB_MGMT_PASSTHROUGH"] == "false"
 
 
-def test_catalog_default_mgmt_passthrough_is_injected(tmp_path):
+def test_catalog_default_mgmt_passthrough_is_injected(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "DEVICE_CATALOG_DIR", tmp_path / "catalog")
+    device_catalog.reload()
     topo = Topology(
         name="lab",
         nodes=[
@@ -113,7 +115,7 @@ def test_catalog_default_mgmt_passthrough_is_injected(tmp_path):
 
     data = yaml.safe_load(path.read_text())
     node = data["topology"]["nodes"]["r1"]
-    assert node["env"]["CLAB_MGMT_PASSTHROUGH"] == "true"
+    assert node["env"]["CLAB_MGMT_PASSTHROUGH"] == "false"
 
 
 def test_flinos_default_nic_speed_can_be_overridden_per_node(tmp_path):
@@ -137,7 +139,10 @@ def test_flinos_default_nic_speed_can_be_overridden_per_node(tmp_path):
     assert node["env"]["QEMU_NIC_SPEED"] == "10000"
 
 
-def test_mgmt_passthrough_can_be_enabled_per_node(tmp_path):
+def test_mgmt_passthrough_true_on_existing_nodes_is_overridden(tmp_path, monkeypatch):
+    monkeypatch.setattr(device_catalog, "default_env", lambda _kind: {
+        "CLAB_MGMT_PASSTHROUGH": "true", "KEEP": "value",
+    })
     topo = Topology(
         name="lab",
         nodes=[
@@ -155,4 +160,5 @@ def test_mgmt_passthrough_can_be_enabled_per_node(tmp_path):
 
     data = yaml.safe_load(path.read_text())
     node = data["topology"]["nodes"]["r1"]
-    assert node["env"]["CLAB_MGMT_PASSTHROUGH"] == "true"
+    assert node["env"]["CLAB_MGMT_PASSTHROUGH"] == "false"
+    assert node["env"]["KEEP"] == "value"

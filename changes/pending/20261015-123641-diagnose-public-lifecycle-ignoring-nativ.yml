@@ -1,0 +1,20 @@
+id: 20261015-123641-diagnose-public-lifecycle-ignoring-nativ
+type: internal
+title: Dispatch qualified public node lifecycle by persisted runtime ownership
+description: Route existing native Linux VD bindings through the journal-bound
+  coordinator instead of Containerlab naming heuristics. Project committed,
+  workload, operation and unknown guest readiness states separately. Persist public
+  request IDs, restart steps, cancellation cleanup and explicit forced recovery;
+  retain removed owner tombstones. Bind stop preflight to its exact footprint,
+  restore declared local native bridges and share the state lock with daemon
+  finalization. Refuse unknown bindings and unqualified topology-wide backends
+  before mutation. Keep GUI local status and cancellation aligned with native proof.
+components:
+- multinode
+- gui
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

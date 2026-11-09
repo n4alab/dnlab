@@ -62,7 +62,7 @@ const ContextMenu = (() => {
     const restartCls = canRestart ? '' : 'cm-disabled';
     const labTitle = isLabRunning ? '' : 'Lab not deployed';
     const runtimeTitle = isPerVdRuntime ? '' : 'Available only on per-VD runtime deployments';
-    const stopTitle = canStop ? 'Force stop VD in any runtime phase' : (labTitle || runtimeTitle || 'VD cannot be stopped');
+    const stopTitle = canStop ? 'Request ordinary stop or cancel a pending start' : (labTitle || runtimeTitle || 'VD cannot be stopped');
     const startTitle = canStart ? '' : (labTitle || runtimeTitle || 'VD cannot be started live');
     const restartTitle = canRestart ? '' : (labTitle || runtimeTitle || 'VD is not running');
 
@@ -89,6 +89,9 @@ const ContextMenu = (() => {
       <div class="cm-sep"></div>
       <div class="cm-item ${stopCls}" data-action="stop-vd" title="${stopTitle}">
         ⏹️ Stop VD
+      </div>
+      <div class="cm-item cm-danger ${stopCls}" data-action="force-stop-vd" title="Force stop; unsaved state may be lost">
+        ⚠️ Force Stop VD
       </div>
       <div class="cm-item ${startCls}" data-action="start-vd" title="${startTitle}">
         ▶️ Start VD

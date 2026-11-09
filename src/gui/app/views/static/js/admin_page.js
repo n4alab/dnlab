@@ -751,8 +751,8 @@ const AdminPage = (() => {
           ${_stepperHtml('kind-vcpu', 'vCPU', env.VCPU, 'vCPU')}
           ${_stepperHtml('kind-ram', 'RAM', env.RAM, 'MiB')}
           <label class="props-check admin-kind-mgmt-passthrough">
-            <input id="kind-mgmt-passthrough" type="checkbox" ${env.CLAB_MGMT_PASSTHROUGH ? 'checked' : ''}>
-            <span>MGMT passthrough</span>
+            <input id="kind-mgmt-passthrough" type="checkbox" disabled>
+            <span>MGMT passthrough (disabled globally)</span>
           </label>
           <div class="admin-kind-step-control">
             <span>RAM step</span>
@@ -856,11 +856,7 @@ const AdminPage = (() => {
       VCPU: String(_readOutput(body, 'kind-vcpu', 1)),
       RAM: String(_readOutput(body, 'kind-ram', 2048)),
     };
-    if (body.querySelector('#kind-mgmt-passthrough')?.checked) {
-      extra.env.CLAB_MGMT_PASSTHROUGH = 'true';
-    } else {
-      delete extra.env.CLAB_MGMT_PASSTHROUGH;
-    }
+    extra.env.CLAB_MGMT_PASSTHROUGH = 'false';
     extra.interfaces = {
       linux_fmt: body.querySelector('#kind-if-linux').value.trim() || 'eth{n}',
       vendor_fmt: body.querySelector('#kind-if-vendor').value.trim() || 'eth{n}',
@@ -919,7 +915,7 @@ const AdminPage = (() => {
       mgmt_iface: 'eth0',
       webui: [],
       extra: {
-        env: { VCPU: '1', RAM: '2048', CLAB_MGMT_PASSTHROUGH: 'true' },
+        env: { VCPU: '1', RAM: '2048', CLAB_MGMT_PASSTHROUGH: 'false' },
         interfaces: { linux_fmt: 'eth{n}', vendor_fmt: 'eth{n}', count: 8 },
       },
     };
@@ -934,7 +930,7 @@ const AdminPage = (() => {
     return {
       VCPU: String(Math.max(1, Number(env.VCPU || env.vcpu || 1) || 1)),
       RAM: String(_roundForQemuRam(Number(env.RAM || env.ram || 2048), 512)),
-      CLAB_MGMT_PASSTHROUGH: String(env.CLAB_MGMT_PASSTHROUGH ?? 'true').toLowerCase() === 'true',
+      CLAB_MGMT_PASSTHROUGH: false,
     };
   }
 

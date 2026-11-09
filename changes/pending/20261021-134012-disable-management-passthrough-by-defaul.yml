@@ -1,0 +1,21 @@
+id: 20261021-134012-disable-management-passthrough-by-defaul
+type: change
+title: Force management passthrough off for all devices
+description: Catalog entries, newly built generic VMs, GUI saves, and generated topologies
+  explicitly set CLAB_MGMT_PASSTHROUGH to false. Legacy per-node true values are overridden,
+  and the GUI cannot re-enable passthrough. Rebuilt FLiNOS images honor false by using
+  QEMU user networking instead of a management tap.
+components:
+- gui
+- multinode
+- image-build
+audience:
+- admin
+- operator
+visibility: public
+breaking: true
+upgrade_notes:
+- Redeploy nodes to apply the forced false setting; per-node true overrides no longer
+  enable management passthrough. Rebuild FLiNOS images to include the updated launcher.
+  Existing running containers are not reconfigured automatically.
+references: []

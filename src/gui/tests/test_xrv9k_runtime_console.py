@@ -42,7 +42,8 @@ def test_flinos_catalog_exposes_n4alab_switch_profile():
     assert devices["kinds"]["flinos"]["env"] == {
         "VCPU": "2",
         "RAM": "4096",
-        "CLAB_MGMT_PASSTHROUGH": "true",
+        "QEMU_NIC_SPEED": "1000",
+        "CLAB_MGMT_PASSTHROUGH": "false",
     }
     assert devices["kinds"]["flinos"]["interfaces"] == {
         "linux_fmt": "eth{n-1}",

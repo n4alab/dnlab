@@ -1,0 +1,14 @@
+id: 20261023-122416-reopen-webui-tunnels-when-their-destinat
+type: bugfix
+title: Reopen WebUI tunnels when their destination changes
+description: A new WebUI open replaces a cached tunnel when the device management
+  IP or effective SSH endpoint changes. Failed replacement returns an explicit error
+  and never falls back to the previous target.
+components:
+- gui
+audience:
+- user
+visibility: public
+breaking: false
+upgrade_notes: []
+references: []

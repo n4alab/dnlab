@@ -1,0 +1,14 @@
+id: 20261023-160554-handle-owned-ssh-listener-startup-transi
+type: bugfix
+title: Handle owned SSH listener startup transitions
+description: Keep a newly appearing loopback listener pending until a complete stable
+  ownership proof succeeds within the existing timeout. Continue to reject foreign
+  listeners, substitutions and process or namespace changes.
+components:
+- gui
+audience:
+- user
+visibility: public
+breaking: false
+upgrade_notes: []
+references: []

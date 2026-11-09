@@ -1,0 +1,21 @@
+id: 20261014-140749-diagnose-implicit-force-in-ordinary-node
+type: bugfix
+title: Require an explicit force option for node stop and removal
+description: Node stop and removal requests default to force false and carry an
+  optional strict boolean through GUI routes, remote and local services and the
+  node controller. The CLI exposes --force, and the GUI offers a distinct Force
+  Stop action with confirmation. Removal does not discard topology state when
+  runtime stop fails. Native runtime regression checks retain process, endpoints,
+  reservations and committed revision after SIGTERM timeout until explicit recovery.
+  This change propagates the control; existing Containerlab execution and unqualified
+  NOS shutdown do not gain native runtime guarantees.
+components:
+- multinode
+- gui
+audience:
+- operator
+- user
+visibility: public
+breaking: false
+upgrade_notes: []
+references: []

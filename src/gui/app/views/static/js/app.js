@@ -301,6 +301,13 @@
     _stopRuntimeNode(nodeData.id);
   });
 
+  ContextMenu.on('force-stop-vd', (nodeData) => {
+    showModal('Force Stop VD', '<p>Force stop the selected VD? Unsaved state may be lost.</p>', [
+      { label: 'Force Stop', class: 'btn-danger', action: () => _stopRuntimeNode(nodeData.id, false, true) },
+      { label: 'Cancel' },
+    ]);
+  });
+
   ContextMenu.on('start-vd', (nodeData) => {
     _startRuntimeNode(nodeData.id);
   });
@@ -834,7 +841,7 @@
     ConsolePanel.open(currentLabId, nodeName);
   });
 
-  async function _stopRuntimeNode(nodeName, refreshProperties = false) {
+  async function _stopRuntimeNode(nodeName, refreshProperties = false, force = false) {
     if (!currentLabId) { showToast('Lab not deployed', 'warn'); return; }
     const activeStart = activeNodeStarts.get(nodeName);
     if (activeStart) activeStart.cancelRequested = true;
@@ -843,12 +850,12 @@
     );
     try {
       showToast(`Stopping ${nodeName}…`, 'info');
-      const result = await API.Labs.stopNode(currentLabId, nodeName);
+      const result = await API.Labs.stopNode(currentLabId, nodeName, { force });
       if (!result || result.success === false) throw new Error(result?.output || 'Node stop failed');
       await _refreshLabStatus();
       if (refreshProperties) _refreshOpenNodeProperties(nodeName);
       if (result.cancelled) {
-        showToast(`Forced stop requested for ${nodeName}`, 'info');
+        showToast(`Start cancellation requested for ${nodeName}`, 'info');
       } else {
         showToast(`${nodeName} stopped`, 'success');
       }

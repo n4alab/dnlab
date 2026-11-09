@@ -29,6 +29,7 @@ from app.auth.labs import can_create_lab, create_lab, derive_network_name, list_
 from app.auth.models import Role, User
 from app.controllers.topology_controller import TopologyController, TopologyValidationError
 from app.models.node import Node
+from app.models.lifecycle import NodeStopOptions
 from app.models.link import Link
 from app.models.topology import Topology
 from app.services.lab_resolver import resolve_for_read, resolve_for_write
@@ -273,6 +274,7 @@ async def remove_node(
     node_name: str,
     db: Annotated[AsyncSession, Depends(get_session)],
     user: Annotated[User, Depends(get_current_user)],
+    options: NodeStopOptions | None = None,
 ):
     lab = await resolve_for_write(db, lab_id, user)
     try:
@@ -285,7 +287,7 @@ async def remove_node(
         runtime_nodes = {}
     if node_name in runtime_nodes:
         try:
-            await multinode.node_remove(lab, node_name)
+            await multinode.node_remove(lab, node_name, force=options.force if options else False)
         except MultinodeServiceError as exc:
             raise HTTPException(
                 409, f"Cannot remove live node runtime: {exc}",

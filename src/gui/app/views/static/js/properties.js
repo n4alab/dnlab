@@ -71,7 +71,6 @@ const Properties = (() => {
     const currentMgmt  = nodeData.mgmt_ipv4 || (nodeData.extra && nodeData.extra['mgmt-ipv4']) || '';
     const currentMgmt6 = nodeData.mgmt_ipv6 || (nodeData.extra && nodeData.extra['mgmt-ipv6']) || '';
     const currentEnv   = (nodeData.extra && nodeData.extra.env && typeof nodeData.extra.env === 'object') ? nodeData.extra.env : {};
-    const mgmtPassthrough = String(currentEnv.CLAB_MGMT_PASSTHROUGH || '').toLowerCase() === 'true';
     const catalogEnv = (typeof DeviceCatalog !== 'undefined') ? DeviceCatalog.kindDefaultEnv(currentKind) : {};
     const effectiveEnv = { ...catalogEnv, ...currentEnv };
 
@@ -141,7 +140,6 @@ const Properties = (() => {
       const extra = _nodeExtraWithMgmtPassthrough(
         nodeData,
         kind,
-        false,
         fd.get('node_vcpu'),
         fd.get('node_ram'),
       );
@@ -410,15 +408,11 @@ const Properties = (() => {
     `;
   }
 
-  function _nodeExtraWithMgmtPassthrough(nodeData, kind, enabled, vcpuRaw, ramRaw) {
+  function _nodeExtraWithMgmtPassthrough(nodeData, kind, vcpuRaw, ramRaw) {
     const currentExtra = (nodeData.extra && typeof nodeData.extra === 'object') ? nodeData.extra : {};
     const catalogEnv = (typeof DeviceCatalog !== 'undefined') ? DeviceCatalog.kindDefaultEnv(kind || nodeData.kind || '') : {};
     const env = (currentExtra.env && typeof currentExtra.env === 'object') ? { ...currentExtra.env } : {};
-    if (enabled) {
-      env.CLAB_MGMT_PASSTHROUGH = 'true';
-    } else {
-      delete env.CLAB_MGMT_PASSTHROUGH;
-    }
+    env.CLAB_MGMT_PASSTHROUGH = 'false';
     const vcpu = parseInt(String(vcpuRaw || '').trim(), 10);
     const ram = parseInt(String(ramRaw || '').trim(), 10);
     if (Number.isFinite(vcpu) && vcpu > 0) env.VCPU = String(vcpu);

@@ -1,10 +1,11 @@
-"""Async client for dNLab runtime relay."""
+"""Async relay client; native sessions require a full qualified Docker ID."""
 
 from __future__ import annotations
 
 import asyncio
 import contextlib
 import logging
+import re
 import shlex
 
 from fastapi import WebSocket
@@ -62,13 +63,23 @@ class RuntimeRelayClient:
                 await writer.wait_closed()
 
     async def _open(self, relay: dict, action: str, *extra: str):
+        backend=relay.get('runtime_backend')
+        identity=relay.get('container_id')
+        if backend not in (None,'custom'):
+            raise RuntimeRelayError('unknown relay workload backend')
+        if backend=='custom':
+            if not isinstance(identity,str) or not re.fullmatch(r'[0-9a-f]{64}',identity):
+                raise RuntimeRelayError('qualified native container identity required')
+        elif identity is not None:
+            raise RuntimeRelayError('container identity requires native relay context')
         host = relay["host"]
         port = int(relay["port"])
         reader, writer = await asyncio.open_connection(host, port)
         parts = [
-            action,
+            action+'_ID' if backend=='custom' else action,
             relay["api_key"],
             relay["container"],
+            *([identity] if backend=='custom' else []),
             *extra,
         ]
         writer.write((" ".join(shlex.quote(p) for p in parts) + "\n").encode())

@@ -39,6 +39,7 @@ from threading import Lock
 from typing import Optional
 
 from app.config import settings
+from app.services.webui_listener import Listener, ListenerError
 
 log = logging.getLogger(__name__)
 
@@ -70,6 +71,10 @@ class WebUITunnel:
     path: str = "/"      # path by default della UI (es. "/login" for qualche vendor)
     label: str = ""      # nome amichevole — solo for log / UX
     upstream_authorization: str | None = None
+    ssh_host: str | None = None
+    ssh_port: int | None = None
+    ssh_user: str | None = None
+    ssh_key: str | None = None
 
 
 class WebUIService:
@@ -115,15 +120,26 @@ class WebUIService:
         if not (1 <= vd_port <= 65535):
             raise WebUITunnelError(f"port {vd_port} fuori range")
 
+        # Resolve the endpoint before cache lookup; defaults can change too.
+        ssh_host = (jh_host or settings.JUMPHOST_HOST) if jh_port else f"dnlab-{lab_name}-jumphost"
+        ssh_port = jh_port or 22
+        ssh_user = settings.JUMPHOST_USER
+        ssh_key = settings.GUI_SSH_KEY
         key = (lab_id, node_name, vd_port)
         with self._lock:
             existing_token = self._by_key.get(key)
             if existing_token:
                 t = self._tunnels.get(existing_token)
-                if t and t.user_id == user_id and _alive(t.process):
+                if (t and t.user_id == user_id and t.lab_name == lab_name
+                        and t.vd_ip == vd_ip and t.scheme == scheme
+                        and (t.ssh_host, t.ssh_port, t.ssh_user, t.ssh_key)
+                            == (ssh_host, ssh_port, ssh_user, ssh_key)
+                        and _alive(t.process)):
                     t.last_used_at = time.time()
+                    t.path = path
+                    t.label = label
                     return t
-                # Stale: stesso key ma processo morto o owner diverso →
+                # Stale: processo, owner o destinazione diversi →
                 # lo puliamo prima di aprirne uno nuovo.
                 if t:
                     self._close_locked(t.token)
@@ -139,10 +155,8 @@ class WebUIService:
         # Where to SSH: the jumphost's published port on the master host
         # (dockerized GUI), or the jumphost container by name (legacy).
         if jh_port:
-            ssh_host = jh_host or settings.JUMPHOST_HOST
             port_args = ["-p", str(jh_port)]
         else:
-            ssh_host = f"dnlab-{lab_name}-jumphost"
             port_args = []
         ssh_cmd = [
             "ssh", "-N", "-T",
@@ -162,22 +176,25 @@ class WebUIService:
             "-o", "ServerAliveCountMax=3",
             "-o", "TCPKeepAlive=yes",
             "-o", "BatchMode=yes",
-            "-i", settings.GUI_SSH_KEY,
+            "-i", ssh_key,
             "-L", f"127.0.0.1:{local_port}:{vd_ip}:{vd_port}",
-            f"{settings.JUMPHOST_USER}@{ssh_host}",
+            f"{ssh_user}@{ssh_host}",
         ]
         log.info(
             "webui: opening tunnel lab=%s node=%s %s://%s:%d → 127.0.0.1:%d via %s:%s",
             lab_id, node_name, scheme, vd_ip, vd_port, local_port,
             ssh_host, jh_port or "name",
         )
-        proc = subprocess.Popen(
-            ssh_cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            stdin=subprocess.DEVNULL,
-            close_fds=True,
-        )
+        try:
+            proc = subprocess.Popen(
+                ssh_cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                stdin=subprocess.DEVNULL,
+                close_fds=True,
+            )
+        except OSError as exc:
+            raise WebUITunnelError("impossibile avviare il tunnel SSH") from exc
         try:
             _wait_for_bind("127.0.0.1", local_port, proc, timeout=BIND_WAIT_S)
         except Exception:
@@ -195,6 +212,7 @@ class WebUIService:
             vd_ip=vd_ip, vd_port=vd_port, scheme=scheme,
             local_port=local_port, process=proc, user_id=user_id,
             opened_at=now, last_used_at=now, path=path, label=label,
+            ssh_host=ssh_host, ssh_port=ssh_port, ssh_user=ssh_user, ssh_key=ssh_key,
         )
         with self._lock:
             self._tunnels[token] = tun
@@ -315,23 +333,27 @@ def _pick_free_port() -> int:
 def _wait_for_bind(
     host: str, port: int, proc: subprocess.Popen, *, timeout: float,
 ) -> None:
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        if proc.poll() is not None:
-            err = b""
-            if proc.stderr:
-                with contextlib.suppress(Exception):
-                    err = proc.stderr.read() or b""
-            raise WebUITunnelError(
-                f"ssh tunnel exited (rc={proc.returncode}) during setup: "
-                f"{err.decode(errors='replace')[:200].strip()}"
-            )
-        with contextlib.suppress(OSError):
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.settimeout(0.3)
-                s.connect((host, port))
-                return
-        time.sleep(0.1)
+    deadline = time.monotonic() + timeout
+    try:
+        with Listener(proc) as listener:
+            while time.monotonic() < deadline:
+                before = listener.proof(host, port)
+                if before is not None:
+                    connected = False
+                    try:
+                        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                            sock.settimeout(0.3)
+                            sock.connect((host, port))
+                            connected = True
+                    except OSError:
+                        pass
+                    if listener.proof(host, port) != before:
+                        raise ListenerError("original listener changed during local connection")
+                    if connected:
+                        return
+                time.sleep(0.1)
+    except (OSError, ValueError, ListenerError) as exc:
+        raise WebUITunnelError(f"cannot qualify original SSH listener: {exc}") from exc
     raise WebUITunnelError(
         f"ssh tunnel did not bind on {host}:{port} within {timeout:.1f}s"
     )

@@ -1,0 +1,14 @@
+id: 20261014-143913-align-flinos-catalog-test-with-the-decla
+type: internal
+title: Align FlinOS catalog test with the declared NIC speed
+description: Include the existing QEMU_NIC_SPEED=1000 field in the exact FlinOS environment
+  expectation. The catalog value is already present in HEAD and is unchanged; only
+  the stale test expectation is corrected.
+components:
+- gui
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

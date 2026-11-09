@@ -25,8 +25,8 @@ class Node(BaseModel):
         return self.image.startswith("vrnetlab/")
 
     # Default env vars injected into every node.
-    # Per-node options such as CLAB_MGMT_PASSTHROUGH live in extra.env.
-    _DEFAULT_ENV: dict[str, str] = {}
+    # Management passthrough is also enforced after merging legacy node env.
+    _DEFAULT_ENV: dict[str, str] = {"CLAB_MGMT_PASSTHROUGH": "false"}
 
     def to_clab_dict(self) -> dict[str, Any]:
         clab_kind = device_catalog.deploy_kind(self.kind)
@@ -44,8 +44,9 @@ class Node(BaseModel):
             d["extra"] = clean_extra
             return d
         d.update(clean_extra)
-        # Merge default env vars (user-defined env takes precedence)
+        # Merge user env, then enforce the global management policy.
         env = {**self._DEFAULT_ENV, **device_catalog.default_env(self.kind), **(d.get("env") or {})}
+        env["CLAB_MGMT_PASSTHROUGH"] = "false"
         if env:
             d["env"] = env
         else:

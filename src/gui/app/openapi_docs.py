@@ -244,7 +244,9 @@ OPERATION_DOCS: dict[tuple[str, str], OperationDoc] = {
         "Stop one lab node",
         "Stop the selected running node while leaving the rest of the lab active "
         "and preserving its configured state. The caller must have write access "
-        "to the lab.",
+        "to the lab. The optional JSON force flag defaults to false; true "
+        "explicitly requests a forced stop. Native runtime shutdown failure "
+        "retains resources for recovery without automatic escalation.",
     ),
     ("post", "/api/labs/{lab_id}/nodes/{node_name}/reconcile"): _doc(
         "Reconcile one lab node",
@@ -319,7 +321,9 @@ OPERATION_DOCS: dict[tuple[str, str], OperationDoc] = {
         "Remove a topology node",
         "Remove the selected node from the saved topology and, when it is live, "
         "remove its runtime first. This destructive operation requires write "
-        "access and returns the resulting topology.",
+        "access and returns the resulting topology. The optional JSON force "
+        "flag defaults to false; true explicitly requests forced runtime stop "
+        "before removal. A failed runtime removal preserves the saved node.",
     ),
     ("put", "/api/labs/{lab_id}/topology/mgmt"): _doc(
         "Set the topology management network",

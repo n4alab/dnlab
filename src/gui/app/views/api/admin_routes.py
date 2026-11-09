@@ -779,7 +779,7 @@ def _publish_generic_vm_kind(spec: dict) -> None:
         "deploy_kind": "generic_vm",
         "image_patterns": [f"vrnetlab/dnlab_{spec['id']}"],
         "mgmt_iface": names["1"],
-        "env": {"VCPU": str(spec["vcpu"]), "RAM": str(spec["ram_mb"]), "CLAB_MGMT_PASSTHROUGH": "true"},
+        "env": {"VCPU": str(spec["vcpu"]), "RAM": str(spec["ram_mb"]), "CLAB_MGMT_PASSTHROUGH": "false"},
         "interfaces": {"linux_fmt": "eth{n-1}", "vendor_fmt": spec["port_template"],
                        "vendor_names": names, "count": spec["data_ports"] + 1},
         "resources": {"cpu": {"source": "env", "key": "VCPU", "type": "int"},

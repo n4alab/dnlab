@@ -85,6 +85,24 @@ def test_upgrade_preserves_admin_deletion(monkeypatch, tmp_path):
     assert "old" not in device_catalog.catalog()["kinds"]
 
 
+def test_upgrade_changes_unchanged_management_passthrough_defaults_to_false(monkeypatch, tmp_path):
+    previous = _catalog()
+    previous["kinds"]["linux"]["env"] = {"CLAB_MGMT_PASSTHROUGH": "true"}
+    current = _catalog()
+    current["kinds"]["linux"]["env"] = {"CLAB_MGMT_PASSTHROUGH": "false"}
+    saved = json.loads(json.dumps(previous))
+    saved["kinds"]["linux"]["label"] = "Administrator label"
+    _configure(monkeypatch, tmp_path, current)
+    _write(device_catalog.custom_path(), saved)
+    _write(device_catalog.baseline_path(), previous)
+
+    device_catalog.initialize()
+
+    entry = device_catalog.catalog()["kinds"]["linux"]
+    assert entry["env"]["CLAB_MGMT_PASSTHROUGH"] == "false"
+    assert entry["label"] == "Administrator label"
+
+
 def test_merge_combines_independent_nested_changes_and_treats_arrays_as_atomic():
     base = {"nested": {"admin": "old", "release": "old"}, "items": ["old"]}
     custom = {"nested": {"admin": "custom", "release": "old"}, "items": ["custom"]}

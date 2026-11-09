@@ -267,7 +267,7 @@
   "kinds": {
     "nokia_srlinux": {
       "env": {
-        "CLAB_MGMT_PASSTHROUGH": "true",
+        "CLAB_MGMT_PASSTHROUGH": "false",
         "VCPU": "1",
         "RAM": "2048"
       },
@@ -299,7 +299,7 @@
     },
     "nokia_sros": {
       "env": {
-        "CLAB_MGMT_PASSTHROUGH": "true",
+        "CLAB_MGMT_PASSTHROUGH": "false",
         "VCPU": "1",
         "RAM": "2048"
       },
@@ -339,7 +339,7 @@
     },
     "nokia_srsim": {
       "env": {
-        "CLAB_MGMT_PASSTHROUGH": "true",
+        "CLAB_MGMT_PASSTHROUGH": "false",
         "VCPU": "1",
         "RAM": "2048"
       },
@@ -379,7 +379,7 @@
     },
     "arista_ceos": {
       "env": {
-        "CLAB_MGMT_PASSTHROUGH": "true",
+        "CLAB_MGMT_PASSTHROUGH": "false",
         "VCPU": "1",
         "RAM": "2048"
       },
@@ -421,7 +421,7 @@
       "env": {
         "RAM": "2048",
         "VCPU": "2",
-        "CLAB_MGMT_PASSTHROUGH": "true"
+        "CLAB_MGMT_PASSTHROUGH": "false"
       },
       "interfaces": {
         "linux_fmt": "eth{n}",
@@ -456,7 +456,7 @@
     },
     "juniper_crpd": {
       "env": {
-        "CLAB_MGMT_PASSTHROUGH": "true",
+        "CLAB_MGMT_PASSTHROUGH": "false",
         "VCPU": "1",
         "RAM": "2048"
       },
@@ -490,7 +490,7 @@
       "env": {
         "RAM": "6144",
         "VCPU": "4",
-        "CLAB_MGMT_PASSTHROUGH": "true"
+        "CLAB_MGMT_PASSTHROUGH": "false"
       },
       "interfaces": {
         "linux_fmt": "eth{n}",
@@ -527,7 +527,7 @@
       "env": {
         "RAM": "4096",
         "VCPU": "2",
-        "CLAB_MGMT_PASSTHROUGH": "true"
+        "CLAB_MGMT_PASSTHROUGH": "false"
       },
       "interfaces": {
         "linux_fmt": "eth{n}",
@@ -564,7 +564,7 @@
       "env": {
         "RAM": "4096",
         "VCPU": "2",
-        "CLAB_MGMT_PASSTHROUGH": "true"
+        "CLAB_MGMT_PASSTHROUGH": "false"
       },
       "interfaces": {
         "linux_fmt": "eth{n}",
@@ -601,7 +601,7 @@
       "env": {
         "RAM": "5120",
         "VCPU": "4",
-        "CLAB_MGMT_PASSTHROUGH": "true"
+        "CLAB_MGMT_PASSTHROUGH": "false"
       },
       "interfaces": {
         "linux_fmt": "eth{n}",
@@ -638,7 +638,7 @@
       "env": {
         "RAM": "5120",
         "VCPU": "4",
-        "CLAB_MGMT_PASSTHROUGH": "true"
+        "CLAB_MGMT_PASSTHROUGH": "false"
       },
       "interfaces": {
         "linux_fmt": "eth{n}",
@@ -675,7 +675,7 @@
       "env": {
         "RAM": "8192",
         "VCPU": "4",
-        "CLAB_MGMT_PASSTHROUGH": "true"
+        "CLAB_MGMT_PASSTHROUGH": "false"
       },
       "interfaces": {
         "linux_fmt": "eth{n}",
@@ -710,7 +710,7 @@
     },
     "juniper_cjunosevolved": {
       "env": {
-        "CLAB_MGMT_PASSTHROUGH": "true",
+        "CLAB_MGMT_PASSTHROUGH": "false",
         "VCPU": "1",
         "RAM": "2048"
       },
@@ -750,7 +750,7 @@
     },
     "cisco_xrd": {
       "env": {
-        "CLAB_MGMT_PASSTHROUGH": "true",
+        "CLAB_MGMT_PASSTHROUGH": "false",
         "VCPU": "1",
         "RAM": "2048"
       },
@@ -792,7 +792,7 @@
       "env": {
         "RAM": "3072",
         "VCPU": "1",
-        "CLAB_MGMT_PASSTHROUGH": "true"
+        "CLAB_MGMT_PASSTHROUGH": "false"
       },
       "interfaces": {
         "linux_fmt": "eth{n}",
@@ -829,7 +829,7 @@
       "env": {
         "RAM": "24576",
         "VCPU": "4",
-        "CLAB_MGMT_PASSTHROUGH": "true"
+        "CLAB_MGMT_PASSTHROUGH": "false"
       },
       "interfaces": {
         "linux_fmt": "eth{n}",
@@ -866,7 +866,7 @@
       "env": {
         "RAM": "4096",
         "VCPU": "1",
-        "CLAB_MGMT_PASSTHROUGH": "true"
+        "CLAB_MGMT_PASSTHROUGH": "false"
       },
       "interfaces": {
         "linux_fmt": "eth{n}",
@@ -903,7 +903,7 @@
       "env": {
         "RAM": "10240",
         "VCPU": "4",
-        "CLAB_MGMT_PASSTHROUGH": "true"
+        "CLAB_MGMT_PASSTHROUGH": "false"
       },
       "interfaces": {
         "linux_fmt": "eth{n}",
@@ -938,7 +938,7 @@
     },
     "cisco_c8000": {
       "env": {
-        "CLAB_MGMT_PASSTHROUGH": "true",
+        "CLAB_MGMT_PASSTHROUGH": "false",
         "VCPU": "1",
         "RAM": "2048"
       },
@@ -980,7 +980,7 @@
       "env": {
         "RAM": "4096",
         "VCPU": "1",
-        "CLAB_MGMT_PASSTHROUGH": "true"
+        "CLAB_MGMT_PASSTHROUGH": "false"
       },
       "interfaces": {
         "linux_fmt": "eth{n}",
@@ -1018,7 +1018,7 @@
       "env": {
         "RAM": "18432",
         "VCPU": "4",
-        "CLAB_MGMT_PASSTHROUGH": "true"
+        "CLAB_MGMT_PASSTHROUGH": "false"
       },
       "interfaces": {
         "linux_fmt": "eth{n}",
@@ -1068,7 +1068,7 @@
       "env": {
         "VCPU": "4",
         "RAM": "18432",
-        "CLAB_MGMT_PASSTHROUGH": "true"
+        "CLAB_MGMT_PASSTHROUGH": "false"
       },
       "interfaces": {
         "linux_fmt": "eth{n}",
@@ -1095,7 +1095,7 @@
     },
     "cisco_iol": {
       "env": {
-        "CLAB_MGMT_PASSTHROUGH": "true",
+        "CLAB_MGMT_PASSTHROUGH": "false",
         "VCPU": "1",
         "RAM": "2048"
       },
@@ -1142,11 +1142,11 @@
       "env": {
         "VCPU": "1",
         "RAM": "512",
-        "CLAB_MGMT_PASSTHROUGH": "true"
+        "CLAB_MGMT_PASSTHROUGH": "false"
       },
       "interfaces": {
         "linux_fmt": "eth{n}",
-        "vendor_fmt": "GigabitEthernet{module}/{port}",
+        "vendor_fmt": "GigabitEthernet0/{n}",
         "count": 8
       },
       "label": "IOSv",
@@ -1169,7 +1169,7 @@
       "env": {
         "RAM": "8192",
         "VCPU": "4",
-        "CLAB_MGMT_PASSTHROUGH": "true"
+        "CLAB_MGMT_PASSTHROUGH": "false"
       },
       "interfaces": {
         "linux_fmt": "eth{n}",
@@ -1204,7 +1204,7 @@
     },
     "cumulus_cvx": {
       "env": {
-        "CLAB_MGMT_PASSTHROUGH": "true",
+        "CLAB_MGMT_PASSTHROUGH": "false",
         "VCPU": "1",
         "RAM": "2048"
       },
@@ -1248,7 +1248,7 @@
         "VCPU": "1",
         "RAM": "4096",
         "DNLAB_WARM_PORTS": "64",
-        "CLAB_MGMT_PASSTHROUGH": "true"
+        "CLAB_MGMT_PASSTHROUGH": "false"
       },
       "interfaces": {
         "linux_fmt": "eth{n}",
@@ -1281,7 +1281,7 @@
       "env": {
         "RAM": "8192",
         "VCPU": "4",
-        "CLAB_MGMT_PASSTHROUGH": "true"
+        "CLAB_MGMT_PASSTHROUGH": "false"
       },
       "interfaces": {
         "linux_fmt": "eth{n}",
@@ -1318,7 +1318,7 @@
       "env": {
         "RAM": "4096",
         "VCPU": "1",
-        "CLAB_MGMT_PASSTHROUGH": "true"
+        "CLAB_MGMT_PASSTHROUGH": "false"
       },
       "interfaces": {
         "linux_fmt": "eth{n}",
@@ -1355,7 +1355,7 @@
       "env": {
         "RAM": "4096",
         "VCPU": "1",
-        "CLAB_MGMT_PASSTHROUGH": "true"
+        "CLAB_MGMT_PASSTHROUGH": "false"
       },
       "interfaces": {
         "linux_fmt": "eth{n}",
@@ -1392,7 +1392,7 @@
       "env": {
         "RAM": "4096",
         "VCPU": "4",
-        "CLAB_MGMT_PASSTHROUGH": "true"
+        "CLAB_MGMT_PASSTHROUGH": "false"
       },
       "interfaces": {
         "linux_fmt": "eth{n}",
@@ -1429,7 +1429,7 @@
       "env": {
         "RAM": "4096",
         "VCPU": "1",
-        "CLAB_MGMT_PASSTHROUGH": "true"
+        "CLAB_MGMT_PASSTHROUGH": "false"
       },
       "interfaces": {
         "linux_fmt": "eth{n}",
@@ -1466,7 +1466,7 @@
       "env": {
         "RAM": "256",
         "VCPU": "1",
-        "CLAB_MGMT_PASSTHROUGH": "true"
+        "CLAB_MGMT_PASSTHROUGH": "false"
       },
       "interfaces": {
         "linux_fmt": "eth{n}",
@@ -1503,7 +1503,7 @@
       "env": {
         "RAM": "4096",
         "VCPU": "4",
-        "CLAB_MGMT_PASSTHROUGH": "true"
+        "CLAB_MGMT_PASSTHROUGH": "false"
       },
       "interfaces": {
         "linux_fmt": "eth{n}",
@@ -1539,7 +1539,8 @@
     "hp_vsr1000": {
       "env": {
         "VCPU": "1",
-        "RAM": "1024"
+        "RAM": "1024",
+        "CLAB_MGMT_PASSTHROUGH": "false"
       },
       "interfaces": {
         "linux_fmt": "eth{n}",
@@ -1582,7 +1583,7 @@
       "env": {
         "RAM": "4096",
         "VCPU": "2",
-        "CLAB_MGMT_PASSTHROUGH": "true"
+        "CLAB_MGMT_PASSTHROUGH": "false"
       },
       "interfaces": {
         "linux_fmt": "eth{n}",
@@ -1619,7 +1620,7 @@
       "env": {
         "RAM": "6144",
         "VCPU": "2",
-        "CLAB_MGMT_PASSTHROUGH": "true"
+        "CLAB_MGMT_PASSTHROUGH": "false"
       },
       "interfaces": {
         "linux_fmt": "eth{n}",
@@ -1656,7 +1657,7 @@
       "env": {
         "RAM": "2048",
         "VCPU": "1",
-        "CLAB_MGMT_PASSTHROUGH": "true"
+        "CLAB_MGMT_PASSTHROUGH": "false"
       },
       "interfaces": {
         "linux_fmt": "eth{n}",
@@ -1691,7 +1692,7 @@
     },
     "checkpoint_cloudguard": {
       "env": {
-        "CLAB_MGMT_PASSTHROUGH": "true",
+        "CLAB_MGMT_PASSTHROUGH": "false",
         "VCPU": "1",
         "RAM": "2048"
       },
@@ -1731,7 +1732,7 @@
     },
     "6wind_vsr": {
       "env": {
-        "CLAB_MGMT_PASSTHROUGH": "true",
+        "CLAB_MGMT_PASSTHROUGH": "false",
         "VCPU": "1",
         "RAM": "2048"
       },
@@ -1763,7 +1764,7 @@
     },
     "keysight_ixia-c-one": {
       "env": {
-        "CLAB_MGMT_PASSTHROUGH": "true",
+        "CLAB_MGMT_PASSTHROUGH": "false",
         "VCPU": "1",
         "RAM": "2048"
       },
@@ -1803,7 +1804,7 @@
     },
     "spirent_stc": {
       "env": {
-        "CLAB_MGMT_PASSTHROUGH": "true",
+        "CLAB_MGMT_PASSTHROUGH": "false",
         "VCPU": "1",
         "RAM": "2048"
       },
@@ -1835,7 +1836,7 @@
     },
     "arrcus_arcos": {
       "env": {
-        "CLAB_MGMT_PASSTHROUGH": "true",
+        "CLAB_MGMT_PASSTHROUGH": "false",
         "VCPU": "1",
         "RAM": "2048"
       },
@@ -1867,7 +1868,7 @@
     },
     "fdio_vpp": {
       "env": {
-        "CLAB_MGMT_PASSTHROUGH": "true",
+        "CLAB_MGMT_PASSTHROUGH": "false",
         "VCPU": "1",
         "RAM": "2048"
       },
@@ -1899,7 +1900,7 @@
     },
     "rare": {
       "env": {
-        "CLAB_MGMT_PASSTHROUGH": "true",
+        "CLAB_MGMT_PASSTHROUGH": "false",
         "VCPU": "1",
         "RAM": "2048"
       },
@@ -1931,7 +1932,7 @@
     },
     "vyosnetworks_vyos": {
       "env": {
-        "CLAB_MGMT_PASSTHROUGH": "true",
+        "CLAB_MGMT_PASSTHROUGH": "false",
         "VCPU": "1",
         "RAM": "2048"
       },
@@ -1971,7 +1972,7 @@
     },
     "veesix_osvbng": {
       "env": {
-        "CLAB_MGMT_PASSTHROUGH": "true",
+        "CLAB_MGMT_PASSTHROUGH": "false",
         "VCPU": "1",
         "RAM": "2048"
       },
@@ -2003,7 +2004,7 @@
     },
     "generic_vm": {
       "env": {
-        "CLAB_MGMT_PASSTHROUGH": "true",
+        "CLAB_MGMT_PASSTHROUGH": "false",
         "VCPU": "1",
         "RAM": "2048"
       },
@@ -2038,7 +2039,7 @@
         "VCPU": "2",
         "RAM": "4096",
         "QEMU_NIC_SPEED": "1000",
-        "CLAB_MGMT_PASSTHROUGH": "true"
+        "CLAB_MGMT_PASSTHROUGH": "false"
       },
       "interfaces": {
         "linux_fmt": "eth{n-1}",
@@ -2073,7 +2074,7 @@
     },
     "linux": {
       "env": {
-        "CLAB_MGMT_PASSTHROUGH": "true",
+        "CLAB_MGMT_PASSTHROUGH": "false",
         "VCPU": "1",
         "RAM": "2048"
       },
@@ -2107,7 +2108,7 @@
       "env": {
         "RAM": "512",
         "VCPU": "1",
-        "CLAB_MGMT_PASSTHROUGH": "true"
+        "CLAB_MGMT_PASSTHROUGH": "false"
       },
       "interfaces": {
         "linux_fmt": "eth{n}",
@@ -2136,7 +2137,7 @@
       "env": {
         "RAM": "512",
         "VCPU": "1",
-        "CLAB_MGMT_PASSTHROUGH": "true"
+        "CLAB_MGMT_PASSTHROUGH": "false"
       },
       "interfaces": {
         "linux_fmt": "eth{n}",
@@ -2165,7 +2166,7 @@
       "env": {
         "RAM": "128",
         "VCPU": "1",
-        "CLAB_MGMT_PASSTHROUGH": "true"
+        "CLAB_MGMT_PASSTHROUGH": "false"
       },
       "interfaces": {
         "linux_fmt": "eth{n}",
@@ -2206,7 +2207,8 @@
       },
       "env": {
         "VCPU": "1",
-        "RAM": "2048"
+        "RAM": "2048",
+        "CLAB_MGMT_PASSTHROUGH": "false"
       },
       "resources": {
         "cpu": {
@@ -2232,7 +2234,8 @@
     "bridge": {
       "env": {
         "VCPU": "1",
-        "RAM": "2048"
+        "RAM": "2048",
+        "CLAB_MGMT_PASSTHROUGH": "false"
       },
       "resources": {
         "cpu": {
@@ -2257,7 +2260,8 @@
     "ovs-bridge": {
       "env": {
         "VCPU": "1",
-        "RAM": "2048"
+        "RAM": "2048",
+        "CLAB_MGMT_PASSTHROUGH": "false"
       },
       "resources": {
         "cpu": {
@@ -2281,7 +2285,7 @@
     },
     "ext-container": {
       "env": {
-        "CLAB_MGMT_PASSTHROUGH": "true",
+        "CLAB_MGMT_PASSTHROUGH": "false",
         "VCPU": "1",
         "RAM": "2048"
       },
@@ -2315,7 +2319,7 @@
       "env": {
         "RAM": "16384",
         "VCPU": "4",
-        "CLAB_MGMT_PASSTHROUGH": "true"
+        "CLAB_MGMT_PASSTHROUGH": "false"
       },
       "resources": {
         "cpu": {
@@ -2355,7 +2359,8 @@
       },
       "env": {
         "VCPU": "1",
-        "RAM": "2048"
+        "RAM": "2048",
+        "CLAB_MGMT_PASSTHROUGH": "false"
       },
       "resources": {
         "cpu": {
@@ -2382,7 +2387,7 @@
       "env": {
         "VCPU": "1",
         "RAM": "2048",
-        "CLAB_MGMT_PASSTHROUGH": "true"
+        "CLAB_MGMT_PASSTHROUGH": "false"
       },
       "interfaces": {
         "linux_fmt": "eth{n}",
@@ -2432,7 +2437,7 @@
       "env": {
         "VCPU": "2",
         "RAM": "4096",
-        "CLAB_MGMT_PASSTHROUGH": "true"
+        "CLAB_MGMT_PASSTHROUGH": "false"
       },
       "interfaces": {
         "linux_fmt": "eth{n}",
@@ -2473,7 +2478,7 @@
       "env": {
         "VCPU": "1",
         "RAM": "2048",
-        "CLAB_MGMT_PASSTHROUGH": "true"
+        "CLAB_MGMT_PASSTHROUGH": "false"
       },
       "interfaces": {
         "linux_fmt": "eth{n}",

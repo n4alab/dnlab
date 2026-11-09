@@ -124,11 +124,11 @@ const API = (() => {
     // Nodes
     addNode:    (id, node)          => request('POST',  `/api/labs/${id}/topology/nodes`, node),
     updateNode: (id, node, updates) => request('PATCH', `/api/labs/${id}/topology/nodes/${encodeURIComponent(node)}`, updates),
-    removeNode: (id, node)          => request('DELETE',`/api/labs/${id}/topology/nodes/${encodeURIComponent(node)}`),
+    removeNode: (id, node, options = {}) => request('DELETE',`/api/labs/${id}/topology/nodes/${encodeURIComponent(node)}`, options),
     wipeNodeDisk: (id, node)        => request('POST',  `/api/labs/${id}/nodes/${encodeURIComponent(node)}/wipe-disk`),
     listNodes: (id)                 => request('GET',   `/api/labs/${id}/nodes`),
     startNode: (id, node)           => request('POST',  `/api/labs/${id}/nodes/${encodeURIComponent(node)}/start`),
-    stopNode:  (id, node)           => request('POST',  `/api/labs/${id}/nodes/${encodeURIComponent(node)}/stop`),
+    stopNode:  (id, node, options = {}) => request('POST',  `/api/labs/${id}/nodes/${encodeURIComponent(node)}/stop`, options),
     restartNode: (id, node)         => request('POST',  `/api/labs/${id}/nodes/${encodeURIComponent(node)}/restart`),
     reconcileNode: (id, node)       => request('POST',  `/api/labs/${id}/nodes/${encodeURIComponent(node)}/reconcile`),
     reconcileLink: (id, link)       => request('POST',  `/api/labs/${id}/links/reconcile`, link),

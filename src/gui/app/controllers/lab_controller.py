@@ -139,10 +139,10 @@ class LabController:
             log.exception("Node start crashed")
             return {"success": False, "output": f"{type(exc).__name__}: {exc}"}
 
-    async def node_stop(self, lab: ResolvedLab, node_name: str) -> dict:
+    async def node_stop(self, lab: ResolvedLab, node_name: str, *, force: bool = False) -> dict:
         log.info("API node_stop: %s/%s (%s)", lab.display_name, node_name, lab.netname)
         try:
-            state = await multinode.node_stop(lab, node_name)
+            state = await multinode.node_stop(lab, node_name, force=force)
             return {
                 "success": True, "cancelled": bool(state.get("cancelled")),
                 "output": "", "state": state,

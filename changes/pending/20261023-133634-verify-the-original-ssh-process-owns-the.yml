@@ -1,0 +1,15 @@
+id: 20261023-133634-verify-the-original-ssh-process-owns-the
+type: bugfix
+title: Verify the original SSH process owns the WebUI listener
+description: Qualify the local tunnel listener through the original process generation,
+  network namespace and socket inode before and after connecting. Reject unrelated
+  or conflicting listeners and incomplete observations instead of reporting a false
+  successful bind.
+components:
+- gui
+audience:
+- user
+visibility: public
+breaking: false
+upgrade_notes: []
+references: []

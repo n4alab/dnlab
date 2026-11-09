@@ -1,4 +1,5 @@
 import asyncio
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -6,6 +7,24 @@ import pytest
 from fastapi import HTTPException
 
 from app.views.api import admin_routes
+
+
+def test_generic_vm_build_publishes_explicitly_disabled_management_passthrough(monkeypatch):
+    catalog = {"kinds": {}}
+    published = []
+    monkeypatch.setattr(admin_routes.device_catalog, "catalog", lambda: catalog)
+    monkeypatch.setattr(admin_routes.device_catalog, "write_custom", published.append)
+    admin_routes._publish_generic_vm_kind({
+        "id": "ubuntu_2404", "version": "1.0.0", "label": "Ubuntu",
+        "vendor": "generic", "type": "server", "vcpu": 2, "ram_mb": 4096,
+        "data_ports": 4, "port_template": "eth{i}",
+        "port_names": {str(i + 1): f"eth{i}" for i in range(5)},
+    })
+
+    entry = json.loads(published[0])["kinds"]["ubuntu_2404"]
+    assert entry["env"]["CLAB_MGMT_PASSTHROUGH"] == "false"
+    assert entry["mgmt_iface"] == "eth0"
+    assert entry["interfaces"]["count"] == 5
 
 
 def _fake_build_module(work_dir: Path):

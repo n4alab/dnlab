@@ -1,0 +1,14 @@
+id: 20261012-074429-correct-iosv-guest-interface-names-in-th
+type: bugfix
+title: Correct IOSv guest interface names in the device catalog
+description: Display cisco_vios data ports as GigabitEthernet0/N instead of splitting
+  them across nonexistent modules after eth3. Preserve Linux interface IDs, the default
+  eight-port list, management interface and other device kinds.
+components:
+- gui
+audience:
+- user
+visibility: public
+breaking: false
+upgrade_notes: []
+references: []

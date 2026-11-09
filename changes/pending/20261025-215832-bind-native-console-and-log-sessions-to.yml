@@ -1,0 +1,17 @@
+id: 20261025-215832-bind-native-console-and-log-sessions-to
+type: bugfix
+title: Bind native console and log sessions to the original workload generation
+description: Resolve custom console and log targets only from verified native bindings
+  and the original active relay. Extend relay requests with an explicit Docker ID
+  and use that immutable ID for console brokers, discovery, cleanup and logs. Reject
+  name-only native requests and incompatible relay images without fallback; retain
+  the Containerlab protocol.
+components:
+- gui
+- multinode
+audience:
+- operator
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
