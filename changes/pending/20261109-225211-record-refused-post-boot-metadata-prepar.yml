@@ -1,0 +1,16 @@
+id: 20261109-225211-record-refused-post-boot-metadata-prepar
+type: none
+title: Record refused post-boot metadata preparation
+description: Document the single authorized prepare refusal on changed boot and namespace
+  before journal opening or host queries, preserving original evidence and requiring
+  separate current-context observation.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
+reason: Experimental evidence and procedure update only; no runtime or installed-service
+  change.

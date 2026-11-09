@@ -507,6 +507,14 @@ archived inputs with the corrected source inventory. Operational qualification
 and authorization remain outstanding. No live journal prepare, recovery,
 runtime directory, account operation or daemon/VM action occurred.
 
+The first separately authorized native metadata prepare was refused at its
+initial context check: boot and mount/network/PID namespace identities differed
+from the frozen recipe. Its private output contains invocation and failed-result
+reports with expected/observed values; no systemctl query, NSS lookup, original
+journal opening or metadata prepare followed. No retry was made. A separate
+current-context readonly observation is required before proposing another
+prepare; the previous installation/qualification evidence remains immutable.
+
 ### Current-boot /run parent: explicit dependency binding, synthetic verification
 
 New post-boot requests may explicitly supply `run_parent=bind_run_parent(...)`.
