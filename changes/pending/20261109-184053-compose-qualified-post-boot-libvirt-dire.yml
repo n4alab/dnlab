@@ -1,0 +1,15 @@
+id: 20261109-184053-compose-qualified-post-boot-libvirt-dire
+type: internal
+title: Compose qualified post-boot libvirt directory recovery
+description: Add a session assembler binding the original journal/source, selected-package
+  policy, current-boot /run identity and directory window. Prepare metadata only,
+  then apply/recover using the original prepared reference without duplicate births
+  or daemon actions.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

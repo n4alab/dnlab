@@ -416,6 +416,28 @@ updates or host reboot; stable guests can continue running. No prepare/apply,
 resource recovery/recreation, libvirt connection or daemon start is authorized
 by packaging the recipe.
 
+### Composed post-boot session: original references, synthetic verification
+
+`PostBootRecoverySession` composes the selected-package policy, explicit /run
+binding, complete persistent observation and directory recovery in the original
+journal. Its constructor checks source/window identity and initializes schema;
+it does not observe live resources. Prepare qualifies only persistent metadata
+and records prepared directory intents, without creating directories. Callers
+must retain the returned prepared reference before any apply.
+
+Apply and recovery validate that original reference against qualification,
+window, source, journal identity, target specs and birth nonces. They cannot
+implicitly prepare a replacement. Response loss reuses known births; uncertain
+absence stays pending without another create. The effective view reobserves
+the completed directories and remains scoped to session directories with
+daemon_ready=false. It cannot change units or start libvirt/QEMU.
+
+Fifteen synthetic composition tests pass, including metadata replay, reopening,
+lost commit/create responses and refusals before the first directory write.
+Native operational transport and its durable output/reference handling remain
+to be prepared and qualified separately. No live journal prepare, recovery,
+runtime directory, account operation or daemon/VM action occurred.
+
 ### Current-boot /run parent: explicit dependency binding, synthetic verification
 
 New post-boot requests may explicitly supply `run_parent=bind_run_parent(...)`.
