@@ -204,6 +204,29 @@ lost candidate/rename/outer-commit responses, changed unrelated files and closed
 windows. No installed file, service, VM or lab was modified. The native provider,
 operational revision and empty-session activation are still pending.
 
+`ConfigurationPreflight` now composes the original installation snapshot with
+account, filesystem and explicitly selected dependency readers. It validates
+the original complete target inventory and profile binding, observes every
+unchanged target twice, and rechecks package/binary/mask/context/service
+prerequisites. Only the changing libvirtd unit is delegated to the staging/swap
+observer. Inactive services, zero pending jobs and no dedicated-UID processes
+are required; this remains a pre-activation contract.
+
+`CompletedAccountObserver` verifies committed original account birth and worker
+completion, then the current identity, without reopening the installation's old
+administrative window or executing helper completion/recovery. The revision
+still requires its separate current window. Observation makes no journal writes;
+the temporary-journal test also passes under SQLite query_only. The existing
+native identity/completion providers must be explicitly supplied and qualified.
+
+Eighteen new cases cover the unchanged target kinds, dependencies, snapshot
+changes, inactive-service restrictions and completed account evidence. One
+composition case uses all seven real temporary files through prepare/apply of
+the revision; account/directory/service observations remain synthetic. The
+combined suite passes 135 tests. A concrete native assembly/recipe, operational
+observation and update remain pending. No new master inventory, account command,
+installed file change, daemon start or VM was performed.
+
 `ServiceGenerationObserver` prepares typed validation of an already acknowledged
 daemon generation. It binds the original activation nonce and command completion
 to the installed unit/configuration, systemd invocation ID, nonroot process

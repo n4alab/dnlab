@@ -1,0 +1,16 @@
+id: 20261109-092200-compose-complete-preflight-for-libvirt-c
+type: internal
+title: Compose complete preflight for libvirt configuration revisions
+description: Recheck original unchanged account, filesystem and directory dependency
+  proofs with the complete inactive host snapshot. Observe committed account births
+  without reopening the historical installation window or writing the journal. Verify
+  composition on temporary files and simulated service prerequisites; native operational
+  assembly remains pending.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
