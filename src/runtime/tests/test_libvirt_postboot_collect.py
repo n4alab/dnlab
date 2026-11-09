@@ -81,6 +81,7 @@ def recipe(tmp_path,monkeypatch,install):
     installer,_,prepared,_=install;installed=installer.apply(prepared['id'])
     namespaces={name:dict(device=1,inode=index+10) for index,name in enumerate(('pid','mnt','net','user'))}
     installed['context']=dict(host_id='master',boot_id='old-synthetic-boot',namespaces=namespaces)
+    installed['prerequisites']['profile_sha256']=installed['profile']['profile_sha256']
     installed['prerequisites']['account_inputs']={
         'usr/sbin/'+role:dict(sha256='a'*64) for role in ('useradd','groupadd')}
     with installer.journal.transaction():installer._save(installed)

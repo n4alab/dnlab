@@ -1,11 +1,11 @@
 id: 20261109-103825-prototype-readonly-post-boot-collector-a
 type: internal
 title: Prototype readonly post-boot collector and journal access
-description: 'Add readonly installation access and current persistent/volatile observation
-  without journal mutations or resource adoption. Initial observer/installer suite
-  passes24 tests. Collector verification stops after10 passes: the synthetic native-wiring
-  fixture omits the required profile fingerprint. Runtime guard correctly refuses
-  before host callbacks; no native collection or retry executed.'
+description: Add readonly installation access and current persistent/volatile observation
+  without journal mutations or resource adoption. Thirty-six synthetic collector/observer/installer
+  tests pass after adding the required profile fingerprint only to the wiring fixture.
+  Runtime guards remain unchanged; no native collection recipe, host observation or
+  operational retry executed.
 components:
 - runtime
 audience:

@@ -372,7 +372,7 @@ post-boot revision. Further boot/revision generations, native collection and
 operational recipes remain unqualified; this does not qualify a running libvirt
 session, VM lifecycle, catalog, distributed recovery or cutover.
 
-### Readonly post-boot collector prototype (verification incomplete)
+### Readonly post-boot collector prototype (synthetic verification only)
 
 `SessionInstaller(readonly=True)` reads only the existing original table and
 refuses prepare/apply/save before mutation callbacks. `PostBootObserver` composes
@@ -386,13 +386,17 @@ pending volatile targets. Its native entry uses a frozen source/input manifest,
 explicit expected context, readonly/immutable SQLite and fixed readonly queries;
 there is no journal writer or prepare/apply/recovery API in that entry.
 
-The new collector suite stopped after ten passes and one failure. Its synthetic
+The initial collector suite stopped after ten passes and one failure. Its synthetic
 native-wiring fixture omits `prerequisites.profile_sha256`, so the existing
 profile/context guard rejects it before output creation or native callbacks.
-The archived installed manifest contains the correct matching field. Proposed
-correction is fixture-only; no guard relaxation or new host observation is
-authorized. Remaining collector cases were not executed. No concrete native
-collection recipe or master collection has been run by this prototype.
+The archived installed manifest contains the correct matching field. The
+separately authorized fixture-only correction adds that fingerprint. All36
+combined collector/observer/installer tests now pass, including the synthetic
+native-entry routing and unchanged readonly SQLite bytes with no WAL/SHM files.
+Runtime and guards are unchanged; the first failed evidence remains preserved.
+No concrete native collection recipe or master collection has been run by this
+prototype. Operational collection and any subsequent qualification/recovery
+remain separate steps requiring authorization.
 
 `ServiceGenerationObserver` prepares typed validation of an already acknowledged
 daemon generation. It binds the original activation nonce and command completion
