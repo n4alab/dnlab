@@ -1,0 +1,16 @@
+id: 20261109-104604-freeze-readonly-post-boot-collection-rec
+type: none
+title: Freeze readonly post-boot collection recipe inputs
+description: Document the private readonly collection package bound to182 source files
+  and7 archived inputs, including the explicitly expected new context. Native body
+  remains unexecuted; no host collection or operational mutation authorized by packaging.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
+reason: Recipe packaging and experimental documentation only; runtime behavior and
+  installed resources unchanged.

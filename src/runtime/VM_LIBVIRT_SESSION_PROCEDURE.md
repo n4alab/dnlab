@@ -398,6 +398,24 @@ No concrete native collection recipe or master collection has been run by this
 prototype. Operational collection and any subsequent qualification/recovery
 remain separate steps requiring authorization.
 
+The first readonly collection package is frozen against182 runtime/tool sources
+and seven archived inputs. Its expected current context comes explicitly from
+the saved failed-prepare observation, not fresh discovery or an updated source
+installation. Recipe validation reads only repo/archived files and has passed;
+the native body has not been invoked. A different boot/context, source inventory
+or original journal is an immediate refusal, without automatic adoption/retry.
+
+The proposed single master collection writes private reports only. Original
+SQLite opens readonly/immutable with query_only; no original lock, intent/table
+initialization or mutation API is used. Historical creation and current NSS/lock,
+filesystem, package/configuration and fixed systemctl-show observations stay
+separate. No shadow contents are exported, no old PID is adopted and volatile
+paths remain pending. Physical workers are not needed. Native collection requires
+separate consent and a brief window without package/account/libvirt/runtime
+updates or host reboot; stable guests can continue running. No prepare/apply,
+resource recovery/recreation, libvirt connection or daemon start is authorized
+by packaging the recipe.
+
 `ServiceGenerationObserver` prepares typed validation of an already acknowledged
 daemon generation. It binds the original activation nonce and command completion
 to the installed unit/configuration, systemd invocation ID, nonroot process
