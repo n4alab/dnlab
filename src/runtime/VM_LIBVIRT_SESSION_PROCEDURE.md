@@ -579,6 +579,19 @@ change, reload, service activation, libvirt connection or VM occurred. The next
 step is the separate current-session unit-revision preparation: the installed
 historical Requires unit has not yet been replaced by Requisite+After.
 
+`PostBootUnitPrepare` now connects the completed directory lineage to
+`CurrentConfigurationSession` through a metadata-only session. The archived
+effective source must match the current derived view exactly. The revision has
+its own window targeting only the libvirtd unit; the completed directory window
+can remain closed. Prepare retains original source/creators and creates only
+revision metadata, requiring phase prepared on replay. Apply/recovery are
+explicitly refused by this entry. Four synthetic tests pass for preparation and
+replay without staging, unchanged historical source, foreign effective source,
+closed revision window and active-service refusal. Filesystem reads use a private
+fixture tree and resource observations are simulated. No native unit preparation,
+candidate/backup creation, unit replacement, reload or daemon activation occurred.
+The operational transport and frozen revision-prepare recipe remain to be prepared.
+
 ### Current-boot /run parent: explicit dependency binding, synthetic verification
 
 New post-boot requests may explicitly supply `run_parent=bind_run_parent(...)`.

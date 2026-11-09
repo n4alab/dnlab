@@ -1,0 +1,14 @@
+id: 20261109-235240-prepare-unit-revision-from-the-original
+type: internal
+title: Prepare unit revision from the original current-session source
+description: Compose metadata-only unit revision preparation from completed post-boot
+  directory lineage, with a separate revision window, exact effective source binding
+  and explicit apply/recovery refusal.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
