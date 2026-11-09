@@ -247,6 +247,31 @@ operation occurred. This is additional evidence alongside the earlier 135-test
 run, not a combined full native qualification. The concrete host recipe and its
 separately authorized prepare/update remain pending.
 
+The native prepare-only entry is `tools/libvirt_configuration_prepare.py`.
+It refuses before loading a recipe without `--prepare-host`; the frozen private
+bundle binds all runtime/tool sources, nine original inputs and the entry hash.
+It checks the original boot/namespaces, installed journal hash/identity/record,
+systemctl/interpreter/worker binaries and prerequisite snapshot. Fixed systemctl
+show queries are readonly and have a five-second timeout. Target NSS identity
+and the original account lock/completion are observed by the existing readers;
+no shadow contents are exported. Worker arm/release and uncommitted outcome
+collection are explicitly disabled in the native runner.
+
+Only the revision prepare is reachable: the operation records tables and intent
+in the original journal, and writes private intent/report/lock artifacts. It does
+not stage, exchange or remove files, create accounts, reload/start services or
+connect to libvirt. The installed record stays unchanged; the journal's database
+bytes necessarily change when revision metadata is recorded. A second invocation
+cannot overwrite the first output directory. Changed context or journal has no
+discovery, adoption or retry fallback.
+
+Fourteen bootstrap/transport/temporary-SQLite tests pass. The package was built
+from archived inputs and current repo sources and checked without running its
+host body. Native prepare has not been executed. It requires separate consent
+and the agreed window without changes to accounts, libvirt/runtime configuration,
+packages or reboot. Guests can remain stable. This prepares neither a service
+activation nor a VM gate; apply/recovery authorization remains separate.
+
 `ServiceGenerationObserver` prepares typed validation of an already acknowledged
 daemon generation. It binds the original activation nonce and command completion
 to the installed unit/configuration, systemd invocation ID, nonroot process

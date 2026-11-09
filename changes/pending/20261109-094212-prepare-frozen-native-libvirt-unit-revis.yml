@@ -1,0 +1,15 @@
+id: 20261109-094212-prepare-frozen-native-libvirt-unit-revis
+type: internal
+title: Prepare frozen native libvirt unit revision recipe
+description: Add an explicit prepare-only entry with frozen source/input bindings,
+  original journal/context verification and disabled account worker execution. Preserve
+  failure diagnostics and readonly query limits. Verify14 synthetic bootstrap/transport/temporary-SQLite
+  cases; no native prepare, file replacement or service operation executed.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
