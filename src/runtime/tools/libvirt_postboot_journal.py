@@ -88,19 +88,27 @@ def open_postboot_journal(directory,installation,*,identity,initial_sha256,retai
             elif original_binding!=binding:
                 raise Conflict('original post-boot journal resume binding differs')
             check()
-            # mode=rw cannot create an absent database. No schema/PRAGMA writes
-            # precede the original logical identity/source checks.
             uri=Path('/proc/self/fd')/str(parent)/'journal.sqlite3'
+            def validate(database):
+                database.row_factory=sqlite3.Row
+                row=database.execute('SELECT identity FROM journal_identity WHERE singleton=1').fetchone()
+                if row is None or row['identity']!=identity:raise Conflict('original journal logical identity differs')
+                value=ExistingJournal(database,identity,gate,check)
+                source=SessionInstaller(value,None,readonly=True)
+                if source.read(installation['id'])!=installation:raise Conflict('original journal installation differs')
+                return value
+            if original_binding is None:
+                # Even a SELECT on a writable WAL connection can create sidecars.
+                # Initial state is hash-authenticated and has no pending journal,
+                # so inspect it immutable before retaining the original binding.
+                initial=sqlite3.connect(uri.as_uri()+'?mode=ro&immutable=1',uri=True,isolation_level=None)
+                try:validate(initial);check()
+                finally:initial.close()
+                retain(deepcopy(binding));check()
+            # Resume already has the durable original physical/source binding.
+            # mode=rw cannot create an absent database; validate again before DDL.
             db=sqlite3.connect(uri.as_uri()+'?mode=rw',uri=True,isolation_level=None)
-            db.row_factory=sqlite3.Row
-            row=db.execute('SELECT identity FROM journal_identity WHERE singleton=1').fetchone()
-            if row is None or row['identity']!=identity:raise Conflict('original journal logical identity differs')
-            journal=ExistingJournal(db,identity,gate,check)
-            source=SessionInstaller(journal,None,readonly=True)
-            if source.read(installation['id'])!=installation:raise Conflict('original journal installation differs')
-            check()
-            if original_binding is None:retain(deepcopy(binding))
-            check()
+            journal=validate(db);check()
             db.execute('PRAGMA synchronous=FULL')
             yield journal,deepcopy(binding)
             check()

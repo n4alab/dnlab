@@ -1,0 +1,14 @@
+id: 20261109-224354-retain-the-journal-binding-before-openin
+type: internal
+title: Retain the journal binding before opening a writable WAL connection
+description: Validate the initial hash-authenticated installation through readonly
+  immutable SQLite, retain its durable binding, then open writable and revalidate
+  identity/source before post-boot metadata transactions.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

@@ -126,3 +126,35 @@ def test_existing_journal_composes_prepare_delivery_and_explicit_resume(assembly
             assert SessionInstaller(journal,None,readonly=True).read(arguments['installation']['id'])==arguments['installation']
         assert files.calls==[] and retained==[binding]
     finally:os.close(fd)
+
+
+def test_wal_journal_retains_binding_before_creating_database_sidecars(original):
+    arguments,path,retained,_=original
+    with sqlite3.connect(path) as db:assert db.execute('PRAGMA journal_mode=WAL').fetchone()[0]=='wal'
+    db.close()
+    arguments['initial_sha256']=hashlib.sha256(path.read_bytes()).hexdigest()
+    def retain(binding):
+        assert not path.with_name(path.name+'-wal').exists(), 'WAL appeared before original binding was retained'
+        assert not path.with_name(path.name+'-shm').exists(), 'SHM appeared before original binding was retained'
+        retained.append(binding)
+    arguments['retain']=retain
+    with open_postboot_journal(**arguments):pass
+    assert len(retained)==1
+
+
+@pytest.mark.parametrize('fault',['identity','source','retention'])
+def test_initial_wal_refusals_never_create_sidecars(original,fault):
+    arguments,path,retained,_=original
+    with sqlite3.connect(path) as db:db.execute('PRAGMA journal_mode=WAL')
+    db.close();arguments['initial_sha256']=hashlib.sha256(path.read_bytes()).hexdigest()
+    raw=path.read_bytes()
+    if fault=='identity':arguments['identity']='0'*32
+    elif fault=='source':
+        arguments['installation']=deepcopy(arguments['installation']);arguments['installation']['phase']='foreign'
+    else:
+        def refuse(binding):raise OSError('synthetic binding durability failure')
+        arguments['retain']=refuse
+    with pytest.raises((Conflict,OSError)):
+        with open_postboot_journal(**arguments):pytest.fail('WAL connection enabled after initial refusal')
+    assert path.read_bytes()==raw and retained==[]
+    assert not path.with_name(path.name+'-wal').exists() and not path.with_name(path.name+'-shm').exists()

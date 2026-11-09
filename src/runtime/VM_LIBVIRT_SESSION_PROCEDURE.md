@@ -452,9 +452,11 @@ runtime refusal stayed unchanged.
 schema initialization. Under the journal execution gate and a supplied
 administrative-window verifier, the first open requires the archived database
 hash and no pending WAL/rollback journal. Original logical identity and installed
-record are checked before enabling metadata transactions. The caller must
-durably retain the original source/directory/database binding first; failure
-prevents metadata preparation. Explicit resume requires that same binding,
+record are first checked through readonly immutable SQLite, which cannot create
+WAL/SHM sidecars. The caller must then durably retain the original
+source/directory/database binding before any writable connection. Identity and
+source are checked again on that connection before metadata transactions.
+Failure prevents metadata preparation. Explicit resume requires that same binding,
 including device/inode, rather than reusing a database hash made stale by the
 prepare itself. Missing files, symlinks, changed source/identity and replacement
 files with identical bytes are refused. Window/path checks bracket transactions;
@@ -481,9 +483,29 @@ installation resources. Their first run had 36 passes and two refusals because
 the fixture added account-tool inputs after calculating its /run source binding.
 With user approval, only the fixture was corrected to calculate that binding
 after its synthetic inputs were complete; runtime guards stayed unchanged.
-Frozen recipe and operational qualification remain separate work. No live
-journal prepare, recovery, runtime directory, account operation or daemon/VM
-action occurred.
+`libvirt_postboot_prepare_host.py` now provides the explicit `--prepare-host`
+entry from seven frozen inputs and a complete runtime-source inventory. It
+records its invocation in a new private output, pins the reviewed systemctl
+binary for fixed readonly show queries with five-second timeouts, and uses the
+original-journal opener, prepare-only observer assembly and durable delivery.
+`--resume-output` accepts only the same output/recipe and original journal
+binding. Context expected/observed, query outcomes, diagnostics and per-attempt
+results are saved; conflicts do not launch an apply, recovery, account command,
+service action or VM. Qualification remains false: prepared metadata does not
+prove daemon readiness.
+
+Five entry tests pass using temporary SQLite and simulated context, binary,
+NSS/observer and query transports. They cover missing flag, prepare/reopen,
+response loss, context mismatch and changed inputs/wrong output. No native
+entry has been executed. A separate WAL regression initially failed: a writable
+SELECT created sidecars before binding retention. With user approval, the initial
+immutable preflight was added. The journal/entry suite now has 19 passes,
+including WAL retention ordering and refusal without sidecars for foreign
+identity/source or failed binding durability. The first frozen recipe is retained
+as historical and must not be run; a second recipe is regenerated from the same
+archived inputs with the corrected source inventory. Operational qualification
+and authorization remain outstanding. No live journal prepare, recovery,
+runtime directory, account operation or daemon/VM action occurred.
 
 ### Current-boot /run parent: explicit dependency binding, synthetic verification
 

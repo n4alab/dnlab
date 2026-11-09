@@ -1,0 +1,14 @@
+id: 20261109-222352-prepare-the-explicit-post-boot-metadata
+type: internal
+title: Prepare the explicit post-boot metadata host entry
+description: Add a frozen-recipe host entry for metadata-only post-boot preparation
+  with explicit authorization flag, original output/journal resume, readonly query
+  transport and per-attempt diagnostics.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
