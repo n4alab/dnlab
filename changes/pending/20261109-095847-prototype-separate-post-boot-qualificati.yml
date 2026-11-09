@@ -1,0 +1,16 @@
+id: 20261109-095847-prototype-separate-post-boot-qualificati
+type: internal
+title: Prototype separate post-boot qualification and historical account evidence
+description: 'Prepare a separate persistent-resource qualification with immutable
+  source/history and pending volatile state. Read original committed account command/worker/exit
+  records without current process adoption. Verification incomplete: the synthetic
+  no-host-access fixture currently blocks the temporary journal lock before historical
+  reads; no host collection or operational retry executed.'
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

@@ -284,6 +284,32 @@ post-boot qualification contract is needed before another operational attempt;
 the mismatch does not authorize adoption or recreation of persistent/volatile
 resources or reuse of historical process identities in the new context.
 
+### Separate post-boot qualification prototype (verification incomplete)
+
+The agreed contract preserves the original installed record and records a new
+qualification intent bound to the same host and an explicitly different boot.
+`HistoricalAccountCreation` validates the saved original account birth, command,
+worker outcome and durable exit chain as historical creation evidence. It does
+not inspect the old PID in the current boot or claim current process liveness.
+Current account identity remains a separate observation.
+
+`PostBootQualification` reobserves the complete persistent inventory twice with
+unchanged original proofs and static prerequisites, plus inactive services and
+no dedicated-UID processes. It records `persistent_qualified` separately from
+runtime readiness. All `/run` targets remain pending, whether absent or present;
+an old name/inode or a caller-supplied ready flag cannot qualify them. This first
+component neither recreates volatile resources nor supplies a new effective
+installation to the existing revision/activation paths. Those guards remain
+unchanged. Current-boot volatile recovery and its integration are still needed.
+
+The initial synthetic run has one pass and one failure before the remaining
+tests: the fixture denies all Python `os.open` calls, including acquisition of
+its own temporary journal execution lock. The failure precedes historical
+reads. Proposed test-only correction is to acquire the original fixture gate
+before enabling the no-open mock; runtime and lock validation stay unchanged.
+Verification is stopped pending user input. No new host collection, original
+journal access, native prepare, resource recreation or service operation occurred.
+
 `ServiceGenerationObserver` prepares typed validation of an already acknowledged
 daemon generation. It binds the original activation nonce and command completion
 to the installed unit/configuration, systemd invocation ID, nonroot process
