@@ -1,0 +1,15 @@
+id: 20261009-104918-prototype-stable-management-endpoint-han
+type: internal
+title: Prototype stable management endpoint handoff
+description: Add an isolated IPv4 management datapath prototype with durable handoff
+  and rollback, traffic probes and an opt-in vrnetlab management bootstrap transform.
+  Runtime deployment capabilities remain gated on NOS qualification.
+components:
+- image-build
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

@@ -199,6 +199,7 @@ def test_flinos_containerlab_mac_handles_missing_and_invalid_addresses(monkeypat
 
 def test_flinos_launcher_uses_reserved_management_mac_and_runtime_data_macs(monkeypatch):
     launcher = _load_flinos_launcher(monkeypatch)
+    monkeypatch.setenv("CLAB_MGMT_PASSTHROUGH", "true")
     addresses = {
         "/sys/class/net/eth0/address": "06:26:8e:73:32:7a\n",
         "/sys/class/net/eth1/address": "02:00:00:00:00:01\n",
@@ -230,6 +231,7 @@ def test_flinos_launcher_uses_reserved_management_mac_and_runtime_data_macs(monk
 
 def test_flinos_launcher_requires_containerlab_management_interface(monkeypatch):
     launcher = _load_flinos_launcher(monkeypatch)
+    monkeypatch.setenv("CLAB_MGMT_PASSTHROUGH", "true")
     monkeypatch.delenv("CLAB_MGMT_MAC", raising=False)
     monkeypatch.setattr(launcher, "containerlab_mac", lambda _index: None)
 
@@ -238,6 +240,7 @@ def test_flinos_launcher_requires_containerlab_management_interface(monkeypatch)
 
 def test_flinos_management_mac_falls_back_to_containerlab(monkeypatch):
     launcher = _load_flinos_launcher(monkeypatch)
+    monkeypatch.setenv("CLAB_MGMT_PASSTHROUGH", "true")
     monkeypatch.delenv("CLAB_MGMT_MAC", raising=False)
     monkeypatch.setattr(launcher, "containerlab_mac", lambda index: "06:26:8e:73:32:7a" if index == 0 else None)
 
@@ -246,7 +249,26 @@ def test_flinos_management_mac_falls_back_to_containerlab(monkeypatch):
 
 def test_flinos_management_mac_rejects_invalid_reservation(monkeypatch):
     launcher = _load_flinos_launcher(monkeypatch)
+    monkeypatch.setenv("CLAB_MGMT_PASSTHROUGH", "true")
     monkeypatch.setenv("CLAB_MGMT_MAC", "not-a-mac")
 
     with pytest.raises(RuntimeError, match="invalid CLAB_MGMT_MAC"):
         launcher.FlinosVM().gen_mgmt()
+
+
+@pytest.mark.parametrize("value", [None, "false", "FALSE"])
+def test_flinos_disabled_passthrough_uses_upstream_nat_without_management_tap(monkeypatch, value):
+    launcher = _load_flinos_launcher(monkeypatch)
+    if value is None:
+        monkeypatch.delenv("CLAB_MGMT_PASSTHROUGH", raising=False)
+    else:
+        monkeypatch.setenv("CLAB_MGMT_PASSTHROUGH", value)
+    monkeypatch.setenv("CLAB_MGMT_MAC", "invalid-and-unused-in-nat-mode")
+    expected = ["-netdev", "user,id=p00,net=10.0.0.0/24"]
+    monkeypatch.setattr(launcher.vrnetlab.VM, "gen_mgmt", lambda _self: expected, raising=False)
+
+    def forbidden_tap(_self):
+        raise AssertionError("NAT management must not create the management tap")
+
+    monkeypatch.setattr(launcher.vrnetlab.VM, "create_tc_tap_ifup", forbidden_tap)
+    assert launcher.FlinosVM().gen_mgmt() == expected

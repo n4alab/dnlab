@@ -105,7 +105,7 @@ KIND_VRNETLAB_DIR: dict[str, list[str]] = {
     "sonic-vm":           ["sonic"],
     "openwrt":            ["openwrt_V2"],
     "nvidia_cumulusvx":   ["nvidia/cumulusvx"],
-    "hp_vsr1000":         ["hp/vsr1000_V2", "hp/vsr1000"],
+    "hp_vsr1000":         ["hp/vsr1000_V2"],
     "f5_bigip":           ["f5_bigip"],
     "freebsd":            ["freebsd"],
     "ubuntu":             ["ubuntu"],

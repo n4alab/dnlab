@@ -1,0 +1,13 @@
+id: 20261009-123239-require-the-v2-builder-for-hp-vsr1000
+type: bugfix
+title: Require the V2 builder for HP VSR1000
+description: Fail explicitly when the HP VSR1000 V2 source directory is missing instead
+  of silently selecting the legacy builder.
+components:
+- image-build
+audience:
+- admin
+visibility: public
+breaking: false
+upgrade_notes: []
+references: []

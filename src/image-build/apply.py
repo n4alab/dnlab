@@ -96,7 +96,14 @@ def _build_patched(
     generated_at: str,
     warm_profile: dict[str, int | bool] | None,
     warm_status: str,
+    runtime_management: bool = False,
+    runtime_management_python: str | None = None,
+    runtime_selected_management: bool = False,
 ) -> None:
+    if runtime_management and runtime_management_python not in {'system', 'uv'}:
+        raise ValueError('runtime candidate requires an explicit Python profile')
+    if runtime_selected_management and (not runtime_management or kind != 'cisco_vios' or not warm_profile):
+        raise ValueError('selected management requires the experimental vIOS warm candidate')
     dockerfile = build_dir / "Dockerfile"
     notice = build_dir / "DERIVED_IMAGE_NOTICE.md"
     notice.write_text(
@@ -130,6 +137,13 @@ def _build_patched(
         "org.dnlab.patch.notice": DERIVED_NOTICE_PATH,
     }
     capabilities: list[str] = []
+    if runtime_management:
+        capabilities.append("runtime-management-v1")
+        labels["org.dnlab.runtime-management.status"] = "experimental-unqualified"
+        labels["org.dnlab.runtime-management.python"] = runtime_management_python
+    if runtime_selected_management:
+        capabilities.append('runtime-selected-management-v1')
+        labels['org.dnlab.runtime-selected-management.status'] = 'experimental-unqualified'
     if warm_profile:
         capabilities.append("warm-links-v1")
         labels.update({
@@ -148,6 +162,10 @@ def _build_patched(
     lines.append("")
     for target_path, local_file in patched_files.items():
         lines.append(f"COPY {local_file.name} {target_path}")
+    if runtime_selected_management:
+        selected_source = Path(__file__).parent / 'runtime_selected_management.py'
+        shutil.copy2(selected_source, build_dir / selected_source.name)
+        lines.append(f'COPY {selected_source.name} /{selected_source.name}')
     if warm_profile:
         shutil.copy2(LINKCTL_SOURCE, build_dir / LINKCTL_SOURCE.name)
         shutil.copy2(LINKCTL_PY_SOURCE, build_dir / LINKCTL_PY_SOURCE.name)
@@ -171,7 +189,21 @@ def main() -> int:
     ap.add_argument("--tag-suffix", default=TAG_SUFFIX_DEFAULT)
     ap.add_argument("--dry-run", action="store_true",
                     help="Extract + patch files and print the resulting diff; do not build.")
+    ap.add_argument("--runtime-management", action="store_true",
+                    help="Experimental stable-interface/boot-barrier ABI; requires a separate tag suffix.")
+    ap.add_argument("--runtime-management-python", choices=("system", "uv"),
+                    help="Candidate helper interpreter: system Python or offline uv environment.")
+    ap.add_argument('--runtime-selected-management', action='store_true',
+                    help='Experimental single-VM vIOS selected-slot ABI; requires runtime management.')
     args = ap.parse_args()
+    if args.runtime_management and args.tag_suffix in ("", TAG_SUFFIX_DEFAULT):
+        ap.error("--runtime-management requires a separate --tag-suffix (e.g. -runtime-spike)")
+    if args.runtime_management and not args.runtime_management_python:
+        ap.error("--runtime-management requires --runtime-management-python")
+    if args.runtime_management_python and not args.runtime_management:
+        ap.error("--runtime-management-python requires --runtime-management")
+    if args.runtime_selected_management and (not args.runtime_management or args.kind != 'cisco_vios'):
+        ap.error('--runtime-selected-management requires --runtime-management and kind cisco_vios')
 
     sys.path.insert(0, str(Path(__file__).parent))
     try:
@@ -186,6 +218,13 @@ def main() -> int:
               file=sys.stderr)
         return 2
 
+    if args.runtime_management:
+        inspected = json.loads(_run(["docker", "image", "inspect", args.image], capture=True).stdout)
+        labels = inspected[0].get("Config", {}).get("Labels") or {}
+        if labels.get("org.dnlab.patch.kind"):
+            print("error: experimental runtime patch requires an unpatched upstream image", file=sys.stderr)
+            return 2
+
     out_tag = f"{args.image}{args.tag_suffix}"
     upstream_identity = _image_identity(args.image)
     dnlab_version = os.getenv("DNLAB_VERSION", "unknown")
@@ -195,8 +234,10 @@ def main() -> int:
     with tempfile.TemporaryDirectory(prefix="dnlab-image-build-") as td:
         build_dir = Path(td)
         warm_profile = warm_links.profile_for(args.kind, args.image)
+        if args.runtime_selected_management and not warm_profile:
+            raise RuntimeError('selected management requires the vIOS warm profile')
         targets = list(mod.FILES)
-        if warm_profile and "/vrnetlab.py" not in targets:
+        if (warm_profile or args.runtime_management) and "/vrnetlab.py" not in targets:
             targets.append("/vrnetlab.py")
         _extract_files(args.image, targets, build_dir)
 
@@ -204,6 +245,8 @@ def main() -> int:
         for target in targets:
             local = build_dir / Path(target).name
             original = local.read_text()
+            if args.runtime_management and "# dnlab-patched:" in original:
+                raise RuntimeError(f"{target}: rebuild the runtime candidate from unpatched upstream sources")
             if target in mod.FILES:
                 new_text, notes = mod.apply(target, original)
             else:
@@ -216,6 +259,23 @@ def main() -> int:
                         f"{target}: warm-link anchors not found; update patches/_common.py"
                     )
                 notes.append(f"{target}: warm-links-v1 applied")
+            if target == "/vrnetlab.py" and args.runtime_management:
+                from patches import _common
+                new_text, ok = _common.patch_runtime_management(new_text)
+                if not ok:
+                    raise RuntimeError(f"{target}: runtime-management anchors not found")
+                notes.append(f"{target}: experimental runtime-management-v1 ABI applied")
+            if target == '/vrnetlab.py' and args.runtime_selected_management:
+                new_text, ok = _common.patch_runtime_selected_management(new_text)
+                if not ok:
+                    raise RuntimeError(f'{target}: selected-management anchors not found')
+                notes.append(f'{target}: experimental runtime-selected-management-v1 ABI applied')
+            if target == "/launch.py" and (args.runtime_management or args.kind in {"cisco_n9kv", "cisco_vios"}):
+                from patches import _common
+                new_text, ok = _common.patch_launcher_constructor(new_text, (build_dir / "vrnetlab.py").read_text())
+                if not ok:
+                    raise RuntimeError(f"{target}: unsupported launcher/common constructor ABI")
+                notes.append(f"{target}: launcher/common constructor ABI checked")
             for n in notes:
                 print(f"  {n}", file=sys.stderr)
             if new_text != original:
@@ -239,6 +299,9 @@ def main() -> int:
             generated_at=generated_at,
             warm_profile=warm_profile,
             warm_status=warm_links.validation_status(args.image, upstream_identity),
+            runtime_management=args.runtime_management,
+            runtime_management_python=args.runtime_management_python,
+            runtime_selected_management=args.runtime_selected_management,
         )
 
     print(f"built {out_tag}", file=sys.stderr)

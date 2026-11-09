@@ -1,0 +1,16 @@
+id: 20261009-123122-correct-experimental-nos-launcher-constr
+type: bugfix
+title: Fix n9kv and vIOS launcher constructor compatibility
+description: Remove the retired use_scrapli=True keyword when the shared VM constructor
+  no longer accepts it, preventing n9kv and vIOS images rebuilt from the release source
+  lock from exiting before guest boot. Preserve the argument when the shared constructor
+  still supports it.
+components:
+- image-build
+- runtime
+audience:
+- developer
+visibility: public
+breaking: false
+upgrade_notes: []
+references: []

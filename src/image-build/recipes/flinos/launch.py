@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Persistent, fixed-port FLiNOS launcher for dNLab/Containerlab.
 
-The base VM provides one management NIC (tap0 <-> eth0).  This launcher adds
+The base VM provides one management NIC (tap0 <-> eth0 only with passthrough).
+Otherwise management uses QEMU user networking. This launcher adds
 exactly eight data NICs (tap1..tap8 <-> eth1..eth8), matching the catalog.
 The recipe patches vrnetlab's overlay path to /persist/overlay.qcow2.
 """
@@ -60,6 +61,8 @@ class FlinosVM(vrnetlab.VM):
         self.conn_mode = "tc"
 
     def gen_mgmt(self) -> list[str]:
+        if os.environ.get("CLAB_MGMT_PASSTHROUGH", "false").lower() != "true":
+            return super().gen_mgmt()
         self.create_tc_tap_ifup()
         mac = management_mac()
         return [

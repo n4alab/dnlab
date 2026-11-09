@@ -1,0 +1,16 @@
+id: 20261027-004827-document-opnsense-launcher-shutdown-inve
+type: none
+title: Document OPNsense launcher shutdown investigation
+description: Record read-only incident evidence, launcher lifecycle findings, and
+  proposed remediation without changing runtime behavior.
+components:
+- image-build
+- multinode
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
+reason: Diagnostic documentation only; no implementation, image, disk, or runtime
+  changes.

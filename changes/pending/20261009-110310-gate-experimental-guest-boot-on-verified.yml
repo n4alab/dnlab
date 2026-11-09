@@ -1,0 +1,15 @@
+id: 20261009-110310-gate-experimental-guest-boot-on-verified
+type: internal
+title: Gate experimental guest boot on verified management setup
+description: Add an opt-in tracked Docker exec bootstrap release with a per-container-boot
+  readiness marker, native restart probe, and pinned-source NOS candidate preparation.
+  Production NOS capabilities remain disabled.
+components:
+- image-build
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

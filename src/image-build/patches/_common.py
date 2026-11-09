@@ -40,6 +40,109 @@ _PROVENANCE_MARKER = "# dnlab-patched: persist-overlay-v1"
 
 _OPTIONAL_IPV6_MARKER = "# dnlab-patched: optional-mgmt-ipv6-v1"
 _WARM_LINK_MARKER = "# dnlab-patched: warm-links-v1"
+_RUNTIME_MGMT_MARKER = "# dnlab-patched: runtime-management-v1"
+
+
+def patch_launcher_constructor(text: str, common_text: str) -> tuple[str, bool]:
+    """Adapt the retired true-only scrapli keyword to the supplied common ABI."""
+    import ast
+    tree = ast.parse(common_text)
+    vm = next((node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "VM"), None)
+    constructor = next((node for node in vm.body if isinstance(node, ast.FunctionDef) and node.name == "__init__"), None) if vm else None
+    if constructor is None:
+        return text, False
+    if constructor.args.kwarg or any(arg.arg == "use_scrapli" for arg in constructor.args.args + constructor.args.kwonlyargs):
+        return text, True
+    marker = "# dnlab-patched: scrapli-constructor-abi-v1"
+    if marker in text:
+        return text, True
+    calls = [node for node in ast.walk(ast.parse(text)) if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "__init__" and isinstance(node.func.value, ast.Call) and isinstance(node.func.value.func, ast.Name) and node.func.value.func.id == "super"]
+    keywords = [kw for node in calls for kw in node.keywords if kw.arg == "use_scrapli"]
+    if not keywords:
+        return text, True
+    anchor = "            use_scrapli=True,"
+    if len(keywords) != 1 or not isinstance(keywords[0].value, ast.Constant) or keywords[0].value.value is not True or text.splitlines().count(anchor) != 1:
+        return text, False
+    return text.replace(anchor, "            " + marker, 1), True
+
+
+def patch_runtime_management(text: str) -> tuple[str, bool]:
+    """Opt-in stable management ABI for runtime qualification candidates.
+
+    Applied only by the explicit experimental build option. Without runtime environment
+    variables, address discovery and startup behavior remain the legacy path.
+    """
+    if _RUNTIME_MGMT_MARKER in text:
+        return text, True
+    interface_anchor = '        self.mgmt_intf = os.environ.get("CLAB_MGMT_INTF", mgmt_intf)'
+    address_anchor = '["ip", "--json", "address", "show", "dev", "eth0"]'
+    if text.count(interface_anchor) != 1 or text.count(address_anchor) != 1:
+        return text, False
+    replacement = '''        # dnlab-patched: runtime-management-v1
+        runtime_mgmt = os.environ.get("DNLAB_RUNTIME_MGMT_INTF", "")
+        if runtime_mgmt and not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,14}", runtime_mgmt):
+            raise ValueError("Invalid DNLAB_RUNTIME_MGMT_INTF")
+        self.mgmt_intf = runtime_mgmt or os.environ.get("CLAB_MGMT_INTF", mgmt_intf)
+        if os.environ.get("DNLAB_RUNTIME_BOOT_WAIT", "").lower() == "true":
+            if not runtime_mgmt:
+                raise ValueError("Runtime boot wait requires a stable management interface")
+            timeout = float(os.environ.get("DNLAB_RUNTIME_BOOT_TIMEOUT", "120"))
+            if not 0 < timeout <= 900:
+                raise ValueError("Invalid DNLAB_RUNTIME_BOOT_TIMEOUT")
+            deadline = time.monotonic() + timeout
+            with open("/proc/1/stat") as runtime_stat:
+                runtime_boot = runtime_stat.read().rsplit(")", 1)[1].split()[19]
+            while True:
+                try:
+                    with open("/run/dnlab-runtime/management-ready") as runtime_ready:
+                        if runtime_ready.read().strip() == runtime_boot:
+                            break
+                except FileNotFoundError:
+                    pass
+                if time.monotonic() >= deadline:
+                    raise RuntimeError("Runtime management preparation timed out before guest boot")
+                time.sleep(0.1)'''
+    text = text.replace(interface_anchor, replacement, 1)
+    text = text.replace(address_anchor, '["ip", "--json", "address", "show", "dev", self.mgmt_intf if os.environ.get("DNLAB_RUNTIME_MGMT_INTF") else "eth0"]', 1)
+    return text, True
+
+
+def patch_runtime_selected_management(text: str) -> tuple[str, bool]:
+    """Wire the separate vIOS selected-slot ABI after stable/warm transforms."""
+    import ast
+    marker = '# dnlab-patched: runtime-selected-management-v1'
+    if marker in text:
+        return text, True
+    if _RUNTIME_MGMT_MARKER not in text or _WARM_LINK_MARKER not in text:
+        return text, False
+    tree = ast.parse(text)
+    vm = next((node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == 'VM'), None)
+    methods = {node.name for node in vm.body if isinstance(node, ast.FunctionDef)} if vm else set()
+    if not {'gen_mgmt', 'gen_nics', 'create_tc_tap_mgmt_ifup'} <= methods:
+        return text, False
+    initial = '            for index in range(1, warm_ports + 1):\n                monitor_command(f"set_link p{index:02d} off")'
+    request = '        match = _re.fullmatch(r"eth([1-9][0-9]*)", iface)'
+    guard = '        index = int(match.group(1))\n        if index > warm_ports:'
+    anchor = '\nclass QemuBroken'
+    if any(text.count(value) != 1 for value in (initial, request, guard, anchor)):
+        return text, False
+    text = text.replace(initial, '''            selected_slot = getattr(vm, "dnlab_selected_management_slot", None)
+            indexes = range(1, warm_ports + 1)
+            if selected_slot is not None:
+                from runtime_selected_management import data_carrier_slots
+                indexes = data_carrier_slots(slot=selected_slot, warm_ports=warm_ports)
+            for index in indexes:
+                monitor_command(f"set_link p{index:02d} off")''', 1)
+    text = text.replace(request, '''        selected_slot = getattr(vm, "dnlab_selected_management_slot", None)
+        pattern = r"eth(0|[1-9][0-9]*)" if selected_slot is not None else r"eth([1-9][0-9]*)"
+        match = _re.fullmatch(pattern, iface)''', 1)
+    text = text.replace(guard, '''        index = int(match.group(1))
+        if selected_slot is not None:
+            from runtime_selected_management import validate_data_carrier_slot
+            validate_data_carrier_slot(index, slot=selected_slot, warm_ports=warm_ports)
+        if index > warm_ports:''', 1)
+    installation = '\n' + marker + '\nfrom runtime_selected_management import install as _dnlab_install_selected_management\n_dnlab_install_selected_management(VM, VR)\n'
+    return text.replace(anchor, installation + anchor, 1), True
 
 
 def patch_persist_overlay(text: str) -> tuple[str, bool]:

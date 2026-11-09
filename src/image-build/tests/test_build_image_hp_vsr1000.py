@@ -28,3 +28,10 @@ def test_hp_vsr1000_persistent_build_accepts_qco_and_applies_patch(monkeypatch, 
         build_image.sys.executable, str(build_image.APPLY_SCRIPT), "hp_vsr1000",
         "vrnetlab/hp_vsr1000:7.10-R0633",
     ] in calls
+
+
+def test_hp_vsr1000_missing_v2_does_not_select_legacy_builder(tmp_path):
+    import pytest
+    (tmp_path / "hp" / "vsr1000").mkdir(parents=True)
+    with pytest.raises(SystemExit, match="vsr1000_V2"):
+        build_image.resolve_vrnetlab_dir("hp_vsr1000", tmp_path)

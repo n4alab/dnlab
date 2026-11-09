@@ -1,0 +1,14 @@
+id: 20261024-124254-document-generic-vm-cpu-and-ram-override
+type: internal
+title: Document generic VM CPU and RAM override mismatch
+description: Describe the verified mismatch between VCPU/RAM and the QEMU resource
+  variables, the proposed launcher fix, acceptance tests and image rollout without
+  applying runtime or source changes.
+components:
+- image-build
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

@@ -1,0 +1,19 @@
+id: 20261024-141738-honor-generic-vm-per-node-cpu-and-ram-ov
+type: bugfix
+title: Honor generic VM per-node CPU and RAM overrides
+description: Resolve VCPU and RAM before QEMU construction in the generic VM launcher,
+  with numeric QEMU aliases as fallback and the build profile as final default. Validate
+  bounds and normalize the aliases so older vrnetlab properties cannot override the
+  requested node resources.
+components:
+- image-build
+audience:
+- operator
+- user
+visibility: public
+breaking: false
+upgrade_notes:
+- Rebuild affected generic VM Docker images and recreate nodes from the new image
+  while preserving persistent storage. Restarting an existing container does not update
+  its launcher; no wipe or QCOW2 regeneration is required.
+references: []

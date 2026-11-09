@@ -1,0 +1,17 @@
+id: 20261012-081010-prepare-vios-selected-management-slot-so
+type: internal
+title: Prepare vIOS selected management slot source helpers
+description: Add experimental source-build helpers that preserve QEMU PCI and backend
+  identities while selecting a vIOS management slot, require a separate data MAC for
+  p00, retarget the management TC script and exclude the reserved slot from data carrier
+  control. Wire the helpers through a separate experimental vIOS build option and
+  validate the single-VM TC profile before QEMU starts. Production runtime APIs
+  continue to reject unqualified NOS kinds.
+components:
+- image-build
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
