@@ -72,6 +72,8 @@ class ConfigurationSession:
         keys=('id','installation','source_sha256','plan','nonce','staging','backup','window_sha256')
         if any(current[key]!=reference.get(key) for key in keys):
             raise Conflict('original prepared revision binding differs')
+        if current.get('predecessor')!=reference.get('predecessor'):
+            raise Conflict('original prepared revision predecessor differs')
         return current
 
     def apply_original(self,reference):

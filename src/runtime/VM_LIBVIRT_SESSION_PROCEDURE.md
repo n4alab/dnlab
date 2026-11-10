@@ -1730,3 +1730,36 @@ pass. Unit resource observations in the latter are synthetic; the new host
 entry has not been executed and no new host state was read to prepare its recipe.
 The recipe context comes only from the saved failed apply. Native observation
 requires separate consent; subsequent recovery depends on its actual evidence.
+
+## Explicit retirement of a prepared unit revision — synthetic only
+
+A unit revision left prepared in an earlier boot can now be explicitly retired
+after the new boot's directory qualification/recovery is complete. Its original
+payload and fingerprint remain unchanged. Separate append-only retirement
+receipts bind the original reference, current effective source, window and
+observed absence of its candidate and backup. Started/uncertain or completed
+revisions cannot retire through this operation. Retry requires the same receipt;
+a lost response does not repeat a filesystem operation.
+
+CurrentConfigurationSession supplies the complete current preflight: accounts,
+persistent and recovered directory proofs, inactive services, the original unit
+birth and readonly absence checks of both historical paths. It rechecks this
+before committing retirement metadata. No missing directory can be adopted or
+recreated by retirement. The old revision remains readable as history, while
+prepare/apply/recovery/effective actions with that retired ID are refused.
+
+The original unique legacy revision table is retained unchanged. Successor
+records use a separate generations table and include the predecessor ID and
+retirement fingerprint. Preparation requires the exact current source from
+CurrentSessionView; that view requires completed current-boot directory recovery.
+Only one non-retired revision can proceed under the original execution gate.
+Original binding checks also bind the predecessor metadata. No legacy row is
+moved, rewritten or implicitly reactivated.
+
+Nineteen synthetic retirement/core tests, fourteen targeted current-session and
+existing unit tests, and one additional predecessor-binding test pass. Resource
+and replacement leaves are synthetic; absence checks use private temporary
+paths. There is no native retirement entry or operational recipe yet, and no
+installation journal, directory, unit or service was changed. The existing
+native revision is still only historically prepared; these tests do not retire
+it or authorize another apply.

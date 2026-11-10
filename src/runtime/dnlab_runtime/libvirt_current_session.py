@@ -6,7 +6,7 @@ volatile directories use the completed current-boot recovery creator.
 """
 from copy import deepcopy
 
-from .libvirt_configuration import ConfigurationRevision,UNIT
+from .libvirt_configuration import ConfigurationRevision,UNIT,compile_revision
 from .libvirt_configuration_adapter import ConfigurationFileAdapter
 from .libvirt_configuration_preflight import ConfigurationPreflight
 from .libvirt_configuration_session import ConfigurationSession
@@ -118,7 +118,28 @@ class CurrentConfigurationSession(ConfigurationSession):
                     or Path(files.root)!=Path(view.files.root)):
                 raise Conflict('separate revision capability must use the original journal and filesystem root')
         self.adapter=ConfigurationFileAdapter(files,window=window,preflight=self.preflight)
-        self.driver=ConfigurationRevision(self.journal,self.adapter,window=window)
+        self.driver=ConfigurationRevision(self.journal,self.adapter,window=window,generation_source=view.read)
+
+    def retire_original(self,reference,*,window):
+        """Retire only untouched historical metadata after current recovery."""
+        import os
+        from .libvirt_configuration_retirement import ConfigurationRetirement
+        def observe(old,source):
+            self._source()
+            request=dict(installation=source,source_sha256=fingerprint(source),plan=compile_revision(source))
+            self.preflight(request)
+            unit=self.preflight.files.observe(request['plan']['source_item'],source['id'])
+            for path in (old['staging'],old['backup']):
+                with self.view.files._parent(path) as (parent,name):
+                    try:os.stat(name,dir_fd=parent,follow_symlinks=False)
+                    except FileNotFoundError:continue
+                    raise Conflict('historical unit candidate or backup is present')
+            self.preflight(request);self._source()
+            return dict(context=deepcopy(source['context']),current_source_sha256=fingerprint(source),
+                original_unit=unit,staging=dict(path=old['staging'],state='absent'),
+                backup=dict(path=old['backup'],state='absent'),services_inactive=True)
+        retirement=ConfigurationRetirement(self.driver,source_reader=self.view.read,observer=observe,window=window)
+        return retirement.retire(window.receipt['operation_id'],reference)
 
     def _source(self):
         if self.journal.identity!=self.journal_identity or self.view.read()!=self.original:

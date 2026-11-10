@@ -1,0 +1,14 @@
+id: 20261110-095219-retire-untouched-libvirt-unit-revisions
+type: internal
+title: Retire untouched libvirt unit revisions before a new boot generation
+description: Preserve original revision payloads with separate retirement receipts,
+  reject retired action IDs and require completed current-directory lineage before
+  preparing a linked replacement generation.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
