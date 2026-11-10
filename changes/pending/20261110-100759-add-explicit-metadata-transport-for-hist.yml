@@ -1,0 +1,14 @@
+id: 20261110-100759-add-explicit-metadata-transport-for-hist
+type: internal
+title: Add explicit metadata transport for historical libvirt unit retirement
+description: Bind retirement to the completed current-directory source, original historical
+  reference and separate window, preserving durable output replay without filesystem
+  or service actions.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

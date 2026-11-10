@@ -1785,3 +1785,26 @@ prepare, retained-binding prepare/replay, response loss and rejection of a forei
 binding without database changes. Native observers/query transports remain
 simulated; the new-cycle native recipe has not been executed. Its expected
 context and /run parent identity come from the saved readonly observation only.
+
+## Explicit host retirement transport — prepared, not executed
+
+`tools/libvirt_postboot_unit_retire_host.py` requires `--retire-host` and a frozen
+twelve-input recipe. `PostBootUnitRetirement` binds the completed current
+runtime-directory source and original historical prepared unit reference before
+retiring. Its window is distinct and current; the completed directory window
+stays closed. The entry exposes no new unit prepare, staging, replacement,
+directory action, account command, reload/start or libvirt connection.
+
+Successful output retains the retirement receipt durably. Explicit output resume
+checks the exact original invocation and receipt; response loss resumes the
+original retirement, with the historical payload unchanged. Fixed pinned
+systemctl-show queries have a five-second timeout and retained diagnostics;
+context mismatches are saved before any journal open or query. The result stays
+metadata-only and daemon_ready=false.
+
+Five synthetic host-entry tests pass in19.06s: retirement/replay, lost response,
+foreign historical reference, explicit flag and context refusal. They use real
+temporary SQLite retirement records and private path absence, with host resource,
+NSS, context and systemctl leaves simulated. The original native unit revision
+has not been retired by these tests, and no successor revision was prepared.
+The native recipe requires separate operational consent and complete preflight.
