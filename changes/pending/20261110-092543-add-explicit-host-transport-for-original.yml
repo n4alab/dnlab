@@ -1,0 +1,13 @@
+id: 20261110-092543-add-explicit-host-transport-for-original
+type: internal
+title: Add explicit host transport for original libvirt unit revision
+description: Dispatch apply and recovery through the original prepared unit reference
+  with retained journal binding, scoped file capability and durable action reports.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

@@ -1679,3 +1679,26 @@ UID-restricted sandbox solely for ownership of new private temporary fixture
 directories; accounts remain simulated. No account command, host installation,
 unit update, daemon start or VM was performed. The real renderer/profile remains
 qualified=false pending the later native/operational checks.
+
+## Current-session unit apply/recovery host transport — not executed
+
+The explicit host entry `tools/libvirt_postboot_unit_action_host.py` accepts
+mutually exclusive `--apply-host` and `--recover-host`. Twelve frozen inputs
+include the original prepared unit reference, journal binding, effective
+post-boot source and distinct unit window. Apply and recovery use separate
+private output directories and cannot prepare another revision or mutate the
+completed directory operation. Only the fixed, pinned systemctl-show query is
+exposed; no reload/start, account command or libvirt connection is performed by
+this entry. Successful output retains the effective revised source with
+`daemon_ready=false`; errors preserve the original cause without automatic
+recovery or rollback.
+
+Five transport tests pass in17.96s using temporary SQLite, real reference
+validation and simulated unit transitions. They cover explicit flags, replay,
+lost-response recovery dispatch, foreign original references and context
+refusal before queries/actions. They do not qualify native unit replacement.
+The first run had four passes and one fixture failure: the run mock remained
+active for the invalid-action assertion. Only the test restored the original
+function before that assertion; transport and guards remained unchanged.
+Both test logs are retained. A frozen native recipe requires separate consent
+and complete preflight before any staging, exchange or backup on the host.
