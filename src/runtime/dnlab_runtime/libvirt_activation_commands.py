@@ -143,7 +143,11 @@ class ActivationCommands:
             value=self._read(item,operation)
             if value is None or value['phase'] not in ('release_requested','completed'):
                 raise Conflict('original released activation command required; no arm or release on recovery')
-            self._check(value,item);result=self._outcome(value)
+            # Observe only the already released original worker first. Its exit
+            # evidence may be needed by the progressive-service preflight.
+            # _outcome still verifies its bound reference/process/context and
+            # cannot arm or release a worker. No operation is confirmed here.
+            result=self._outcome(value)
             if result is None:raise Conflict('original activation command outcome pending')
             if value['phase']=='completed' and result!=value['outcome']:raise Conflict('original activation outcome changed')
             self._check(value,item)

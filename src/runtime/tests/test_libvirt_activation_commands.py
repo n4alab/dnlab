@@ -136,3 +136,57 @@ def test_original_completion_is_readonly_and_does_not_recurse_into_resource_pref
     before=helper.journal.db.total_changes
     assert helper.original_completion(item,value['id'])==proof
     assert helper.journal.db.total_changes==before and state['calls']==['arm','release']
+
+
+def test_recovery_collects_original_exit_before_progressive_service_preflight(command,monkeypatch):
+    helper,value,state=command;item=value['items'][0];state['missing']=True
+    with pytest.raises(Conflict,match='pending'):helper.execute(item,value['id'])
+    state['outcome']=dict(reference=deepcopy(state['reference']),exit_code=0,stdout='',stderr='')
+    collected=[];read=helper.runner.outcome;preflight=helper.preflight
+    def collect(reference):
+        result=read(reference);collected.append(True);return result
+    def completed(reference):return deepcopy(state['outcome']) if collected else None
+    def active(plan):
+        if helper.original_completion(item,value['id']) is None:
+            raise Conflict('synthetic active service awaits original worker exit evidence')
+        return preflight(plan)
+    monkeypatch.setattr(helper.runner,'outcome',collect)
+    monkeypatch.setattr(helper.runner,'completed_outcome',completed,raising=False)
+    monkeypatch.setattr(helper,'preflight',active)
+    assert helper.recover(item,value['id'])['exit_code']==0
+    assert collected and state['calls']==['arm','release']
+
+
+def test_recovery_keeps_command_pending_when_preflight_rejects_after_collection(command,monkeypatch):
+    helper,value,state=command;item=value['items'][0];state['missing']=True
+    with pytest.raises(Conflict,match='pending'):helper.execute(item,value['id'])
+    state['outcome']=dict(reference=deepcopy(state['reference']),exit_code=0,stdout='',stderr='')
+    saved=helper._read(item,value['id']);collected=[];read=helper.runner.outcome
+    def collect(reference):collected.append(True);return read(reference)
+    def reject(plan):raise Conflict('synthetic full resource preflight conflict')
+    monkeypatch.setattr(helper.runner,'outcome',collect);monkeypatch.setattr(helper,'preflight',reject)
+    with pytest.raises(Conflict,match='full resource preflight conflict'):helper.recover(item,value['id'])
+    assert collected==[True] and helper._read(item,value['id'])==saved
+    assert state['calls']==['arm','release']
+
+
+@pytest.mark.parametrize('fault',['worker','context','reference'])
+def test_recovery_cannot_confirm_unqualified_original_outcome(command,monkeypatch,fault):
+    helper,value,state=command;item=value['items'][0];state['missing']=True
+    with pytest.raises(Conflict,match='pending'):helper.execute(item,value['id'])
+    state['outcome']=dict(reference=deepcopy(state['reference']),exit_code=0,stdout='',stderr='')
+    saved=helper._read(item,value['id']);reads=[];read=helper.runner.outcome
+    def collect(reference):reads.append(True);return read(reference)
+    monkeypatch.setattr(helper.runner,'outcome',collect)
+    if fault=='worker':state['verified']=False
+    elif fault=='context':
+        value['installation']['context']['boot_id']='foreign'
+        value['installation_sha256']=fingerprint(value['installation'])
+    else:state['outcome']['reference']['token']='0'*32
+    with pytest.raises(Conflict):helper.recover(item,value['id'])
+    if fault in ('worker','context'):assert reads==[]
+    else:assert reads==[True]
+    if fault=='context':
+        value['installation']['context']['boot_id']=saved['context']['boot_id']
+        value['installation_sha256']=fingerprint(value['installation'])
+    assert helper._read(item,value['id'])==saved and state['calls']==['arm','release']

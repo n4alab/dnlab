@@ -1,0 +1,14 @@
+id: 20261110-153925-collect-original-activation-worker-outco
+type: internal
+title: Collect original activation worker outcome before recovery preflight
+description: Observe only an already released worker through its original reference
+  and context before progressive-service resource preflight, preserving pending state
+  and prohibiting arm/release retries.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

@@ -1973,3 +1973,20 @@ cases with fake Popen/observer and synthetic procfs/pidfd/poll. No real child,
 process inspection, systemctl, reload/start or service mutation occurred. Native
 source/interpreter/bin qualification, progressive assembly and an explicitly
 authorized host canary remain pending; these tests do not establish host readiness.
+
+## Activation command recovery: collect original exit before full preflight
+
+Explicit recovery now observes only the already released original worker first.
+Original activation/command binding, worker reference/context and runner process
+verification remain mandatory before collecting its outcome. This observation
+cannot arm/release or adopt a process. Full resource/service preflight still runs
+before confirmation; failed or incomplete proof leaves the command pending.
+
+The initial synthetic regression failed because a progressive preflight could
+need the same original exit evidence it prevented recovery from collecting.
+After user approval, only the recovery ordering changed. Twenty executor tests
+pass, including successful collection before preflight, conflict after collection
+without command confirmation, and refusal of foreign worker/context/reference
+without another action. Both failed and corrected logs are retained. All runner
+and activation state are simulated; no host observation, reload/start or service
+mutation was executed.
