@@ -1702,3 +1702,31 @@ active for the invalid-action assertion. Only the test restored the original
 function before that assertion; transport and guards remained unchanged.
 Both test logs are retained. A frozen native recipe requires separate consent
 and complete preflight before any staging, exchange or backup on the host.
+
+## Unit apply refused on changed boot; separate observation prepared
+
+The single authorized unit apply stopped at its first context check: boot ID
+changed while the recorded namespaces matched. No original journal was opened,
+no systemctl query ran and no candidate/backup or unit replacement occurred.
+The failed attempt and expected/observed context are retained; it was not retried.
+
+`tools/libvirt_unit_postboot_collect_host.py` prepares a separate readonly
+observation of the original installation and prepared unit metadata. It requires
+the original physical journal binding, takes the existing execution lock without
+creating it, rejects SQLite sidecars and opens immutable/query-only. Original
+source and the entire prepared unit record must match. The current database hash
+is diagnostic; the initial pre-metadata hash is historical. Database changes or
+replacement during observation are conflicts. The journal is never initialized
+or written, and no original window/reference is rewritten.
+
+Existing post-boot observers inspect persistent ownership and current account
+identity, selected package facts, inactive services and volatile metadata twice.
+Runtime directories remain unqualified even if present. Output has qualified=false
+and unit_apply_permitted=false; it cannot authorize another apply or reuse old
+volatile births. No libvirt connection, account command, reload/start or VM.
+
+Seven private temporary SQLite tests and five historical-unit component tests
+pass. Unit resource observations in the latter are synthetic; the new host
+entry has not been executed and no new host state was read to prepare its recipe.
+The recipe context comes only from the saved failed apply. Native observation
+requires separate consent; subsequent recovery depends on its actual evidence.

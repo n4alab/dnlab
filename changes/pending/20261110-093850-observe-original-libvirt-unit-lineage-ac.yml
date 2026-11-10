@@ -1,0 +1,14 @@
+id: 20261110-093850-observe-original-libvirt-unit-lineage-ac
+type: internal
+title: Observe original libvirt unit lineage across a boot change
+description: Retain the prepared unit reference while collecting readonly post-boot
+  evidence through the original journal binding without mutation or volatile resource
+  adoption.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
