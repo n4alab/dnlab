@@ -1889,3 +1889,28 @@ are real private temporary artifacts; process/systemd/socket and complete
 resource-provider leaves remain synthetic. There is no native activation
 transport or operational command in this change. Full snapshot/resource
 composition and tracked reload/start executor remain pending.
+
+## Activation snapshot and repeated unchanged-resource preflight
+
+ActivationSnapshot specializes the installation snapshot only for activation.
+It retains binary/package/configuration/mask/namespace/parent checks and uses
+ActivationServices for the original operation's service observations. Its state
+is checked before and after collection. InstallationSnapshot and its inactive
+service/process guard are unchanged; legacy activation profiles are refused by
+the activation snapshot.
+
+ActivationResources binds the exact completed revision/current source and
+activation ID. It checks all unchanged account, file, dependency and recovered
+directory proofs twice with two complete snapshots, preserving original creator
+mapping. The revised unit is excluded here and remains the responsibility of
+CompletedExchangeObserver. Every current service census must match the same
+operation's acknowledgements. Static prerequisites remain unchanged under the
+selected-package policy; the global dpkg hash remains diagnostic for that policy.
+
+Ten resource and six snapshot synthetic tests pass. They cover current birth
+and account changes, context/static prerequisites, foreign processes/operation,
+second-pass changes, active acknowledged service snapshots, daemon replacement
+and preserved installation inactivity. Snapshot files are private fixtures;
+resource/account and process/systemd/socket leaves are synthetic. No native
+observation, reload/start or service mutation occurred. The tracked command
+executor and operational activation assembly/qualification remain pending.

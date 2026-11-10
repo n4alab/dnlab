@@ -1,0 +1,14 @@
+id: 20261110-144441-preflight-current-resources-during-progr
+type: internal
+title: Preflight current resources during progressive libvirt activation
+description: Add activation-specific snapshots and repeated original resource checks
+  with qualified service census, preserving installation inactivity and selected-package
+  policies.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
