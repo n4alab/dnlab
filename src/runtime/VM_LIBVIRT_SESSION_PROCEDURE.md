@@ -2069,3 +2069,29 @@ pidfd references. No systemd connection, monitor process, host read or service
 action occurred. Native D-Bus subscription/normalization, command-job correlation,
 process keeper and transport continuity still require implementation and
 qualification before this component can produce a host readiness receipt.
+
+## Versioned D-Bus start worker — synthetic bus only
+
+The historical systemctl worker does not record the returned systemd job.
+The new dbus-start-v1 command format is distinct, and only permits StartUnit
+with mode fail for the three dedicated units. No old command/intent is converted.
+The worker uses an already pinned connection, validates manager sender, reply
+serial, signature and job path, and makes one call only after exact release.
+It reports the original job and waits for the parent's durable acknowledgement.
+
+StartJobReceipts uses the existing journal to bind the original armed worker,
+command, context and connection before release. It collects only that worker's
+own response, commits the job before acknowledging it and can replay that receipt
+without calling the bus or adopting another job. A missing original response
+remains pending. The receipt is job provenance, not daemon readiness or proof of
+worker exit. Release preflight and original worker exit remain executor duties.
+
+Twelve tests pass using string frames, a simulated bus and temporary journal.
+They cover response/ack loss, foreign replies/jobs/managers, connection change,
+worker substitution, fixed release and separation from systemctl commands.
+No bus connection, child, host read or service action occurred. The native bus
+adapter, source/library qualification, original runner and controller/monitor
+integration are still pending. This module is not an operational start executor.
+
+API reference: systemd v257 documents subscribing before StartUnit and following
+the returned job: https://raw.githubusercontent.com/systemd/systemd/v257/man/org.freedesktop.systemd1.xml

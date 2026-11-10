@@ -1,0 +1,15 @@
+id: 20261110-162320-prepare-tracked-d-bus-starts-for-dedicat
+type: internal
+title: Prepare tracked D-Bus starts for dedicated libvirt units
+description: Add a versioned single-call StartUnit worker protocol and original job
+  receipt metadata, with durable acknowledgement, reply identity checks and no response-loss
+  resend. Existing systemctl intents remain distinct; native transport and controller
+  integration are pending.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
