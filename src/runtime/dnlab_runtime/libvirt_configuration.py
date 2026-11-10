@@ -34,6 +34,21 @@ def compile_revision(installation):
         unchanged_sha256=fingerprint([item for item in installation['items'] if item is not matches[0]]))
 
 
+def project_revision(value):
+    """Project validated lineage only; this is not a current readiness proof."""
+    if (value['phase']!='completed' or value['plan']!=compile_revision(value['installation'])
+            or value['source_sha256']!=fingerprint(value['installation'])):
+        raise Conflict('completed original configuration lineage required')
+    ConfigurationRevision._receipt(value,value['proof'])
+    result=deepcopy(value['installation']);result.update(request=value['plan']['request'],profile=value['plan']['profile'])
+    result['prerequisites']['profile_sha256']=result['profile']['profile_sha256']
+    for item in result['items']:
+        if item['spec'].get('path')==UNIT:
+            item.update(spec=deepcopy(value['plan']['target_spec']),nonce=value['nonce'],proof=deepcopy(value['proof']['replacement']))
+    result['configuration_revision']=dict(operation_id=value['id'],source_sha256=value['source_sha256'],receipt_sha256=fingerprint(value['proof']))
+    return result
+
+
 class ConfigurationRevision:
     def __init__(self,journal,adapter,*,window,generation_source=None):
         self.journal,self.adapter,self.window=journal,adapter,window
@@ -205,10 +220,4 @@ class ConfigurationRevision:
         value=self.read(operation);self._active(value)
         if value['phase']!='completed':raise Conflict('configuration revision remains pending')
         self._observe(value,require_window=False)
-        result=deepcopy(value['installation']);result.update(request=value['plan']['request'],profile=value['plan']['profile'])
-        result['prerequisites']['profile_sha256']=result['profile']['profile_sha256']
-        for item in result['items']:
-            if item['spec'].get('path')==UNIT:
-                item.update(spec=deepcopy(value['plan']['target_spec']),nonce=value['nonce'],proof=deepcopy(value['proof']['replacement']))
-        result['configuration_revision']=dict(operation_id=operation,source_sha256=value['source_sha256'],receipt_sha256=fingerprint(value['proof']))
-        return result
+        return project_revision(value)

@@ -1823,3 +1823,29 @@ NOREPLACE recover without repeating the exchange. Session/current-directory
 qualification leaves in these cases are simulated; these results do not prove
 native apply. The next frozen recipe uses the actual prepared successor
 reference; apply requires distinct operational consent and full preflight.
+
+## Activation lineage and split file observation — synthetic preparation only
+
+`project_revision` separates pure completed-revision projection from the existing
+inactive-only current observer. Existing ConfigurationRevision.effective still
+runs its full preflight before projecting. ActivationLineage validates the exact
+completed revision, non-retired identity, original directory source and saved
+effective source; projection alone cannot establish readiness.
+
+ActivationFiles observes unchanged configuration files through the current
+lineage filesystem observer. Only the revised libvirtd unit uses the scoped
+exchange adapter and original backup, with mandatory injected complete preflight.
+It never substitutes the installation ID for the unit revision creator, calls
+an inactive-only effective observer during activation, or performs commands.
+Current service-state-aware preflight and native activation transport remain to
+be composed and qualified separately.
+
+Fourteen targeted synthetic tests pass, including existing revision behavior,
+closed historical window observation, replaced backup refusal, mandatory complete
+preflight and current/effective lineage conflicts. Exchange/configuration files
+are private temporary files; directory/session/service leaves are synthetic.
+The first run had twelve passes and two failures because the new observer used
+the unit-scoped file capability for unchanged files. With user approval the
+observers and fixture were separated; unit capability restrictions stayed intact.
+Both logs are retained. No native observation, reload/start or service mutation
+was performed by this preparation.

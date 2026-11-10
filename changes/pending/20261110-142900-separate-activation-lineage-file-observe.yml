@@ -1,0 +1,14 @@
+id: 20261110-142900-separate-activation-lineage-file-observe
+type: internal
+title: Separate activation lineage file observers from unit exchange capability
+description: Project completed revision lineage without claiming readiness and verify
+  unchanged configuration files through the current source observer while retaining
+  original exchange and backup qualification for the revised unit.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
