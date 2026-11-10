@@ -1,0 +1,15 @@
+id: 20261110-163456-prepare-pinned-sd-bus-transport-for-libv
+type: internal
+title: Prepare pinned sd-bus transport for libvirt starts
+description: Add a narrow non-variadic sd-bus ABI adapter for one StartUnit call on
+  an already qualified connection. Validate original reply identity, bound timeout
+  and release owned messages on errors; provide no library loading, bus open, reconnect
+  or retry defaults.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

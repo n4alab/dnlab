@@ -2119,3 +2119,30 @@ binding. All host processes/actions remain simulated; neither systemctl nor D-Bu
 is executed on the host. The native D-Bus runner/adapter, process keeper and source/
 library qualification remain pending. This is synthetic integration, not native
 session readiness or authorization to reload/start services.
+
+## sd-bus call adapter — ABI doubles only
+
+tools/libvirt_systemd_bus.py binds the non-variadic sd-bus API and supplies the
+StartUnit call side for the worker. Construction does not load a library or call
+it. A caller must provide the qualified library, borrowed original handle and
+qualification callback. There is no bus-open, reconnect or subprocess default.
+
+The adapter checks the original connection's unique name and sends to the pinned
+manager unique owner instead of resolving a new owner. One call has a positive
+timeout capped at five seconds. It validates reply sender/serial/signature/job
+and releases only its owned message references on success or failure; the
+borrowed connection remains owned by its custodian. An error after dispatch is
+uncertain delivery, never permission to resend.
+
+Twenty-two tests pass: ten adapter/ABI cases and twelve worker/receipt cases,
+using function doubles, synthetic pointer values and temporary journals. They
+cover original destination/body/timeout, failures before and after dispatch,
+message cleanup, foreign sender and changed connection identity. No CDLL load,
+real handle, socket, library call or service action was executed. ABI correctness
+on the installed library is still unverified. Original library loading and
+provenance, connection creation, event transport and native runner remain pending.
+
+API references (systemd v257):
+https://raw.githubusercontent.com/systemd/systemd/v257/src/systemd/sd-bus.h
+https://raw.githubusercontent.com/systemd/systemd/v257/man/sd_bus_call.xml
+https://raw.githubusercontent.com/systemd/systemd/v257/man/sd_bus_message_append_basic.xml
