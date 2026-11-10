@@ -2,23 +2,68 @@
 
 from contextlib import ExitStack, contextmanager
 from copy import deepcopy
+import hashlib
 import os
 import re
 import select
+import stat
 import uuid
 
 from dnlab_runtime.libvirt_activation_bus import UNITS
 from dnlab_runtime.manifest import Conflict, fingerprint
 from dnlab_runtime.qemu_process import stat_start
+from dnlab_runtime.vm_bundle import metadata
 from tools.libvirt_systemd_bus import require
 from tools.vm_host_inventory import regular
 
 DIRECTORY_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
 NAMESPACES = ('pid', 'mnt', 'net', 'user')
+EXECUTABLE_LIMIT = 128 * 1024 * 1024
 
 
 def identity(info):
     return info.st_dev, info.st_ino
+
+
+def executable_digest(root):
+    # The proc directory and pidfd pin the original process that owns this link.
+    fd = os.open('exe', os.O_RDONLY | os.O_CLOEXEC | os.O_NONBLOCK, dir_fd=root)
+    try:
+        before = os.fstat(fd)
+        require(stat.S_ISREG(before.st_mode) and before.st_uid == 0 and not before.st_mode & 0o022
+                and 0 < before.st_size <= EXECUTABLE_LIMIT, 'bounded root-controlled service executable required')
+        remaining = before.st_size
+        hashed = hashlib.sha256()
+        while remaining:
+            data = os.read(fd, min(remaining, 65536))
+            require(data, 'service executable truncated during observation')
+            hashed.update(data)
+            remaining -= len(data)
+        require(not os.read(fd, 1) and metadata(before) == metadata(os.fstat(fd))
+                and metadata(before) == metadata(os.stat('exe', dir_fd=root)),
+                'original service executable changed during observation')
+        return hashed.hexdigest()
+    finally:
+        os.close(fd)
+
+
+def process_details(root, status, environment, spec):
+    groups = [line[7:].split() for line in status.splitlines() if line.startswith(b'Groups:')]
+    require(len(groups) == 1 and all(group.isdigit() for group in groups[0]),
+            'original service supplementary groups malformed')
+    raw_command = regular(root, 'cmdline', 1024 * 1024)
+    require(raw_command.endswith(b'\0') and raw_command[0] != 0, 'original service command malformed')
+    variables = {}
+    for entry in environment[:-1].split(b'\0'):
+        key, separator, value = entry.partition(b'=')
+        name = os.fsdecode(key)
+        require(separator and name and name not in variables, 'original service environment malformed')
+        variables[name] = os.fsdecode(value)
+    digest = executable_digest(root)
+    require(digest == spec['binary']['sha256'], 'original service executable digest differs')
+    return dict(uids=[spec['uid']] * 4, gids=[spec['gid']] * 4, groups=[int(group) for group in groups[0]],
+                executable_sha256=digest, argv=[os.fsdecode(arg) for arg in raw_command[:-1].split(b'\0')],
+                environment=variables)
 
 
 class ServiceProcessPins:
@@ -41,7 +86,7 @@ class ServiceProcessPins:
         boot = regular(self.proc, 'sys/kernel/random/boot_id', 128).decode('ascii').strip()
         require(boot == self.context['boot_id'], 'original service boot identity differs')
 
-    def _snapshot(self, root, pid, invocation, spec, poll):
+    def _snapshot(self, root, pid, invocation, spec, poll, *, details=False):
         self._check_context()
         require(not poll.poll(0), 'original service process exited or pidfd status differs')
         original = identity(os.fstat(root))
@@ -60,11 +105,15 @@ class ServiceProcessPins:
             device, inode = identity(os.stat('ns/' + name, dir_fd=root))
             require(dict(device=device, inode=inode) == self.context['namespaces'][name],
                     'original service process namespace differs: ' + name)
+        result = dict(pid=pid, start_ticks=ticks, boot_id=self.context['boot_id'],
+                      namespaces=deepcopy(self.context['namespaces']), pidfd_alive=True)
+        if details:
+            result.update(process_details(root, status, environment, spec))
         current = os.stat(str(pid), dir_fd=self.proc, follow_symlinks=False)
         require(identity(current) == original and stat_start(regular(root, 'stat', 16384), pid) == ticks
                 and not poll.poll(0), 'original service process changed during observation')
         self._check_context()
-        return ticks
+        return result
 
     def pin(self, request, subscription, pid, invocation):
         spec = request['spec']
@@ -84,11 +133,11 @@ class ServiceProcessPins:
             poll.register(descriptor, select.POLLIN)
             root = os.open(str(pid), DIRECTORY_FLAGS, dir_fd=self.proc)
             resources.callback(os.close, root)
-            ticks = self._snapshot(root, pid, invocation, spec, poll)
+            observation = self._snapshot(root, pid, invocation, spec, poll)
             reference = dict(
                 kind='original-service-process-v1', token=uuid.uuid4().hex,
                 request_sha256=fingerprint(request), subscription_sha256=fingerprint(subscription),
-                invocation_id=invocation, pid=pid, start_ticks=ticks, boot_id=self.context['boot_id'],
+                invocation_id=invocation, pid=pid, start_ticks=observation['start_ticks'], boot_id=self.context['boot_id'],
                 namespaces_sha256=fingerprint(self.context['namespaces']),
             )
             self.owner.enter_context(resources.pop_all())
@@ -97,16 +146,27 @@ class ServiceProcessPins:
         return reference
 
     def verify(self, reference, request, subscription):
-        live = self.live.get(reference['token'])
-        if (not self.active or live is None or live[0] != reference
-                or reference['request_sha256'] != fingerprint(request)
-                or reference['subscription_sha256'] != fingerprint(subscription)):
+        if reference['subscription_sha256'] != fingerprint(subscription):
             return False
         try:
-            ticks = self._snapshot(live[1], reference['pid'], reference['invocation_id'], request['spec'], live[2])
+            self._observe(reference, request)
         except (OSError, Conflict):
             return False
-        return ticks == reference['start_ticks']
+        return True
+
+    def _observe(self, reference, request, *, details=False):
+        live = self.live.get(reference['token'])
+        require(self.active and live is not None and live[0] == reference
+                and reference['request_sha256'] == fingerprint(request), 'original live service pin required')
+        result = self._snapshot(live[1], reference['pid'], reference['invocation_id'],
+                                request['spec'], live[2], details=details)
+        require(result['start_ticks'] == reference['start_ticks'], 'original service start time differs')
+        return result
+
+    @contextmanager
+    def observe(self, reference, request):
+        yield self._observe(reference, request, details=True)
+        self._observe(reference, request)
 
 
 @contextmanager

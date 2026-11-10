@@ -1,6 +1,7 @@
 """Original service pin tests using an isolated procfs fixture."""
 
 from copy import deepcopy
+import hashlib
 import os
 import select
 
@@ -102,3 +103,26 @@ def test_wrong_invocation_releases_uncommitted_descriptor(process):
         with pytest.raises(OSError):
             os.fstat(fd)
         assert not pins.live
+
+
+def test_process_observation_reads_original_executable_credentials_and_arguments(process):
+    keeper, request, _, pid, target, _ = process
+    binary = target / 'daemon'
+    binary.write_bytes(b'synthetic service binary')
+    (target / 'exe').symlink_to('daemon')
+    request['spec']['binary'] = dict(sha256=hashlib.sha256(binary.read_bytes()).hexdigest())
+    subscription = dict(request_sha256=fingerprint(request), context_sha256=fingerprint(request['context']))
+    with (target / 'status').open('a') as status:
+        status.write('Groups:\t1002 108\n')
+    (target / 'cmdline').write_bytes(b'/usr/sbin/virtlogd\0--config\0/etc/dnlab/libvirt/virtlogd.conf\0')
+    with keeper() as pins:
+        reference = pins.pin(request, subscription, pid, INVOCATION)
+        with pins.observe(reference, request) as result:
+            assert result['executable_sha256'] == request['spec']['binary']['sha256']
+            assert result['groups'] == [1002, 108]
+            assert result['argv'] == ['/usr/sbin/virtlogd', '--config', '/etc/dnlab/libvirt/virtlogd.conf']
+            assert result['environment'] == {'INVOCATION_ID': INVOCATION}
+        binary.write_bytes(b'replaced service binary')
+        with pytest.raises(Conflict, match='executable digest differs'):
+            with pins.observe(reference, request):
+                pytest.fail('replacement binary observed as original')

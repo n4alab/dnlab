@@ -2215,3 +2215,10 @@ the reference. A replacement supervisor cannot recover it by reopening the PID.
 The event reader and pin provider have been exercised with synthetic signals,
 procfs fixtures and the activation journal. Live process and job correlation
 still require qualification on the master.
+
+The native daemon observer checks the active unit against the original
+invocation. It reads the process executable digest, credentials, arguments and
+environment from the retained proc directory. It opens the dedicated Unix
+socket below the original runtime directory and checks kernel peer credentials
+against the pinned PID, UID and GID. The probe sends no libvirt requests.
+The process and socket identities are rechecked before accepting the observation.

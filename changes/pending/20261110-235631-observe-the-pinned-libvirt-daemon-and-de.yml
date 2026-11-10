@@ -1,0 +1,14 @@
+id: 20261110-235631-observe-the-pinned-libvirt-daemon-and-de
+type: internal
+title: Observe the pinned libvirt daemon and dedicated socket
+description: Verify executable and process attributes through the original process
+  pin. Link the dedicated socket peer to the systemd invocation and refuse a replaced
+  runtime directory or socket.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
