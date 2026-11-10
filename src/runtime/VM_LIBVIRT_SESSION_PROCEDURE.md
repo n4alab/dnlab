@@ -604,6 +604,16 @@ The frozen native recipe is prepared separately from archived facts; no native
 unit prepare, candidate/backup creation, unit replacement or service action has
 yet been authorized or performed through this entry.
 
+The subsequently authorized single native unit metadata prepare completed in
+about four seconds. Its original revision reference is durably saved in phase
+prepared with proof null; candidate and backup remain planned paths, not created
+files. All eight readonly queries succeeded and all 24 context comparisons
+matched. The only target remains dnlab-libvirtd.service; the installed Requires
+unit, accounts, directories and services were unchanged. No retry, replacement,
+reload/start or libvirt/VM action occurred. Unit apply/recovery must consume this
+original revision reference through a separate scoped file-mutation entry,
+which still needs preparation and operational authorization.
+
 ### Current-boot /run parent: explicit dependency binding, synthetic verification
 
 New post-boot requests may explicitly supply `run_parent=bind_run_parent(...)`.

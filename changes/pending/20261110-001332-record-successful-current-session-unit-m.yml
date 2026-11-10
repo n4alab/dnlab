@@ -1,0 +1,16 @@
+id: 20261110-001332-record-successful-current-session-unit-m
+type: none
+title: Record successful current-session unit metadata preparation
+description: Record the authorized metadata-only unit prepare with original source
+  binding, retained prepared revision reference and no staging, replacement, reload
+  or activation.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
+reason: Experimental operational evidence and procedure update only; no unit or runtime
+  implementation change.
