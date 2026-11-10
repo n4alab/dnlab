@@ -1,0 +1,14 @@
+id: 20261110-145120-journal-fixed-libvirt-activation-command
+type: internal
+title: Journal fixed libvirt activation commands without uncertain resend
+description: Add an injected blocked-runner executor for fixed systemctl reload/start
+  commands with original activation binding, checkpoint preflight, worker context
+  verification and readonly completion evidence.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

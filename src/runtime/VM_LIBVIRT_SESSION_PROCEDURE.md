@@ -1914,3 +1914,25 @@ and preserved installation inactivity. Snapshot files are private fixtures;
 resource/account and process/systemd/socket leaves are synthetic. No native
 observation, reload/start or service mutation occurred. The tracked command
 executor and operational activation assembly/qualification remain pending.
+
+## Tracked activation command executor — simulated runner only
+
+ActivationCommands derives only daemon-reload and the original three dedicated
+start commands from the rendered activatable profile and stored activation
+step/nonce. It records intent before arming, retains the original root worker
+reference and context, and checks complete injected preflight after checkpoints
+and before its single release. Lost arm/release or missing completion never
+permits another execution. Explicit recovery reads only the original outcome;
+nonzero or substituted output is refused.
+
+Readonly original_completion exposes only qualified original worker exit
+metadata without recursive resource preflight; full host/resource and daemon
+process/socket qualification remain mandatory separately. A zero exit code is
+command completion, not daemon readiness. Account worker command validation is
+unchanged and rejects these systemctl commands.
+
+Fourteen executor boundary tests and one readonly completion test pass, all with
+simulated authoritative activation state and runner. No native command runner or
+subprocess default is supplied. The native blocked systemctl worker/runner,
+progressive activation assembly and operational qualification remain pending.
+No systemctl, host process, reload/start or service mutation was executed.
