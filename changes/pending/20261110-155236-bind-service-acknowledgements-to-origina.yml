@@ -1,0 +1,14 @@
+id: 20261110-155236-bind-service-acknowledgements-to-origina
+type: internal
+title: Bind service acknowledgements to original activation monitors
+description: Persist monitor references before command intents and confirm only original
+  monitored generations with qualified command completion, explicit pending recovery
+  and readonly original receipt checks.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

@@ -2005,3 +2005,25 @@ This closes a wiring check between the previously tested components. It does
 not qualify native systemctl execution, service generation acknowledgements,
 manager reload/readiness or an actual empty libvirt session. Progressive service
 assembly and an explicitly authorized native qualification remain pending.
+
+## Original monitored service acknowledgements — synthetic journal only
+
+ActivationAcknowledgements requires an already qualified original monitor
+reference. Registration must precede the start-command intent, and binds the
+activation step/nonce, source/context, fixed command digest and active window.
+The helper cannot create a monitor or discover a service by name. Confirmation
+requires the original worker completion and that same monitor's original
+process/socket generation, plus complete injected resource preflight.
+
+An interrupted qualification stays pending and uses explicit recovery of the
+same reference; a confirmed receipt can be read without recursive resource
+preflight and is rechecked against original monitor/command evidence. Replaced
+or missing generations are refused, never adopted. Native monitor creation and
+its event/process provenance are mandatory external providers, not supplied or
+qualified by this journal helper.
+
+Nine synthetic tests pass with a temporary journal and fake monitor/daemon
+proofs: registration before command, replay, lost monitor/commit replies, foreign
+monitor/command/process/resource proof and generation replacement. No host
+monitor, process, systemctl, reload/start or service mutation was executed.
+Progressive controller assembly and native qualification remain pending.
