@@ -1,0 +1,16 @@
+id: 20261110-154604-verify-composed-activation-command-worke
+type: none
+title: Verify composed activation command worker and process journals
+description: Exercise executor, blocked runner and original-process observer together
+  with fake child/procfs, including lost release response and pending output recovery
+  without respawn.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
+reason: Experimental integration test and evidence coverage only; no production or
+  installed runtime behavior change.

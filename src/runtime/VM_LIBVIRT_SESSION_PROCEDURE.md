@@ -1990,3 +1990,18 @@ without command confirmation, and refusal of foreign worker/context/reference
 without another action. Both failed and corrected logs are retained. All runner
 and activation state are simulated; no host observation, reload/start or service
 mutation was executed.
+
+## Composed command/runner/process pipeline — simulated child only
+
+Three integration tests compose ActivationCommands, ActivationProcessRunner and
+ActivationWorkerObserver with the same real temporary journal. The activation
+source/state, Popen child, process filesystem, pidfd and systemctl exec are
+synthetic; no child process or service is launched. The tests verify the original
+worker exit/readonly proof and closed original descriptors, recovery after the
+release reply is lost, and later collection of pending output without a second
+spawn or release. Command, worker and process records remain separately bound.
+
+This closes a wiring check between the previously tested components. It does
+not qualify native systemctl execution, service generation acknowledgements,
+manager reload/readiness or an actual empty libvirt session. Progressive service
+assembly and an explicitly authorized native qualification remain pending.
