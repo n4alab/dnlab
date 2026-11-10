@@ -2043,3 +2043,29 @@ original monitor binding, empty-session rejection and replay without duplicate c
 All processes, monitors, services and inventory are synthetic. Native monitor creation,
 resource/process/socket providers and host qualification remain pending; no reload,
 service start or VM operation was executed.
+
+## Original event monitor — normalized synthetic stream only
+
+ActivationEventMonitor persists the original subscription before command intent.
+It consumes bounded ordered events from that same subscription, with pinned
+manager owner/context and explicit loss detection. A start job must be correlated
+with the original command by an explicit provider; matching a unit name alone is
+insufficient. Duplicate jobs, second invocations, failed jobs and sequence gaps
+leave the monitor pending without adopting a replacement.
+
+The invocation event must already carry a qualified original process reference,
+including start ticks and a token for its supervised pidfd keeper. A persisted
+token is not a reusable numeric FD. The process provider must retain and verify
+the original pidfd, request/subscription binding and context; it cannot reconstruct
+the reference from a current PID. The monitor never acquires a new process at
+readiness or recovery. It rechecks the same reference before/after process/socket
+qualification and preserves the first proof on replay.
+
+Twenty-seven targeted synthetic tests pass (18 monitor, 9 acknowledgements).
+An earlier boundary regression reproduced acceptance of changed process start
+ticks before the first ready observation; both the failure and corrected results
+are retained. Tests use temporary journals, normalized fake events and simulated
+pidfd references. No systemd connection, monitor process, host read or service
+action occurred. Native D-Bus subscription/normalization, command-job correlation,
+process keeper and transport continuity still require implementation and
+qualification before this component can produce a host readiness receipt.

@@ -1,0 +1,15 @@
+id: 20261110-161653-track-original-libvirt-activation-event
+type: internal
+title: Track original libvirt activation event generations
+description: Persist original event subscriptions and ordered start-job evidence;
+  bind the first invocation to its original process starttime and supervised pidfd
+  reference, refusing continuity loss, ambiguity or replacement. Native event and
+  process providers remain unqualified.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
