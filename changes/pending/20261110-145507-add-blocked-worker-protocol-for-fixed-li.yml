@@ -1,0 +1,14 @@
+id: 20261110-145507-add-blocked-worker-protocol-for-fixed-li
+type: internal
+title: Add blocked worker protocol for fixed libvirt activation commands
+description: Validate only manager reload and individual dedicated starts, pin the
+  original binary FD and require the matching release before exec without broadening
+  account worker commands.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

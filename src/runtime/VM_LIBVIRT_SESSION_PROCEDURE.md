@@ -1936,3 +1936,20 @@ simulated authoritative activation state and runner. No native command runner or
 subprocess default is supplied. The native blocked systemctl worker/runner,
 progressive activation assembly and operational qualification remain pending.
 No systemctl, host process, reload/start or service mutation was executed.
+
+## Blocked activation worker protocol — not launched
+
+The activation worker has its own fixed systemctl command validator. It accepts
+only daemon-reload or an individual start of dnlab-virtlogd, dnlab-virtlockd or
+dnlab-libvirtd with the exact environment. Account worker validation is unchanged.
+The worker reads one bounded token/command frame, verifies the root-controlled
+pinned binary FD, acknowledges ready and requires the exact token/command digest
+release before rechecking the same FD and executing it without a child shell.
+The inherited-FD entry closes interpreter/source descriptors on exec.
+
+Sixteen protocol tests pass with memory streams, private synthetic ELF bytes and
+mocked exec. Missing/truncated release, changed token/hash, arbitrary verbs/unit,
+force/environment injection and changed/writable binaries are refused. No
+interpreter worker, subprocess, systemctl or service was launched. Parent runner,
+original-process observation, activation assembly and host qualification remain
+pending; source code for exec does not authorize native invocation.
