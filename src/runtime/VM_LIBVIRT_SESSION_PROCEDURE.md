@@ -2180,3 +2180,18 @@ Six wrapper tests plus ten collector tests pass against a temporary root,
 synthetic context and socket metadata. The real collector runs in those fixtures,
 but no master input, library, package, account or service is observed. A separate
 explicit authorization is required to execute the prepared native recipe once.
+
+## Readonly system-bus connection probe
+
+The probe binds its recipe to the recorded inventory digest and checks the
+same boot and namespaces. It hashes and loads libsystemd through a pinned
+descriptor, connects once to the recorded socket and records the kernel peer
+credentials. Readonly broker queries identify the client and the systemd owner.
+The owner must resolve to PID 1 and UID 0 in the observed namespace. The probe
+rechecks the connection and the input identities before recording success.
+
+The probe owns the connection until it closes and writes its result to an
+exclusive private report directory. The synthetic tests cover descriptor
+ownership, changed inputs and a changed manager owner. Native execution
+requires separate authorization. Live systemd job and libvirt daemon
+qualification are later steps.

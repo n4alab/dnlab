@@ -4,6 +4,7 @@ Only private reports are written. Current context is a fresh diagnostic, never
 adoption of historical processes/resources. No library or bus is opened here.
 """
 import argparse
+from contextlib import contextmanager
 import hashlib
 import json
 import os
@@ -36,8 +37,8 @@ def validate(request):
         raise ValueError('fixed bus inventory request required')
 
 
-def prepare_recipe(folder,request):
-    validate(request);folder=Path(folder);folder.mkdir(mode=0o700)
+def prepare_recipe(folder,request,*,validate_request=validate):
+    validate_request(request);folder=Path(folder);folder.mkdir(mode=0o700)
     raw=json.dumps(request,sort_keys=True).encode()
     (folder/'request.json').write_bytes(raw)
     receipt=dict(schema_version=1,runtime_root=str(RUNTIME),source_sha256=inventory(),request_sha256=sha(raw))
@@ -45,8 +46,8 @@ def prepare_recipe(folder,request):
     return receipt
 
 
-def verify_recipe(folder):
-    folder=Path(folder);raw=(folder/'request.json').read_bytes();request=json.loads(raw);validate(request)
+def verify_recipe(folder,*,validate_request=validate):
+    folder=Path(folder);raw=(folder/'request.json').read_bytes();request=json.loads(raw);validate_request(request)
     receipt=json.loads((folder/'receipt.json').read_text())
     if (receipt.get('schema_version')!=1 or receipt.get('runtime_root')!=str(RUNTIME)
             or receipt.get('source_sha256')!=inventory() or receipt.get('request_sha256')!=sha(raw)):
@@ -63,10 +64,9 @@ def host_context(host_id):
     return dict(host_id=host_id,boot_id=boot,namespaces=namespaces)
 
 
-def run(recipe,*,root_fd,read_context,output_parent):
-    request=verify_recipe(recipe)
-    from tools.libvirt_bus_prerequisites import collect
-    parent=output=None;name='libvirt-bus-readonly-'+request['nonce'][:12]
+@contextmanager
+def private_report(output_parent, name):
+    parent=output=None
     try:
         parent=os.open(output_parent,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW|os.O_CLOEXEC)
         info=os.fstat(parent)
@@ -79,6 +79,17 @@ def run(recipe,*,root_fd,read_context,output_parent):
             with os.fdopen(fd,'wb') as stream:
                 stream.write(raw);stream.flush();os.fsync(stream.fileno())
             os.fsync(output)
+        yield persist, Path(output_parent)/name
+    finally:
+        if output is not None:os.close(output)
+        if parent is not None:os.close(parent)
+
+
+def run(recipe,*,root_fd,read_context,output_parent):
+    request=verify_recipe(recipe)
+    from tools.libvirt_bus_prerequisites import collect
+    name='libvirt-bus-readonly-'+request['nonce'][:12]
+    with private_report(output_parent, name) as (persist, output):
         persist('intent.json',json.dumps(request,sort_keys=True).encode())
         try:
             expected=read_context()
@@ -88,10 +99,7 @@ def run(recipe,*,root_fd,read_context,output_parent):
         except Exception as error:
             result=dict(status='failed',qualified=False,error_type=type(error).__name__,error=str(error))
         persist('result.json',json.dumps(result,sort_keys=True).encode())
-        return result,Path(output_parent)/name
-    finally:
-        if output is not None:os.close(output)
-        if parent is not None:os.close(parent)
+        return result,output
 
 
 def main(argv=None):

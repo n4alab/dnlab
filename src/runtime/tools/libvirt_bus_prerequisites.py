@@ -7,6 +7,7 @@ There is no CLI/native default or permission to qualify a daemon from this repor
 from copy import deepcopy
 import hashlib
 import json
+import os
 from pathlib import PurePosixPath
 import re
 import stat
@@ -25,9 +26,7 @@ def require(condition,message):
     if not condition:raise Conflict(message)
 
 
-def library(root,persist):
-    alias=probe(root,LIBRARY);persist('library-alias.json',json.dumps(alias,sort_keys=True).encode())
-    if alias['status']=='absent':return dict(alias=alias,object=None,path=None)
+def library_path(alias):
     require(alias['status']=='present' and alias['metadata'][3]==0,'original library alias metadata differs')
     path=LIBRARY
     if alias['kind']=='symlink':
@@ -36,17 +35,27 @@ def library(root,persist):
             'library target must be a constrained sibling')
         path=str(PurePosixPath(LIBRARY).parent/target)
     else:require(alias['kind']=='regular','library alias must be regular or one symlink')
+    return path
+
+
+def hash_library(fd, info):
+    require(info.st_uid==0 and not info.st_mode&0o022 and 4<=info.st_size<=LIMIT,'bounded root-controlled library required')
+    digest=hashlib.sha256();total=0;header=b''
+    while total<=info.st_size:
+        block=os.read(fd,min(65536,info.st_size+1-total))
+        if not block:break
+        if not header:header=block[:4]
+        total+=len(block);digest.update(block)
+    require(total==info.st_size and header==b'\x7fELF','bounded ELF library bytes required')
+    return dict(metadata=list(metadata(info)),sha256=digest.hexdigest(),bytes=total)
+
+
+def library(root,persist):
+    alias=probe(root,LIBRARY);persist('library-alias.json',json.dumps(alias,sort_keys=True).encode())
+    if alias['status']=='absent':return dict(alias=alias,object=None,path=None)
+    path=library_path(alias)
     with pinned_file(root,path) as (fd,info):
-        require(info.st_uid==0 and not info.st_mode&0o022 and 4<=info.st_size<=LIMIT,'bounded root-controlled library required')
-        import os
-        digest=hashlib.sha256();total=0;header=b''
-        while total<=info.st_size:
-            block=os.read(fd,min(65536,info.st_size+1-total))
-            if not block:break
-            if not header:header=block[:4]
-            total+=len(block);digest.update(block)
-        require(total==info.st_size and header==b'\x7fELF','bounded ELF library bytes required')
-        value=dict(metadata=list(metadata(info)),sha256=digest.hexdigest(),bytes=total)
+        value=hash_library(fd,info)
     require(probe(root,LIBRARY)==alias,'library alias changed during read')
     return dict(alias=alias,object=value,path=path)
 

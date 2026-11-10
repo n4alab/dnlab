@@ -56,29 +56,34 @@ class SdBusABI:
     def call_start(self,handle,command,manager_owner,timeout):
         validate(command)
         require(type(timeout) is int and 0<timeout<=5,'bounded original bus call timeout required')
+        return self._call(handle, manager_owner, command['path'], command['interface'],
+                          command['member'], command['body'], 'o', timeout * 1_000_000)
+
+    def _call(self, handle, destination, path, interface, method, arguments, output, timeout_usec):
         library=self.library;message=C.c_void_p();reply=C.c_void_p()
         try:
-            # Send to the pinned unique owner, never resolve a replacement owner.
-            success(library.sd_bus_message_new_method_call(handle,C.byref(message),manager_owner.encode('ascii'),
-                command['path'].encode('ascii'),command['interface'].encode('ascii'),command['member'].encode('ascii')),
-                'sd_bus_message_new_method_call')
+            success(library.sd_bus_message_new_method_call(
+                handle, C.byref(message), destination.encode('ascii'), path.encode('ascii'),
+                interface.encode('ascii'), method.encode('ascii')), 'sd_bus_message_new_method_call')
             require(message.value is not None,'original bus message missing')
-            for value in command['body']:
+            for value in arguments:
                 success(library.sd_bus_message_append_basic(message,b's',C.c_char_p(value.encode('ascii'))),'sd_bus_message_append_basic')
             # A timeout/error is uncertain delivery. There is deliberately no loop.
-            success(library.sd_bus_call(handle,message,timeout*1_000_000,None,C.byref(reply)),'sd_bus_call')
+            success(library.sd_bus_call(handle,message,timeout_usec,None,C.byref(reply)),'sd_bus_call')
             require(reply.value is not None,'original bus method reply missing')
             sent=C.c_uint64();received=C.c_uint64()
             success(library.sd_bus_message_get_cookie(message,C.byref(sent)),'sd_bus_message_get_cookie')
             success(library.sd_bus_message_get_reply_cookie(reply,C.byref(received)),'sd_bus_message_get_reply_cookie')
             sender=library.sd_bus_message_get_sender(reply)
             signature=library.sd_bus_message_get_signature(reply,1)
-            require(isinstance(sender,bytes) and signature==b'o','original bus reply sender/signature missing')
-            job=C.c_char_p()
-            require(success(library.sd_bus_message_read_basic(reply,b'o',C.byref(job)),'sd_bus_message_read_basic')>0
-                and job.value is not None,'original bus job body missing')
+            require(isinstance(sender,bytes) and signature==output.encode('ascii'),
+                    'original bus reply sender/signature missing')
+            body = C.c_uint32() if output == 'u' else C.c_char_p()
+            require(success(library.sd_bus_message_read_basic(reply,signature,C.byref(body)),
+                            'sd_bus_message_read_basic') > 0 and body.value is not None,
+                    'original bus reply body missing')
             return dict(call_serial=sent.value,reply_serial=received.value,sender=sender.decode('ascii'),
-                signature=signature.decode('ascii'),body=[job.value.decode('ascii')])
+                signature=output,body=[body.value if output == 'u' else body.value.decode('ascii')])
         finally:
             if reply.value is not None:library.sd_bus_message_unref(reply)
             if message.value is not None:library.sd_bus_message_unref(message)

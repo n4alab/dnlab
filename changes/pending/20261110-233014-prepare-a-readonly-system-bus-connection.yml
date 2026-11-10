@@ -1,0 +1,14 @@
+id: 20261110-233014-prepare-a-readonly-system-bus-connection
+type: internal
+title: Prepare a readonly system bus connection probe
+description: Recheck the recorded library, socket and namespace before opening one
+  system-bus connection. Verify broker credentials and the systemd owner through readonly
+  queries and persist the result privately.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
