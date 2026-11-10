@@ -1,0 +1,14 @@
+id: 20261110-143256-validate-progressive-libvirt-activation
+type: internal
+title: Validate progressive libvirt activation service inventory
+description: Match dedicated service and process census to ordered original activation
+  acknowledgements with repeated generation qualification, rejecting foreign processes,
+  pending jobs and unacknowledged services.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

@@ -1849,3 +1849,20 @@ the unit-scoped file capability for unchanged files. With user approval the
 observers and fixture were separated; unit capability restrictions stayed intact.
 Both logs are retained. No native observation, reload/start or service mutation
 was performed by this preparation.
+
+## Progressive activation service census — synthetic validator only
+
+ActivationServices validates the complete dedicated/vendor unit and UID process
+inventory against the same activation's ordered acknowledgements. Only an
+original requested/confirmed step with qualified command/process/socket proof
+may explain an active dedicated service. Unrequested services and all forbidden
+vendor units must stay inactive without jobs. The process census must match
+exactly the acknowledged daemon PIDs/credentials; duplicates, missing or foreign
+processes are conflicts. Generation observers run before and after validation.
+
+Fifteen synthetic tests pass across every ordered activation prefix, original
+completion before its confirmed checkpoint, changed generations/credentials,
+missing acknowledgements, foreign processes, vendor activation and pending jobs.
+No native procfs/systemd/socket observation or command transport is supplied.
+Complete resource/snapshot preflight and command execution/recovery must still be
+composed; these tests neither activate a daemon nor establish native readiness.
