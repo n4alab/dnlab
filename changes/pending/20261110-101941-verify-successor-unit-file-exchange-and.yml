@@ -1,0 +1,16 @@
+id: 20261110-101941-verify-successor-unit-file-exchange-and
+type: none
+title: Verify successor unit file exchange and lost-response recovery
+description: Exercise scoped candidate staging and both rename response-loss boundaries
+  for a revision linked to an explicitly retired predecessor using private temporary
+  files.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
+reason: Experimental test and evidence coverage only; no product or installed runtime
+  behavior change.

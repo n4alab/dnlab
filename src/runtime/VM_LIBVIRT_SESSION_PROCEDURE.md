@@ -1808,3 +1808,18 @@ temporary SQLite retirement records and private path absence, with host resource
 NSS, context and systemctl leaves simulated. The original native unit revision
 has not been retired by these tests, and no successor revision was prepared.
 The native recipe requires separate operational consent and complete preflight.
+
+## Successor metadata prepared; temporary-file exchange verified
+
+One separately authorized successor prepare completed with its original
+predecessor ID and retirement fingerprint. The revision remains prepared with
+proof=null; neither candidate nor backup was created, and the installed unit and
+services remain unchanged. Output and reference are retained privately.
+
+Three additional synthetic integration cases exercise that successor through
+real private candidate/backup files and the scoped file capability: successful
+exchange preserves original backup/history, and lost replies at EXCHANGE and
+NOREPLACE recover without repeating the exchange. Session/current-directory
+qualification leaves in these cases are simulated; these results do not prove
+native apply. The next frozen recipe uses the actual prepared successor
+reference; apply requires distinct operational consent and full preflight.
