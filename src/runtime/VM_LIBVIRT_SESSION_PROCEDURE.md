@@ -614,6 +614,23 @@ reload/start or libvirt/VM action occurred. Unit apply/recovery must consume thi
 original revision reference through a separate scoped file-mutation entry,
 which still needs preparation and operational authorization.
 
+`PostBootUnitRevision` now composes that original reference with a separate
+`PreparedUnitFiles` capability. Only the exact original candidate spec/nonce and
+revision ID can be created or recovered; source/candidate relocation is limited
+to the compiled unit, candidate and backup paths. The existing staging/exchange
+engines retain full inactive-session preflight and original file identities.
+`CurrentConfigurationSession` accepts an explicit revision-file capability only
+for the same journal and root; unchanged-resource observation continues through
+the original current-session view. Existing callers retain their default path.
+The directory mutator is not broadened, and this entry never prepares another
+revision. Thirteen targeted tests pass, including actual private temporary
+candidate/exchange/backup files, lost exchange response without repeated
+exchange, source/reference/service refusals and default current-session tests.
+One existing full temporary provisioning/ownership scenario was excluded from
+this targeted run; it was not rerun under the sandbox UID limitation. No native
+unit apply/recovery, reload or activation occurred; its operational transport
+and frozen action recipe remain separate work.
+
 ### Current-boot /run parent: explicit dependency binding, synthetic verification
 
 New post-boot requests may explicitly supply `run_parent=bind_run_parent(...)`.

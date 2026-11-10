@@ -102,7 +102,7 @@ class CurrentSessionPreflight(ConfigurationPreflight):
 
 class CurrentConfigurationSession(ConfigurationSession):
     """Separate versioned source path, never a fallback from legacy preparation."""
-    def __init__(self,view,*,snapshot,identity,directory_dependency,window,journal_identity):
+    def __init__(self,view,*,snapshot,identity,directory_dependency,window,journal_identity,revision_files=None):
         self.view,self.journal,self.window=view,view.journal,window
         if self.journal.identity!=journal_identity:raise Conflict('original current-session journal differs')
         self.original=view.read();metadata=self.original['postboot']
@@ -111,7 +111,13 @@ class CurrentConfigurationSession(ConfigurationSession):
             raise Conflict('separate current-boot unit revision window required')
         self.journal_identity=journal_identity;self.operation=window.receipt['operation_id']
         self.preflight=CurrentSessionPreflight(view,snapshot=snapshot,identity=identity,directory_dependency=directory_dependency)
-        self.adapter=ConfigurationFileAdapter(view.files,window=window,preflight=self.preflight)
+        files=view.files if revision_files is None else revision_files
+        if revision_files is not None:
+            from pathlib import Path
+            if (files.journal is not self.journal or getattr(files,'readonly',False)
+                    or Path(files.root)!=Path(view.files.root)):
+                raise Conflict('separate revision capability must use the original journal and filesystem root')
+        self.adapter=ConfigurationFileAdapter(files,window=window,preflight=self.preflight)
         self.driver=ConfigurationRevision(self.journal,self.adapter,window=window)
 
     def _source(self):

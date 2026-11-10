@@ -1,0 +1,14 @@
+id: 20261110-001935-scope-current-unit-revision-to-its-origi
+type: internal
+title: Scope current unit revision to its original candidate and transition
+description: Add a separate original-reference unit file capability and current-session
+  apply/recovery assembly, preserving directory-only mutation and readonly unchanged-resource
+  preflight.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
