@@ -21,11 +21,13 @@ def require(condition,message):
 
 
 class ActivationEventMonitor:
-    def __init__(self,journal,*,binary,activation_reader,command_intent,command_reader,stream,processes,correlate,observe):
+    def __init__(self,journal,*,binary,activation_reader,command_intent,command_reader,stream,processes,correlate,observe,command_builder=None):
         require(all(callable(fn) for fn in (activation_reader,command_intent,command_reader,correlate,observe)),
             'explicit original event monitor providers required')
         self.journal,self.binary,self.stream=journal,deepcopy(binary),stream
         self.processes=processes
+        self.command_builder=command_plan if command_builder is None else command_builder
+        require(callable(self.command_builder),'explicit event command builder required')
         self.activation_reader,self.command_intent,self.command_reader=activation_reader,command_intent,command_reader
         self.correlate,self.observe=correlate,observe
         with journal.transaction():
@@ -41,7 +43,7 @@ class ActivationEventMonitor:
             and matches[0]['spec']['kind']=='start','original event monitor activation differs')
         item=matches[0]
         expected=dict(activation_id=value['id'],installation_sha256=fingerprint(source),context=deepcopy(source['context']),
-            spec=deepcopy(item['spec']),nonce=item['nonce'],command_sha256=fingerprint(command_plan(source,item,value['id'],self.binary)))
+            spec=deepcopy(item['spec']),nonce=item['nonce'],command_sha256=fingerprint(self.command_builder(source,item,value['id'],self.binary)))
         require(request==expected,'original event monitor request differs')
         return source,item
 

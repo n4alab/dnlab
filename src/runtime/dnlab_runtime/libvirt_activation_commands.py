@@ -34,10 +34,12 @@ def command_plan(installation,item,activation_id,binary):
 
 
 class ActivationCommands:
-    def __init__(self,journal,*,binary,runner,activation_reader,preflight,after_outcome=None):
+    def __init__(self,journal,*,binary,runner,activation_reader,preflight,after_outcome=None,command_builder=None):
         if not callable(activation_reader) or not callable(preflight):raise Conflict('explicit original command providers required')
         self.journal,self.binary,self.runner=journal,deepcopy(binary),runner
         self.activation_reader,self.preflight=activation_reader,preflight
+        self.command_builder=command_plan if command_builder is None else command_builder
+        if not callable(self.command_builder):raise Conflict('explicit activation command builder required')
         if after_outcome is not None and not callable(after_outcome):raise Conflict('explicit outcome qualifier required')
         self.after_outcome=after_outcome
         with journal.transaction():
@@ -61,7 +63,7 @@ class ActivationCommands:
         if row is None:return None
         value=json.loads(row['payload'])
         if (fingerprint(value)!=row['fingerprint'] or value['activation_id']!=operation or value['nonce']!=item['nonce']
-                or value['command']!=command_plan(activation['installation'],current,operation,self.binary)
+                or value['command']!=self.command_builder(activation['installation'],current,operation,self.binary)
                 or value['installation_sha256']!=activation['installation_sha256']
                 or value['context']!=activation['installation']['context']
                 or value['phase'] not in ('arming_requested','armed','release_requested','completed')):
@@ -73,6 +75,32 @@ class ActivationCommands:
         if value['phase']=='completed':self._validate_outcome(value,value['outcome'])
         elif value['outcome'] is not None:raise Conflict('unexpected activation command outcome')
         return value
+
+    def inspect_intent(self,item,operation):
+        """Readonly registration view; a prepared step can prove absence only.
+
+        The execution reader remains restricted to requested/confirmed steps.
+        Any command row under a still-prepared step is a conflict, not an intent
+        that registration may adopt or ignore.
+        """
+        with self.journal.execution_lock:
+            value=self.activation_reader(operation)
+            matches=[current for current in value['items'] if current['spec']==item['spec'] and current['nonce']==item['nonce']]
+            if (value['id']!=operation or value['installation_sha256']!=fingerprint(value['installation'])
+                    or len(matches)!=1 or [current['spec'] for current in value['items']]!=steps(value['installation']['profile'])
+                    or matches[0]['phase'] not in ('prepared','requested','confirmed')):
+                raise Conflict('original registration activation binding differs')
+            if matches[0]['phase']!='prepared':return self._read(item,operation)
+            row=self.journal.db.execute('SELECT 1 FROM libvirt_activation_commands WHERE activation_id=? AND nonce=?',
+                (operation,item['nonce'])).fetchone()
+            if row is not None:raise Conflict('unexpected command under prepared activation step')
+            return None
+
+    def inspect_completion(self,item,operation):
+        """Registration sees no completion only after qualified intent absence."""
+        with self.journal.execution_lock:
+            if self.inspect_intent(item,operation) is None:return None
+            return self.original_completion(item,operation)
 
     def _save(self,value):
         with self.journal.transaction():
@@ -162,7 +190,7 @@ class ActivationCommands:
             activation,current=self._bind(item,operation)
             if current['phase']!='requested':raise Conflict('original requested activation command required')
             if self._read(item,operation) is not None:raise Conflict('activation command already tracked; no execution retry')
-            command=command_plan(activation['installation'],current,operation,self.binary)
+            command=self.command_builder(activation['installation'],current,operation,self.binary)
             observed=self.preflight(deepcopy(command))
             if (not isinstance(observed,dict) or set(observed)!={'qualified','command_sha256','installation_sha256','context_sha256','inputs_sha256'}
                     or observed['qualified'] is not True or observed['command_sha256']!=fingerprint(command)

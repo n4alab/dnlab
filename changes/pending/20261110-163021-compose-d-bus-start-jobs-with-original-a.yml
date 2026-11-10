@@ -1,0 +1,15 @@
+id: 20261110-163021-compose-d-bus-start-jobs-with-original-a
+type: internal
+title: Compose D-Bus start jobs with original activation monitors
+description: Share an explicitly selected command plan across controller, command
+  executor, acknowledgements and event monitor. Add a readonly registration view for
+  verified prepared-step command absence while preserving requested/confirmed execution
+  guards and refusing transport fallback after monitor binding.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

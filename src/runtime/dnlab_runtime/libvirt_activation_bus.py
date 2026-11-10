@@ -47,6 +47,16 @@ def start_plan(installation,item,activation_id,transport):
         body=[item['spec']['unit'],'fail']))
 
 
+class BusStartPlan:
+    """Explicit mixed plan: retain systemctl reload, version the three starts."""
+    def __init__(self,transport):self.transport=deepcopy(transport)
+
+    def __call__(self,installation,item,activation_id,binary):
+        if item['spec']['kind']=='start':return start_plan(installation,item,activation_id,self.transport)
+        from .libvirt_activation_commands import command_plan
+        return command_plan(installation,item,activation_id,binary)
+
+
 def connection_proof(connection):
     require(isinstance(connection,dict) and set(connection)=={'token','context_sha256','manager_owner','unique_name'}
         and hex_value(connection['token'],32) and hex_value(connection['context_sha256'],64)

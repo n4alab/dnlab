@@ -15,12 +15,14 @@ from .manifest import Conflict,canonical,fingerprint
 
 
 class ActivationAcknowledgements:
-    def __init__(self,journal,*,binary,activation_reader,command_reader,command_intent,monitor,preflight,window):
+    def __init__(self,journal,*,binary,activation_reader,command_reader,command_intent,monitor,preflight,window,command_builder=None):
         if not all(callable(fn) for fn in (activation_reader,command_reader,command_intent,preflight)):
             raise Conflict('explicit original service acknowledgement providers required')
         self.journal,self.binary,self.window=journal,deepcopy(binary),window
         self.activation_reader,self.command_reader,self.monitor,self.preflight=activation_reader,command_reader,monitor,preflight
         self.command_intent=command_intent
+        self.command_builder=command_plan if command_builder is None else command_builder
+        if not callable(self.command_builder):raise Conflict('explicit acknowledgement command builder required')
         with journal.transaction():
             journal.db.execute('CREATE TABLE IF NOT EXISTS libvirt_activation_acknowledgements '
                 '(activation_id TEXT NOT NULL,nonce TEXT NOT NULL,payload TEXT NOT NULL,fingerprint TEXT NOT NULL,'
@@ -33,7 +35,7 @@ class ActivationAcknowledgements:
                 or len(matches)!=1 or matches[0]['phase'] not in ('requested','confirmed')
                 or item['spec']['kind']!='start' or [entry['spec'] for entry in value['items']]!=steps(source['profile'])):
             raise Conflict('original requested service acknowledgement required')
-        command=command_plan(source,item,operation,self.binary)
+        command=self.command_builder(source,item,operation,self.binary)
         request=dict(activation_id=operation,installation_sha256=fingerprint(source),context=deepcopy(source['context']),
             spec=deepcopy(item['spec']),nonce=item['nonce'],command_sha256=fingerprint(command))
         return request,source

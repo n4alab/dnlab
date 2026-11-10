@@ -68,6 +68,31 @@ def test_lost_release_reply_uses_original_outcome_without_resend(command):
     assert state['calls']==['arm','release']
 
 
+def test_registration_read_proves_prepared_absence_without_weakening_execution(command):
+    helper,value,state=command;item=value['items'][1]
+    before=helper.journal.db.total_changes
+    assert helper.inspect_intent(item,value['id']) is None
+    assert helper.inspect_completion(item,value['id']) is None
+    assert helper.journal.db.total_changes==before and state['calls']==[]
+    with pytest.raises(Conflict,match='requested activation'):helper._read(item,value['id'])
+
+
+def test_registration_rejects_any_command_row_under_prepared_step(command):
+    helper,value,state=command;item=value['items'][1]
+    with helper.journal.transaction():
+        helper.journal.db.execute('INSERT INTO libvirt_activation_commands VALUES(?,?,?,?)',(value['id'],item['nonce'],'{}','0'*64))
+    before=helper.journal.db.total_changes
+    with pytest.raises(Conflict,match='unexpected command'):helper.inspect_intent(item,value['id'])
+    with pytest.raises(Conflict,match='unexpected command'):helper.inspect_completion(item,value['id'])
+    assert helper.journal.db.total_changes==before and state['calls']==[]
+
+
+def test_registration_cannot_infer_absence_for_foreign_nonce(command):
+    helper,value,state=command;item=deepcopy(value['items'][1]);item['nonce']='0'*32
+    with pytest.raises(Conflict,match='registration activation'):helper.inspect_intent(item,value['id'])
+    assert state['calls']==[]
+
+
 def test_uncertain_outcome_cannot_resend_or_rearm(command):
     helper,value,state=command;item=value['items'][0];state['missing']=True
     with pytest.raises(Conflict,match='pending'):helper.execute(item,value['id'])

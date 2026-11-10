@@ -2095,3 +2095,27 @@ integration are still pending. This module is not an operational start executor.
 
 API reference: systemd v257 documents subscribing before StartUnit and following
 the returned job: https://raw.githubusercontent.com/systemd/systemd/v257/man/org.freedesktop.systemd1.xml
+
+## D-Bus plan/controller integration — original job/event chain, synthetic only
+
+BusStartPlan explicitly selects the versioned D-Bus format for starts and retains
+systemctl for manager reload. Controller, executor, acknowledgement and event
+monitor accept the same explicit command builder; their default remains the
+historical systemctl plan. Original command fingerprints and monitor references
+refuse a changed plan once bound. There is no fallback or intent conversion.
+
+Registration uses inspect_intent/inspect_completion: an original prepared step
+can prove absence only when no command row exists for its original step/nonce.
+Any such row is a conflict. Execution _bind/_read still require requested or
+confirmed. The first integration attempt incorrectly wired registration to the
+execution-only reader; it failed before commands (65 passed, 3 setup errors).
+
+After the approved separate readonly view, 71 targeted tests pass. Three compose
+the actual controller, command/job/acknowledgement/event journals and string-frame
+worker with a simulated bus, process pins and service inventory. They verify
+the returned job through event correlation to readiness, recovery after release
+reply loss without a second start, and refusal of a plan switch after monitor
+binding. All host processes/actions remain simulated; neither systemctl nor D-Bus
+is executed on the host. The native D-Bus runner/adapter, process keeper and source/
+library qualification remain pending. This is synthetic integration, not native
+session readiness or authorization to reload/start services.

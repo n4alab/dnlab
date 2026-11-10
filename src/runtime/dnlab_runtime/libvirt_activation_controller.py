@@ -22,12 +22,14 @@ def resource_digest(source):
 
 
 class ActivationController:
-    def __init__(self,journal,installation,*,operation,window,binary,runner,source_reader,monitor,resources,inventory,empty):
+    def __init__(self,journal,installation,*,operation,window,binary,runner,source_reader,monitor,resources,inventory,empty,command_builder=None):
         identifier(operation,'original controller activation_id')
         if not all(callable(fn) for fn in (source_reader,resources,inventory,empty)):
             raise Conflict('complete explicit activation providers required')
         self.journal,self.source,self.operation,self.window=journal,deepcopy(installation),operation,window
         self.source_reader,self.monitor,self.resources,self.inventory,self.empty=source_reader,monitor,resources,inventory,empty
+        self.command_builder=command_plan if command_builder is None else command_builder
+        if not callable(self.command_builder):raise Conflict('explicit controller command builder required')
         expected=[spec['key'] for spec in steps(installation['profile'])]
         if (window.receipt['operation_id']!=operation or window.receipt['context']!=installation['context']
                 or window.receipt['targets']!=expected):raise Conflict('separate original activation window required')
@@ -37,10 +39,10 @@ class ActivationController:
                 '(activation_id TEXT PRIMARY KEY,payload TEXT NOT NULL,fingerprint TEXT NOT NULL)')
         self.driver=SessionActivation(journal,self)
         self.commands=ActivationCommands(journal,binary=binary,runner=runner,activation_reader=self.driver.read,
-            preflight=self._command_preflight,after_outcome=self._after_outcome)
+            preflight=self._command_preflight,after_outcome=self._after_outcome,command_builder=self.command_builder)
         self.acknowledgements=ActivationAcknowledgements(journal,binary=binary,activation_reader=self.driver.read,
             command_reader=self.commands.original_completion,command_intent=self.commands._read,
-            monitor=monitor,preflight=self._acknowledgement_preflight,window=window)
+            monitor=monitor,preflight=self._acknowledgement_preflight,window=window,command_builder=self.command_builder)
         self.services=ActivationServices(self.source,generation_observer=self._generation_observer)
 
     def _source(self):
@@ -55,7 +57,7 @@ class ActivationController:
 
     def monitor_request(self,value,item):
         self._bound(value)
-        command=command_plan(self.source,item,self.operation,self.binary)
+        command=self.command_builder(self.source,item,self.operation,self.binary)
         return dict(activation_id=self.operation,installation_sha256=fingerprint(self.source),context=deepcopy(self.source['context']),
             spec=deepcopy(item['spec']),nonce=item['nonce'],command_sha256=fingerprint(command))
 
@@ -142,7 +144,7 @@ class ActivationController:
 
     def _command_preflight(self,command):
         value=self.driver.read(self.operation);self._monitors(value)
-        matches=[item for item in value['items'] if command_plan(self.source,item,self.operation,self.binary)==command]
+        matches=[item for item in value['items'] if self.command_builder(self.source,item,self.operation,self.binary)==command]
         if len(matches)!=1:raise Conflict('original controller command differs')
         item=matches[0];self._window(item)
         if item['spec']['kind']=='start':
