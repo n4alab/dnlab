@@ -1,0 +1,14 @@
+id: 20261110-143825-observe-completed-libvirt-exchanges-duri
+type: internal
+title: Observe completed libvirt exchanges during qualified activation
+description: Add a read-only completed-exchange path bound to original backup and
+  receipt, independent resource preflight and progressive acknowledged service census
+  while preserving inactive mutation guards.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

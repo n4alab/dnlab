@@ -30,7 +30,7 @@ class ActivationLineage:
 
 
 class ActivationFiles:
-    def __init__(self,lineage,files,*,revision_window,preflight):
+    def __init__(self,lineage,files,*,revision_window,preflight,completed_exchange=None):
         if (files.journal is not lineage.view.journal or not callable(preflight)
                 or getattr(files,'root',None)!=lineage.view.files.root):
             raise Conflict('original activation files and explicit complete preflight required')
@@ -38,6 +38,12 @@ class ActivationFiles:
         reference=lineage.reference
         if revision_window.sha256!=reference['window_sha256']:
             raise Conflict('original revision window binding required for file observation')
+        if completed_exchange is not None:
+            from .libvirt_activation_exchange import CompletedExchangeObserver
+            if (not isinstance(completed_exchange,CompletedExchangeObserver)
+                    or completed_exchange.reference!=reference or completed_exchange.swap.files is not files):
+                raise Conflict('original completed activation exchange observer required')
+        self.completed_exchange=completed_exchange
         # Only observe_revised_file is exposed below; no command or file mutation.
         self.adapter=ConfigurationFileAdapter(files,window=revision_window,preflight=preflight)
 
@@ -48,7 +54,12 @@ class ActivationFiles:
         if item['spec']['path']==UNIT:
             if creator!=self.lineage.reference['id']:
                 raise Conflict('original revised activation file creator required')
-            proof=self.adapter.observe_revised_file(item,creator,self.lineage.reference)
+            if self.completed_exchange is None:
+                proof=self.adapter.observe_revised_file(item,creator,self.lineage.reference)
+            else:
+                if item['spec']!=self.lineage.reference['plan']['target_spec'] or item['nonce']!=self.lineage.reference['nonce']:
+                    raise Conflict('original revised activation descriptor differs')
+                proof=self.completed_exchange.observe()['replacement']
         else:
             if creator!=source['id']:raise Conflict('original persistent activation file creator required')
             proof=self.lineage.view.files.observe(deepcopy(item),creator)

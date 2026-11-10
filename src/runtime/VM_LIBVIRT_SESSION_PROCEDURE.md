@@ -1866,3 +1866,26 @@ missing acknowledgements, foreign processes, vendor activation and pending jobs.
 No native procfs/systemd/socket observation or command transport is supplied.
 Complete resource/snapshot preflight and command execution/recovery must still be
 composed; these tests neither activate a daemon nor establish native readiness.
+
+## Completed exchange observation during progressive activation
+
+CompletedExchangeObserver supplies a separate readonly path for the already
+completed revision. It requires the exact original request, staged/exchange
+records, replacement and backup identities, receipt, independent resource
+preflight and ActivationServices census for the bound activation ID. Resource
+and service observations are repeated around file checks; any change conflicts.
+It does not call staging, rename, fsync, recovery or schema initialization.
+
+ActivationFiles can explicitly select this observer for the revised unit while
+unchanged files retain their current-source observer. No inactive-service claim
+is generated for active acknowledged services. Existing ConfigurationSwap and
+ConfigurationFileAdapter mutation/effective guards remain unchanged and still
+require services_inactive=true on their original paths.
+
+Fourteen targeted synthetic tests pass, covering an acknowledged active daemon,
+no mutation calls, foreign process/command refusal, changed backup and mandatory
+resource preflight, plus successor file and lineage regressions. Files/exchange
+are real private temporary artifacts; process/systemd/socket and complete
+resource-provider leaves remain synthetic. There is no native activation
+transport or operational command in this change. Full snapshot/resource
+composition and tracked reload/start executor remain pending.

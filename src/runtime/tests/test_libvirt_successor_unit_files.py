@@ -17,6 +17,8 @@ from test_libvirt_configuration_adapter import configured,install,request_profil
 def successor(configured):
     old,adapter,reference,root=configured
     source=deepcopy(reference['installation']);source['context']['boot_id']='99999999-9999-4999-8999-999999999999'
+    source['context']['namespaces']={name:dict(device=1,inode=index+10)
+        for index,name in enumerate(('pid','mnt','net','user'))}
     source['postboot']={'synthetic_completed_directory_lineage':True}
     agreement=dict(operation_id='retire-unit',context=deepcopy(source['context']),targets=['file:'+UNIT],nonce='4'*32)
     window=ProvisioningWindow(agreement,lambda:deepcopy(agreement))
