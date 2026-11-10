@@ -1,0 +1,13 @@
+id: 20261110-095436-prepare-a-new-libvirt-boot-cycle-with-it
+type: internal
+title: Prepare a new libvirt boot cycle with its retained journal binding
+description: Allow an explicitly frozen retained binding for a fresh metadata-only
+  post-boot cycle while preserving initial-open behavior and exact output replay checks.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

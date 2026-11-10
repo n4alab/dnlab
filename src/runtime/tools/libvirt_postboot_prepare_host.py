@@ -21,6 +21,7 @@ RUNTIME=Path('/opt/dnlab/src/runtime')
 OUTPUT_PARENT=Path('/var/lib/dnlab-runtime-spikes')
 INPUTS=('installed.json','journal-reference.json','expected-packages.json','approved-account-inputs.json',
         'worker-profile.json','expected-context.json','postboot.json')
+BOUND_INPUTS=INPUTS+('journal-binding.json',)
 
 
 def verify_recipe(recipe):
@@ -28,7 +29,7 @@ def verify_recipe(recipe):
     sources={str(path.relative_to(RUNTIME)) for directory in ('dnlab_runtime','tools')
         for path in (RUNTIME/directory).glob('*.py')}
     if (receipt.get('schema_version')!=1 or receipt.get('runtime_root')!=str(RUNTIME)
-            or set(receipt.get('input_sha256',{}))!=set(INPUTS) or not sources
+            or set(receipt.get('input_sha256',{})) not in (set(INPUTS),set(BOUND_INPUTS)) or not sources
             or set(receipt.get('source_sha256',{}))!=sources
             or receipt.get('entry_sha256')!=hashlib.sha256(Path(__file__).read_bytes()).hexdigest()):
         raise RuntimeError('frozen post-boot prepare recipe differs')
@@ -63,7 +64,7 @@ def read_output(fd,name):
 
 def run(recipe,*,resume_output=None):
     recipe=Path(recipe);receipt=verify_recipe(recipe)
-    inputs={name:json.loads((recipe/name).read_text()) for name in INPUTS}
+    inputs={name:json.loads((recipe/name).read_text()) for name in receipt['input_sha256']}
     installed=inputs['installed.json'];reference=inputs['journal-reference.json']
     expected=inputs['expected-context.json'];request=inputs['postboot.json'];nonce=request['nonce']
     if (set(request)!={'qualification_id','recovery_id','nonce','window','run_parent'}
@@ -133,6 +134,11 @@ def run(recipe,*,resume_output=None):
                     return {key:entry[key] for key in ('exit_code','stdout','stderr')}
                 window=ProvisioningWindow(agreement,lambda:json.loads((recipe/'postboot.json').read_text())['window'])
                 binding=read_output(output_fd,'journal-binding.json') if resume_output is not None else None
+                if 'journal-binding.json' in inputs:
+                    original_binding=inputs['journal-binding.json']
+                    if resume_output is None:save(output,'journal-binding.json',original_binding)
+                    elif binding!=original_binding:raise RuntimeError('original retained prepare journal binding differs')
+                    binding=original_binding
                 journal,_=stack.enter_context(open_postboot_journal(reference['directory'],installed,
                     identity=reference['identity'],initial_sha256=reference['database_sha256'],
                     retain=lambda value:save(output,'journal-binding.json',value),verify=verify,original_binding=binding))

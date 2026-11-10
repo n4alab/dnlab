@@ -1763,3 +1763,25 @@ paths. There is no native retirement entry or operational recipe yet, and no
 installation journal, directory, unit or service was changed. The existing
 native revision is still only historically prepared; these tests do not retire
 it or authorize another apply.
+
+## Fresh post-boot metadata cycle with an existing retained journal binding
+
+The metadata prepare host entry accepts either its historical seven-input recipe
+or an explicit eight-input recipe containing `journal-binding.json`. The latter
+preserves and durably saves the original binding in the new output before a
+writable journal connection. Resume requires that exact binding; it never creates
+a new physical binding or treats the pre-metadata database hash as current.
+The original initial-open/hash behavior remains unchanged for old recipes.
+
+A new cycle uses separate qualification/recovery IDs and a new current-boot
+window. All historical references and the installation record remain unchanged.
+The prepared outcome contains metadata only: no directory creation, retirement,
+unit staging/replacement, account command, daemon reload/start or VM. The old
+prepared unit cannot be reused by this step. Retirement and a successor revision
+still require completed current-boot directory recovery and their own operations.
+
+Eight targeted synthetic host-transport tests pass, including existing initial
+prepare, retained-binding prepare/replay, response loss and rejection of a foreign
+binding without database changes. Native observers/query transports remain
+simulated; the new-cycle native recipe has not been executed. Its expected
+context and /run parent identity come from the saved readonly observation only.
