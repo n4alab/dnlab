@@ -145,7 +145,10 @@ class ActivationEventMonitor:
                     'event job not correlated with original command')
                 value['job']=event['job_path']
             elif kind=='invocation':
-                require(set(event)==common|{'invocation_id','pid','process_reference'} and value['job'] is not None and value['invocation'] is None
+                # systemd can emit unit changes before JobNew. Keep the first
+                # pinned candidate in stream order and qualify it only once the
+                # original job has been correlated and completed.
+                require(set(event)==common|{'invocation_id','pid','process_reference'} and value['invocation'] is None
                     and isinstance(event['invocation_id'],str) and re.fullmatch('[0-9a-f]{32}',event['invocation_id']) is not None
                     and event['invocation_id']!='0'*32 and type(event['pid']) is int and event['pid']>0,
                     'missing or replaced first service invocation')
@@ -172,7 +175,8 @@ class ActivationEventMonitor:
             except Conflict as error:
                 value=before;value.update(phase='pending',failure=str(error));self._save(value)
                 raise
-            require(value['completed'] and value['invocation'] is not None,'original service event evidence pending')
+            require(value['job'] is not None and value['completed'] and value['invocation'] is not None,
+                'original service event evidence pending')
             command=self.command_reader(deepcopy(item),request['activation_id'])
             require(isinstance(command,dict) and set(command)=={'sha256','exit_code','process_reference_sha256'}
                 and command['sha256']==request['command_sha256'] and type(command['exit_code']) is int and command['exit_code']==0

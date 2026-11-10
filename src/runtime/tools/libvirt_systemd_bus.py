@@ -78,12 +78,15 @@ class SdBusABI:
             signature=library.sd_bus_message_get_signature(reply,1)
             require(isinstance(sender,bytes) and signature==output.encode('ascii'),
                     'original bus reply sender/signature missing')
-            body = C.c_uint32() if output == 'u' else C.c_char_p()
-            require(success(library.sd_bus_message_read_basic(reply,signature,C.byref(body)),
-                            'sd_bus_message_read_basic') > 0 and body.value is not None,
-                    'original bus reply body missing')
+            values = []
+            if output:
+                body = C.c_uint32() if output == 'u' else C.c_char_p()
+                require(success(library.sd_bus_message_read_basic(reply,signature,C.byref(body)),
+                                'sd_bus_message_read_basic') > 0 and body.value is not None,
+                        'original bus reply body missing')
+                values.append(body.value if output == 'u' else body.value.decode('ascii'))
             return dict(call_serial=sent.value,reply_serial=received.value,sender=sender.decode('ascii'),
-                signature=output,body=[body.value if output == 'u' else body.value.decode('ascii')])
+                signature=output,body=values)
         finally:
             if reply.value is not None:library.sd_bus_message_unref(reply)
             if message.value is not None:library.sd_bus_message_unref(message)

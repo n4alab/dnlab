@@ -1,0 +1,13 @@
+id: 20261110-234810-observe-systemd-activation-signals-in-wi
+type: internal
+title: Observe systemd activation signals in wire order
+description: Retain the first pinned generation even when unit properties arrive before
+  JobNew. Qualify it only after the original StartUnit job is correlated and completes.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

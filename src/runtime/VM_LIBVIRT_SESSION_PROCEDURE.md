@@ -2195,3 +2195,17 @@ exclusive private report directory. The synthetic tests cover descriptor
 ownership, changed inputs and a changed manager owner. Native execution
 requires separate authorization. Live systemd job and libvirt daemon
 qualification are later steps.
+
+## Systemd activation signals
+
+The event reader opens an owned, verified D-Bus connection, installs matches
+before subscribing and retains the first process generation in signal order.
+Systemd may emit unit property updates before `JobNew`. The monitor retains
+the pinned candidate in either order and requires the job from the original
+`StartUnit` receipt and its successful completion before qualification.
+An unmatched job, a changed manager or a replaced generation ends the
+observation without qualifying the service.
+
+The event reader has been exercised with synthetic signals and the activation
+journal. Native process pinning and live job correlation still require
+qualification before the dedicated daemon activation path is exercised.
