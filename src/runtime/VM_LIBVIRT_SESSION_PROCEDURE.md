@@ -1953,3 +1953,23 @@ force/environment injection and changed/writable binaries are refused. No
 interpreter worker, subprocess, systemctl or service was launched. Parent runner,
 original-process observation, activation assembly and host qualification remain
 pending; source code for exec does not authorize native invocation.
+
+## Activation runner and original-process observer — synthetic qualification
+
+ActivationProcessRunner reuses the blocked parent transport with the separate
+activation command validator and `libvirt_activation_workers` table.
+ActivationWorkerObserver uses `libvirt_activation_processes`, preserving pinned
+waiter/pidfd, boot/namespace and durable exit checks. While alive after exec, the
+systemctl process must retain its exact original argv; the account observer's
+special allowance for scrubbed account argv is not used on this path.
+
+Shared runner/observer table selection is a code-level class default; account
+instances retain their original tables and validator. No user-selected table or
+command policy is introduced. Lost release is not resent, lost waiter is not
+reconstructed from PID, and committed outcomes can reopen without spawning.
+
+Fifty-two targeted tests pass, including shared account regressions and activation
+cases with fake Popen/observer and synthetic procfs/pidfd/poll. No real child,
+process inspection, systemctl, reload/start or service mutation occurred. Native
+source/interpreter/bin qualification, progressive assembly and an explicitly
+authorized host canary remain pending; these tests do not establish host readiness.

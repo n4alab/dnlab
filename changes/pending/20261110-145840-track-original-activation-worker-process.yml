@@ -1,0 +1,14 @@
+id: 20261110-145840-track-original-activation-worker-process
+type: internal
+title: Track original activation worker processes in separate journals
+description: Reuse blocked-runner mechanics with activation-specific validation and
+  separate worker/process tables, requiring exact target argv while preserving account
+  defaults and original waiter/exit checks.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

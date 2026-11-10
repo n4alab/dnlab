@@ -19,6 +19,8 @@ from .qemu_process import stat_start
 
 
 class AccountWorkerObserver:
+    process_table='libvirt_account_processes'
+
     def __init__(self,journal,*,proc_root='/proc',pidfd_open=os.pidfd_open,
                  poll_factory=select.poll,pid_namespace=None):
         self.journal,self.proc_root=journal,Path(proc_root)
@@ -26,7 +28,7 @@ class AccountWorkerObserver:
         self.pid_namespace=pid_namespace or self._local_namespace
         self.live={}
         with journal.transaction():
-            journal.db.execute('CREATE TABLE IF NOT EXISTS libvirt_account_processes '
+            journal.db.execute('CREATE TABLE IF NOT EXISTS '+self.process_table+' '
                 '(token TEXT PRIMARY KEY,payload TEXT NOT NULL,fingerprint TEXT NOT NULL)')
 
     @staticmethod
@@ -139,15 +141,15 @@ class AccountWorkerObserver:
             value=dict(reference=deepcopy(reference),command_sha256=fingerprint(command),
                 snapshot=deepcopy(live['snapshot']),exit=None)
             with self.journal.transaction():
-                if self.journal.db.execute('SELECT token FROM libvirt_account_processes WHERE token=?',(reference['token'],)).fetchone():
+                if self.journal.db.execute('SELECT token FROM '+self.process_table+' WHERE token=?',(reference['token'],)).fetchone():
                     raise Conflict('original helper binding is immutable')
-                self.journal.db.execute('INSERT INTO libvirt_account_processes VALUES(?,?,?)',
+                self.journal.db.execute('INSERT INTO '+self.process_table+' VALUES(?,?,?)',
                     (reference['token'],canonical(value),fingerprint(value)))
             live['token']=reference['token']
 
     def _read(self,reference):
         with self.journal.lock:
-            row=self.journal.db.execute('SELECT * FROM libvirt_account_processes WHERE token=?',(reference['token'],)).fetchone()
+            row=self.journal.db.execute('SELECT * FROM '+self.process_table+' WHERE token=?',(reference['token'],)).fetchone()
         if row is None:raise Conflict('original helper binding missing')
         value=json.loads(row['payload'])
         if fingerprint(value)!=row['fingerprint'] or value['reference']!=reference:
@@ -201,7 +203,7 @@ class AccountWorkerObserver:
             if value['exit'] is not None and value['exit']!=proof:raise Conflict('original helper exit differs')
             value['exit']=proof
             with self.journal.transaction():
-                self.journal.db.execute('UPDATE libvirt_account_processes SET payload=?,fingerprint=? WHERE token=?',
+                self.journal.db.execute('UPDATE '+self.process_table+' SET payload=?,fingerprint=? WHERE token=?',
                     (canonical(value),fingerprint(value),reference['token']))
             return True
 

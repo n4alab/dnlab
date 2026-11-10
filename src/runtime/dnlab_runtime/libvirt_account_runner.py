@@ -89,6 +89,9 @@ def collect_output(process,state,timeout=10):
 
 
 class AccountProcessRunner:
+    worker_table='libvirt_account_workers'
+    command_validator=staticmethod(validate_command)
+
     def __init__(self,journal,*,profile,observer,spawn=subprocess.Popen,opener=open_resource,
                  read_ready=ready_line,read_output=collect_output):
         if set(profile)!={'python','worker'} or any(set(v)!={'path','sha256'} for v in profile.values()):
@@ -97,17 +100,17 @@ class AccountProcessRunner:
         self.spawn,self.opener,self.read_ready,self.read_output=spawn,opener,read_ready,read_output
         self.live={}
         with journal.transaction():
-            journal.db.execute('CREATE TABLE IF NOT EXISTS libvirt_account_workers '
+            journal.db.execute('CREATE TABLE IF NOT EXISTS '+self.worker_table+' '
                 '(token TEXT PRIMARY KEY,payload TEXT NOT NULL,fingerprint TEXT NOT NULL)')
 
     def _save(self,value):
         with self.journal.transaction():
-            self.journal.db.execute('UPDATE libvirt_account_workers SET payload=?,fingerprint=? WHERE token=?',
+            self.journal.db.execute('UPDATE '+self.worker_table+' SET payload=?,fingerprint=? WHERE token=?',
                 (canonical(value),fingerprint(value),value['token']))
 
     def _read(self,reference):
         with self.journal.lock:
-            row=self.journal.db.execute('SELECT * FROM libvirt_account_workers WHERE token=?',(reference['token'],)).fetchone()
+            row=self.journal.db.execute('SELECT * FROM '+self.worker_table+' WHERE token=?',(reference['token'],)).fetchone()
         if row is None:raise Conflict('original account worker journal missing')
         value=json.loads(row['payload'])
         if (fingerprint(value)!=row['fingerprint'] or value['reference']!=reference
@@ -117,7 +120,7 @@ class AccountProcessRunner:
         return value
 
     def arm(self,command):
-        validate_command(command)
+        self.command_validator(command)
         with self.journal.execution_lock:
             token=uuid.uuid4().hex
             packet=(canonical(dict(token=token,command=command))+'\n').encode()
@@ -125,7 +128,7 @@ class AccountProcessRunner:
             value=dict(token=token,command=deepcopy(command),profile=deepcopy(self.profile),
                 phase='launch_requested',reference=None,outcome=None)
             with self.journal.transaction():
-                self.journal.db.execute('INSERT INTO libvirt_account_workers VALUES(?,?,?)',
+                self.journal.db.execute('INSERT INTO '+self.worker_table+' VALUES(?,?,?)',
                     (token,canonical(value),fingerprint(value)))
             with self.opener(command['binary']['path']) as binary, self.opener(self.profile['python']['path']) as python, self.opener(self.profile['worker']['path']) as worker:
                 binary_proof(binary,command['binary']['sha256'])
