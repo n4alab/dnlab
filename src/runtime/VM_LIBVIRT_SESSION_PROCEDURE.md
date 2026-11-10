@@ -2027,3 +2027,19 @@ proofs: registration before command, replay, lost monitor/commit replies, foreig
 monitor/command/process/resource proof and generation replacement. No host
 monitor, process, systemctl, reload/start or service mutation was executed.
 Progressive controller assembly and native qualification remain pending.
+
+## Progressive activation controller — synthetic providers only
+
+ActivationController composes the existing activation, command and acknowledgement
+journals. All three original monitor references are bound before the first command;
+registration cannot replace them. Original worker exit is collected before monitored
+service qualification and the complete progressive resource/service preflight.
+Confirmation remains blocked on incomplete or conflicting evidence.
+
+Recovery reconciles only commands already requested, without arm/release or advancing
+later prepared steps. Continuing activation requires explicit apply. Six controller
+tests and twenty command tests pass, including lost replies, conflicts after start,
+original monitor binding, empty-session rejection and replay without duplicate commands.
+All processes, monitors, services and inventory are synthetic. Native monitor creation,
+resource/process/socket providers and host qualification remain pending; no reload,
+service start or VM operation was executed.

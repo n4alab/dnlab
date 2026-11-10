@@ -34,10 +34,12 @@ def command_plan(installation,item,activation_id,binary):
 
 
 class ActivationCommands:
-    def __init__(self,journal,*,binary,runner,activation_reader,preflight):
+    def __init__(self,journal,*,binary,runner,activation_reader,preflight,after_outcome=None):
         if not callable(activation_reader) or not callable(preflight):raise Conflict('explicit original command providers required')
         self.journal,self.binary,self.runner=journal,deepcopy(binary),runner
         self.activation_reader,self.preflight=activation_reader,preflight
+        if after_outcome is not None and not callable(after_outcome):raise Conflict('explicit outcome qualifier required')
+        self.after_outcome=after_outcome
         with journal.transaction():
             journal.db.execute('CREATE TABLE IF NOT EXISTS libvirt_activation_commands '
                 '(activation_id TEXT NOT NULL,nonce TEXT NOT NULL,payload TEXT NOT NULL,fingerprint TEXT NOT NULL,'
@@ -150,6 +152,7 @@ class ActivationCommands:
             result=self._outcome(value)
             if result is None:raise Conflict('original activation command outcome pending')
             if value['phase']=='completed' and result!=value['outcome']:raise Conflict('original activation outcome changed')
+            if self.after_outcome is not None:self.after_outcome(deepcopy(item),operation,self._proof(value))
             self._check(value,item)
             if value['phase']!='completed':value.update(phase='completed',outcome=result);self._save(value)
             return self.completion(item,operation)
@@ -185,6 +188,7 @@ class ActivationCommands:
             self.runner.release(deepcopy(reference))
             result=self._outcome(value)
             if result is None:raise Conflict('activation command outcome pending; no execution retry')
+            if self.after_outcome is not None:self.after_outcome(deepcopy(item),operation,self._proof(value))
             self._check(value,item)
             value.update(phase='completed',outcome=result);self._save(value)
             return self.completion(item,operation)

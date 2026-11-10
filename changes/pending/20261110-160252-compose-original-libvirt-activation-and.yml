@@ -1,0 +1,14 @@
+id: 20261110-160252-compose-original-libvirt-activation-and
+type: internal
+title: Compose original libvirt activation and recovery
+description: Compose persistent activation, original worker outcomes and monitored
+  service receipts; recovery reconciles only requested commands and requires complete
+  resource preflight before confirmation. Native providers remain explicit and unqualified.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
