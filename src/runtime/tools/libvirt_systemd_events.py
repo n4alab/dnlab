@@ -9,6 +9,7 @@ import uuid
 from dnlab_runtime.libvirt_activation_bus import UNITS
 from dnlab_runtime.manifest import Conflict, fingerprint
 from tools.libvirt_bus_connection import BROKER, MANAGER, TIMEOUT, ConnectionABI, open_proven_bus, unique_name
+from tools.libvirt_service_process import open_service_process_pins
 from tools.libvirt_systemd_bus import require, success
 
 MANAGER_PATH = '/org/freedesktop/systemd1'
@@ -276,17 +277,18 @@ class SystemdActivationStream:
 
 
 @contextmanager
-def open_activation_stream(root, inventory, requests, *, read_context, pin_process):
+def open_activation_stream(root, inventory, requests, *, read_context):
     """Keep the sole original subscription live for all three activation steps."""
     requests = tuple(requests)
     require({request['spec']['unit'] for request in requests} == set(UNITS)
             and all(request['context'] == inventory['context'] for request in requests),
             'dedicated activation stream and inventory contexts must agree')
-    with open_proven_bus(root, inventory, read_context=read_context) as (abi, handle, identity):
+    with (open_service_process_pins(inventory['context'], read_context=read_context) as processes,
+          open_proven_bus(root, inventory, read_context=read_context) as (abi, handle, identity)):
         signals = SystemdSignals(SignalABI(abi.library), handle, identity)
-        stream = SystemdActivationStream(signals, requests, pin_process=pin_process)
+        stream = SystemdActivationStream(signals, requests, pin_process=processes.pin)
         try:
-            yield stream
+            yield stream, processes
             stream._pump()
         finally:
             stream.continuous = False

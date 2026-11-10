@@ -2206,6 +2206,12 @@ the pinned candidate in either order and requires the job from the original
 An unmatched job, a changed manager or a replaced generation ends the
 observation without qualifying the service.
 
-The event reader has been exercised with synthetic signals and the activation
-journal. Native process pinning and live job correlation still require
-qualification before the dedicated daemon activation path is exercised.
+The native stream and its process pins share the activation supervisor lifetime.
+The first generation binds a retained pidfd to its proc directory, start time,
+dedicated credentials, namespaces and systemd invocation ID. Each verification
+checks the original descriptor and process. Closing the supervisor invalidates
+the reference. A replacement supervisor cannot recover it by reopening the PID.
+
+The event reader and pin provider have been exercised with synthetic signals,
+procfs fixtures and the activation journal. Live process and job correlation
+still require qualification on the master.

@@ -1,0 +1,14 @@
+id: 20261110-235202-retain-pidfd-pins-for-systemd-activation
+type: internal
+title: Retain pidfd pins for systemd activation generations
+description: Bind the first service invocation to its original process and pidfd for
+  the lifetime of the native activation stream. Refuse a replacement process even
+  when it reuses the numeric PID.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
