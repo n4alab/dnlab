@@ -1,0 +1,15 @@
+id: 20261110-163942-prepare-bounded-libsystemd-and-bus-socke
+type: internal
+title: Prepare bounded libsystemd and bus socket inventory
+description: Add a two-pass readonly prerequisite collector for the fixed libsystemd
+  alias, constrained sibling target, controlled parents and system bus socket metadata.
+  Preserve context diagnostics and reject changes without loading libraries or opening
+  sockets.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

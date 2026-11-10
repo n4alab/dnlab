@@ -2146,3 +2146,20 @@ API references (systemd v257):
 https://raw.githubusercontent.com/systemd/systemd/v257/src/systemd/sd-bus.h
 https://raw.githubusercontent.com/systemd/systemd/v257/man/sd_bus_call.xml
 https://raw.githubusercontent.com/systemd/systemd/v257/man/sd_bus_message_append_basic.xml
+
+## Bus prerequisite collector — synthetic filesystem only
+
+libvirt_bus_prerequisites collects only the fixed amd64 libsystemd alias, its
+constrained sibling target, controlled parent directories and system bus socket
+metadata. It hashes bounded ELF bytes through pinned descriptors, compares two
+passes and saves expected/observed context before rejecting differences. It
+never loads a library, opens the socket or queries packages/accounts/services.
+The report remains unqualified, including when the library is absent.
+
+Ten tests pass with temporary files/links and synthetic socket stat metadata.
+No socket is created; open attempts on the socket path are explicitly refused
+by the fixture. External targets, non-ELF/writable libraries, changed context,
+changed bytes and non-socket metadata are covered. No master input was read.
+The collector requires an already opened root FD and explicit context/private
+persistence providers; it has no native CLI/default. A frozen one-shot host
+recipe and separate authorization remain necessary before collecting real input.
