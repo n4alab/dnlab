@@ -2163,3 +2163,20 @@ changed bytes and non-socket metadata are covered. No master input was read.
 The collector requires an already opened root FD and explicit context/private
 persistence providers; it has no native CLI/default. A frozen one-shot host
 recipe and separate authorization remain necessary before collecting real input.
+
+## Frozen readonly bus inventory wrapper — prepared, not executed on master
+
+libvirt_bus_inventory_host freezes the complete runtime/tool source hashes and
+fixed request scope. Native entry requires --collect-host and Python -B. A fresh
+current context is recorded before collection and must stay stable throughout;
+it is diagnostic only and does not requalify historical installation/processes.
+
+Only an exclusive private output directory and report files are written. The
+same nonce/output cannot be reused. Context mismatches retain expected/observed
+values; changed request/sources fail before collection. The output parent must
+be controlled and cannot be a symlink. No original journal is accessed.
+
+Six wrapper tests plus ten collector tests pass against a temporary root,
+synthetic context and socket metadata. The real collector runs in those fixtures,
+but no master input, library, package, account or service is observed. A separate
+explicit authorization is required to execute the prepared native recipe once.

@@ -1,0 +1,15 @@
+id: 20261110-164405-prepare-one-shot-readonly-bus-inventory
+type: internal
+title: Prepare one-shot readonly bus inventory recipe
+description: Freeze the bus collector source/request inputs and write private one-shot
+  diagnostics with stable current context. Require explicit native collection flag
+  and Python -B; provide no bus connection, library load, package query or service
+  action.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
