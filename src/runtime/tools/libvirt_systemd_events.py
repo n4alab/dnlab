@@ -159,13 +159,17 @@ class SystemdSignals:
         require(not self.started, 'original systemd subscription already attempted')
         self.started = True
         deadline = monotonic() + TIMEOUT
-        matches = (
+        matches = [
             f"type='signal',sender='{BROKER}',path='{BROKER_PATH}',interface='{BROKER}',"
             f"member='NameOwnerChanged',arg0='{MANAGER}'",
-            f"type='signal',sender='{self.owner}',path='{MANAGER_PATH}',interface='{MANAGER_INTERFACE}'",
-            f"type='signal',sender='{self.owner}',path_namespace='{UNIT_PATH.rstrip('/')}',"
-            f"interface='{PROPERTIES}',member='PropertiesChanged'",
-        )
+        ]
+        for unit in UNITS:
+            for member in ('JobNew', 'JobRemoved'):
+                matches.append(f"type='signal',sender='{self.owner}',path='{MANAGER_PATH}',"
+                               f"interface='{MANAGER_INTERFACE}',member='{member}',arg2='{unit}'")
+        for path in UNIT_PATHS:
+            matches.append(f"type='signal',sender='{self.owner}',path='{path}',"
+                           f"interface='{PROPERTIES}',member='PropertiesChanged'")
         for match in matches:
             self._call(BROKER, BROKER_PATH, BROKER, 'AddMatch', [match], deadline)
         self._call(self.owner, MANAGER_PATH, MANAGER_INTERFACE, 'Subscribe', [], deadline)

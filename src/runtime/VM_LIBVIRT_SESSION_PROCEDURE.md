@@ -2319,3 +2319,16 @@ original libvirtd generation is qualified, the live observers check its
 state and the all-domain query verifies the empty session.
 [Libvirt QEMU session paths](https://github.com/libvirt/libvirt/blob/v11.3.0/src/qemu/qemu_conf.c),
 [Libvirt startup loading](https://github.com/libvirt/libvirt/blob/v11.3.0/src/qemu/qemu_driver.c).
+
+### Recovery before the first service start
+
+The bus subscription matches job signals by the dedicated unit argument and
+property signals by each exact unit path. A daemon reload can emit property
+changes for the host's other units, so these are filtered at the broker.
+
+If the supervisor exits after the reload has completed and before any service
+start intent exists, explicit prestart recovery can retain the original
+activation reference and durable reload completion. It archives the unused
+monitor records before registering new subscriptions. Complete inactive
+inventory and resource checks still apply. A recorded start, job, invocation
+or service acknowledgement prevents this recovery path.

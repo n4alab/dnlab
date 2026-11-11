@@ -143,10 +143,14 @@ def test_broker_matches_are_installed_before_subscribe_and_never_retried():
     abi = ABI()
     signals = SystemdSignals(abi, object(), dict(manager_owner=':1.42', unique_name=':1.43'))
     signals.subscribe()
-    assert [row[:2] for row in abi.calls] == [(BROKER, 'AddMatch')] * 3 + [(':1.42', 'Subscribe')]
+    assert [row[:2] for row in abi.calls] == [(BROKER, 'AddMatch')] * 10 + [(':1.42', 'Subscribe')]
+    rules = [row[2][0] for row in abi.calls[:-1]]
+    assert not any('path_namespace=' in rule for rule in rules)
+    assert all("arg2='dnlab-" in rule for rule in rules[1:7])
+    assert all(any("path='" + path + "'" in rule for path in UNIT_PATHS) for rule in rules[7:])
     with pytest.raises(Conflict, match='already attempted'):
         signals.subscribe()
-    assert len(abi.calls) == 4
+    assert len(abi.calls) == 11
 
 
 @pytest.mark.parametrize('order', ['job-first', 'properties-first', 'foreign-job'])

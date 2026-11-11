@@ -42,7 +42,8 @@ def close_worker_pipes(runner):
 @contextmanager
 def open_native_activation(journal, installation, *, root, operation, window, binary,
                            reload_profile, start_profile, sources_sha256, bus_inventory,
-                           read_context, source_reader, resources, inventory, virsh, files, unit_query):
+                           read_context, source_reader, resources, inventory, virsh, files, unit_query,
+                           prestart_reference=None):
     """Prepare and bind an activation, leaving all command releases to the caller."""
     installation = deepcopy(installation)
     bus_inventory = deepcopy(bus_inventory)
@@ -99,6 +100,9 @@ def open_native_activation(journal, installation, *, root, operation, window, bi
 
         with journal.execution_lock:
             reference = controller.prepare()
+            if prestart_reference is not None:
+                from dnlab_runtime.libvirt_activation_prestart import retire_unused_monitors
+                retire_unused_monitors(controller, prestart_reference)
             with journal.lock:
                 already_bound = journal.db.execute(
                     'SELECT 1 FROM libvirt_activation_monitor_bindings WHERE activation_id=?',
@@ -110,7 +114,7 @@ def open_native_activation(journal, installation, *, root, operation, window, bi
                     'SELECT 1 FROM libvirt_activation_event_monitors WHERE activation_id=?',
                     (operation,)).fetchone()
             if (already_bound or already_registered or
-                    any(item['phase'] != 'prepared' for item in reference['items'])):
+                    prestart_reference is None and any(item['phase'] != 'prepared' for item in reference['items'])):
                 raise Conflict('original native activation supervisor cannot be replaced')
             requests = [controller.monitor_request(reference, item) for item in reference['items']
                         if item['spec']['kind'] == 'start']
@@ -128,5 +132,8 @@ def open_native_activation(journal, installation, *, root, operation, window, bi
             lifetime.callback(setattr, monitor, 'monitor', None)
             references = {request['spec']['unit']: event_monitor.register(
                 request, stream.subscription(request['spec']['unit'])) for request in requests}
-            controller.bind_monitors(references)
+            controller.bind_monitors(references, after_reload=prestart_reference is not None)
+            if prestart_reference is not None:
+                reference=deepcopy(prestart_reference)
+                controller.recover_original(reference)
         yield controller, reference

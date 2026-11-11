@@ -73,7 +73,7 @@ def verify_recipe(recipe):
     return inputs, sha(source_inventory)
 
 
-def activate(inputs, sources_sha256, *, verify, persist):
+def activate(inputs, sources_sha256, *, verify, persist, prestart_reference=None):
     from dnlab_runtime.libvirt_account_identity import host_query
     from dnlab_runtime.libvirt_account_runner import open_resource, source_proof
     from dnlab_runtime.libvirt_account_worker import binary_proof
@@ -187,6 +187,7 @@ def activate(inputs, sources_sha256, *, verify, persist):
             reload_profile=dict(python=binaries['python'], worker=binaries['reload']),
             start_profile=dict(python=binaries['python'], worker=binaries['start']),
             sources_sha256=sources_sha256, bus_inventory=bus, read_context=context, virsh=binaries['virsh'],
+            **(dict(prestart_reference=prestart_reference) if prestart_reference is not None else {}),
         ) as (controller, reference):
             persist('prepared.json', reference)
             try:
@@ -199,7 +200,7 @@ def activate(inputs, sources_sha256, *, verify, persist):
         return result
 
 
-def run(recipe):
+def run(recipe,*,prestart_reference=None):
     from tools.libvirt_bus_inventory_host import private_report
 
     inputs, sources = verify_recipe(recipe)
@@ -212,14 +213,16 @@ def run(recipe):
         if verify_recipe(recipe) != (inputs, sources):
             raise ValueError('original activation recipe changed')
 
-    with private_report(OUTPUT_PARENT, 'libvirt-activation-' + nonce[:12]) as (write, output):
+    suffix='-recover-prestart' if prestart_reference is not None else ''
+    with private_report(OUTPUT_PARENT, 'libvirt-activation-' + nonce[:12]+suffix) as (write, output):
         def persist(name, value):
             write(name, json.dumps(value, sort_keys=True).encode() + b'\n')
 
         persist('invocation.json', dict(window=agreement, sources_sha256=sources,
                                         activation_source_sha256=sha((recipe / 'activation-source.json').read_bytes())))
         try:
-            activated = activate(inputs, sources, verify=verify, persist=persist)
+            options=dict(prestart_reference=prestart_reference) if prestart_reference is not None else {}
+            activated = activate(inputs, sources, verify=verify, persist=persist,**options)
             result = dict(status='ready_empty', activation=activated)
         except Exception as error:
             result = dict(status='failed', error_type=type(error).__name__, error=str(error))
@@ -231,12 +234,14 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--recipe', required=True, type=Path)
     parser.add_argument('--activate-host', action='store_true', required=True)
+    parser.add_argument('--prestart-reference', type=Path)
     args = parser.parse_args(argv)
     if not sys.dont_write_bytecode or not sys.flags.isolated or not sys.flags.no_site or os.geteuid() != 0:
         parser.error('root and python -B -I -S required')
     verify_recipe(args.recipe)
     sys.path.insert(0, str(RUNTIME))
-    result, output = run(args.recipe)
+    reference=json.loads(args.prestart_reference.read_bytes()) if args.prestart_reference is not None else None
+    result, output = run(args.recipe,prestart_reference=reference)
     print(json.dumps(dict(status=result['status'], output=str(output)), sort_keys=True), flush=True)
     return 0 if result['status'] == 'ready_empty' else 1
 

@@ -75,10 +75,15 @@ class ActivationController:
                 self.acknowledgements._reference(saved['references'][item['spec']['unit']],self.monitor_request(value,item))
         return deepcopy(saved['references'])
 
-    def bind_monitors(self,references):
+    def bind_monitors(self,references,*,after_reload=False):
         with self.journal.execution_lock:
             value=self.driver.read(self.operation);self._bound(value)
-            if any(item['phase']!='prepared' for item in value['items']):raise Conflict('monitors bind before activation actions only')
+            if after_reload:
+                if (any(item['phase']!='prepared' for item in value['items'][1:])
+                        or self.commands.original_completion(value['items'][0],self.operation) is None):
+                    raise Conflict('original reload and unrequested starts required for monitor recovery')
+            elif any(item['phase']!='prepared' for item in value['items']):
+                raise Conflict('monitors bind before activation actions only')
             expected={item['spec']['unit'] for item in value['items'] if item['spec']['kind']=='start'}
             if not isinstance(references,dict) or set(references)!=expected:raise Conflict('complete original monitor references required')
             saved=dict(activation_id=self.operation,installation_sha256=fingerprint(self.source),window_sha256=self.window.sha256,

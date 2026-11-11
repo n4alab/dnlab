@@ -1,0 +1,13 @@
+id: 20261111-221226-recover-libvirt-subscriptions-before-the
+type: internal
+title: Recover libvirt subscriptions before the first start
+description: Filter systemd signals to dedicated units and preserve the completed
+  original reload when recovering unused prestart monitors.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
