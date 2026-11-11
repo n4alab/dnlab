@@ -1,0 +1,13 @@
+id: 20261111-233619-reuse-immutable-libvirt-revision-project
+type: internal
+title: Reuse immutable libvirt revision projections
+description: Avoid repeated projection and duplicate revision reads during post-boot
+  qualification while preserving fresh journal, retirement and resource checks.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

@@ -75,9 +75,10 @@ class PostBootQualification:
         if self.completed_revision is None:
             if binding is not None:raise Conflict('original completed revision reader required')
             return
-        if binding!=self.completed_revision.binding(value['installation'],value['context']):
+        source,observed_binding=self.completed_revision.source_and_binding(value['installation'],value['context'])
+        if binding!=observed_binding:
             raise Conflict('original post-boot completed revision binding differs')
-        return self.completed_revision.source(value['installation'],value['context'])
+        return source
 
     def read(self,operation):
         row=self.journal.db.execute('SELECT * FROM libvirt_postboot_qualifications WHERE id=?',(operation,)).fetchone()

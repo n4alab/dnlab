@@ -95,3 +95,36 @@ def test_requalification_preserves_prepared_state_on_conflict(after_revision, fa
         qualification.qualify_persistent(value['id'])
     assert qualification.read(value['id'])['phase'] == 'prepared'
     assert recovery.files.calls == []
+
+
+def test_projection_reuse_rechecks_journal_and_returns_independent_values(after_revision, monkeypatch):
+    qualification, value, _, revision, reference, _, _, _ = after_revision
+    completed = qualification.completed_revision
+    original_read = revision.read
+    reads = []
+
+    def read(operation):
+        reads.append(operation)
+        return original_read(operation)
+
+    monkeypatch.setattr(revision, 'read', read)
+    source = qualification._revision(value)
+    assert reads == [reference['id']]
+    source['context']['host_id'] = 'changed-copy'
+    assert qualification._revision(value)['context']['host_id'] != 'changed-copy'
+    changed = deepcopy(reference)
+    changed['window_sha256'] = 'f' * 64
+    monkeypatch.setattr(revision, 'read', lambda operation: changed)
+    with pytest.raises(Conflict, match='original completed unit revision changed'):
+        qualification._revision(value)
+
+
+def test_cached_projection_does_not_bypass_retirement(after_revision, monkeypatch):
+    qualification, value, _, revision, _, _, _, _ = after_revision
+
+    def retired(reference):
+        raise Conflict('configuration revision retired')
+
+    monkeypatch.setattr(revision, '_active', retired)
+    with pytest.raises(Conflict, match='configuration revision retired'):
+        qualification._revision(value)
