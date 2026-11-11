@@ -29,6 +29,21 @@ n9kv/vIOS source profiles, asset candidates and unresolved machine/PCI details.
 It separates source facts from guest and host qualification; it is not a
 bootable bundle and does not transfer previous container qualifications.
 
+`vm_sample_template.py` now translates those two V2 profiles into candidate
+manifests. Resources, NIC count, versioned machine and root PCI addresses are
+explicit inputs; automatic placement from the launcher is never inferred.
+`vm_bundle_prepare.py` copies pinned source FDs into a new content-addressed
+directory, verifies hashes and sizes, synchronizes files/directories and
+publishes the manifest last with an exclusive rename. Existing or interrupted
+attempts are preserved and refused. This is offline packaging, without disk
+conversion, overlays or guest execution. A matching filesystem bundle is still
+not a host/guest qualification or permission to boot it.
+
+Current master milestone: the dedicated non-root libvirt session has completed
+its original activation and returned an empty all-domain inventory. The three
+daemon generations and private sockets were qualified; no VM has been created.
+Earlier package/installation milestones below describe their original scope.
+
 `tools/vm_host_inventory.py` prepares the first host prerequisite collection.
 It requires explicit `--collect-host --host-id HOST`, or `--fixture-root` for
 synthetic input. It reports bounded hashes/metadata for fixed QEMU/libvirt and

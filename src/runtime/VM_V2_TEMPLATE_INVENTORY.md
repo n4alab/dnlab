@@ -1,7 +1,7 @@
 # Initial direct-VM template inventory
 
-This is source analysis for the experimental libvirt backend, not a bootable
-bundle or a qualification of the guest. Only `_V2` launchers are considered.
+This is source analysis and candidate preparation for the experimental libvirt
+backend, not a qualification of the guest. Only `_V2` launchers are considered.
 No launcher or image-build recipe was executed to obtain these facts.
 
 ## Source profiles
@@ -95,11 +95,35 @@ shutdown capability is established by these launchers' SIGTERM handlers.
 
 ## Remaining work for the first bundles
 
-1. Pin the source repository/branch/commit and record launchers, common code,
-   build patches and firmware by hash; keep the V2 source choice explicit.
+The first readonly source collection verified the three relevant launcher/common
+files against Git commit `b37f5fa8ff2097ce3a433e6c2486a9132d96970e`. On the master,
+QEMU's machine list includes `pc-i440fx-10.0` as the version behind `pc`.
+The two selected source disks are qcow2 1.1, with no backing filename reported,
+dirty flag false and corrupt false in `qemu-img info`. Their content hashes are:
+
+- n9kv 9500: `923d5f910d25956329757190b62fbfc960b02d82a2aecb98809eac87a99b45e8`
+- vIOS L2: `24c79d9cc59a40d44bca3bb47f9ecc3020429fc20f6950011d9cf045882c5deb`
+- V2 OVMF: `ecac18b7b102b61fa826c517257c50571af07aef13512f745d3daff38ee60fe2`
+
+These are source-file observations, not a disk consistency check or a libvirt
+capability result. The readonly command follows the
+[QEMU image-info interface](https://www.qemu.org/docs/master/tools/qemu-img.html).
+The command uses an explicit qcow2 format and no shared-write override.
+
+`vm_sample_template.sample_template` requires explicit root PCI placement and
+retains the common source's bridge inventory and data-slot formula. Its guest
+names are expected mappings to test, with manual bootstrap/readiness and
+unqualified shutdown. `vm_bundle_prepare.prepare_bundle` prepares immutable
+copies from pinned FDs in a private owned parent, refusing any existing attempt.
+Only a successful durable preparation may feed later distribution/admission;
+merely finding a manifest in an interrupted attempt does not complete it.
+The first candidates still require:
+
+1. Preserve source/patch/firmware provenance alongside the candidate, then verify
+   it again when distributing or admitting the template.
 2. Qualify the selected host machine, emulator/firmware and complete PCI layout.
    Compare guest port names and MACs for both samples, including holes/spares.
-3. Verify and hash the chosen immutable source disks and their backing chains;
+3. Verify the packaged copies, qcow2 consistency and required access permissions;
    package firmware and other required assets without executing launcher hooks.
 4. Emit canonical manifests accepted by `vm_template`, verify the filesystem
    bundles and bind per-instance overlays, TAPs, console and original generation.

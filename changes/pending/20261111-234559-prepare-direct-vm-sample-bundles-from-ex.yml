@@ -1,0 +1,13 @@
+id: 20261111-234559-prepare-direct-vm-sample-bundles-from-ex
+type: internal
+title: Prepare direct VM sample bundles from explicit V2 profiles
+description: Generate n9kv and vIOS candidate manifests with explicit hardware and
+  prepare immutable filesystem bundles without running launchers or guests.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
