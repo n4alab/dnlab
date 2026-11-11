@@ -2255,6 +2255,16 @@ original file and account observations, and the installed-package snapshot.
 The master recipe needs a matching boot context for the revision lineage
 and D-Bus inventory, plus the approved activation window and binary proofs.
 
+After a reboot, the completed revision can be carried into a separate
+qualification. The new record binds the original revision ID and digest,
+checks the revised unit and backup through the completed exchange, and
+uses the original account history with a fresh identity observation.
+The two runtime directories require completed current-boot births before
+the current session view can supply the source to activation. The original
+revision and its boot context remain in the journal. This path has been
+exercised with synthetic boots and directory births. The master recipe
+still needs the corresponding current-boot inputs.
+
 The one-shot `tools/libvirt_activation_host.py` entry accepts an explicit
 `--activate-host` and a frozen input directory. It matches the completed
 unit projection to the archived source, opens the original journal with its

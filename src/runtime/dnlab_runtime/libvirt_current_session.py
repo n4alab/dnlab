@@ -28,7 +28,9 @@ class CurrentSessionView:
             qualified=qualifier.read(recovered['qualification_id']);qualifier._source(qualified)
             if qualified['phase']!='persistent_qualified' or recovered['qualification_sha256']!=fingerprint(qualified):
                 raise Conflict('original post-boot source lineage differs')
-            original=qualified['installation'];result=deepcopy(original)
+            original=qualified['installation']
+            revised=qualifier._revision(qualified)
+            result=deepcopy(original if revised is None else revised)
             result['context']=deepcopy(qualified['context'])
             result['prerequisites']=deepcopy(qualified['receipt']['observation']['prerequisites'])
             replacements={item['spec']['key']:item for item in recovered['items']}
@@ -38,7 +40,7 @@ class CurrentSessionView:
                 if key in replacements:
                     item=deepcopy(replacements[key]);result['items'][index]=item
                     creators[key]=recovered['id']
-                elif item['phase']=='created':creators[key]=original['id']
+                elif item['phase']=='created':creators[key]=item['proof']['intent_id']
             result['postboot']=dict(kind='postboot-session-view-v1',source_sha256=fingerprint(original),
                 qualification_id=qualified['id'],qualification_sha256=fingerprint(qualified),
                 recovery_id=recovered['id'],recovery_sha256=fingerprint(recovered),creators=creators,

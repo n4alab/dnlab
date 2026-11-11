@@ -54,10 +54,13 @@ def plan(installation,current):
 
 
 class PostBootQualification:
-    def __init__(self,journal,*,source_reader,observer,account_history):
+    def __init__(self,journal,*,source_reader,observer,account_history,completed_revision=None):
         if not all(callable(fn) for fn in (source_reader,observer,account_history)):
             raise Conflict('explicit post-boot source/current/history observers required')
         self.journal,self.source_reader,self.observer,self.account_history=journal,source_reader,observer,account_history
+        if completed_revision is not None and completed_revision.revision.journal is not journal:
+            raise Conflict('original post-boot revision journal differs')
+        self.completed_revision=completed_revision
         with journal.transaction():
             journal.db.execute('CREATE TABLE IF NOT EXISTS libvirt_postboot_qualifications '
                 '(id TEXT PRIMARY KEY,context_key TEXT UNIQUE NOT NULL,payload TEXT NOT NULL,fingerprint TEXT NOT NULL)')
@@ -65,6 +68,16 @@ class PostBootQualification:
     def _source(self,value):
         if self.source_reader(value['installation']['id'])!=value['installation']:
             raise Conflict('original installation changed during post-boot qualification')
+        self._revision(value)
+
+    def _revision(self,value):
+        binding=value.get('completed_revision')
+        if self.completed_revision is None:
+            if binding is not None:raise Conflict('original completed revision reader required')
+            return
+        if binding!=self.completed_revision.binding(value['installation'],value['context']):
+            raise Conflict('original post-boot completed revision binding differs')
+        return self.completed_revision.source(value['installation'],value['context'])
 
     def read(self,operation):
         row=self.journal.db.execute('SELECT * FROM libvirt_postboot_qualifications WHERE id=?',(operation,)).fetchone()
@@ -84,11 +97,11 @@ class PostBootQualification:
             raise Conflict('original installed package policy differs')
         prerequisites_for_policy(value['installation']['prerequisites'],value.get('package_policy'))
         if 'run_parent' in value:validate_run_parent(value['run_parent'],value['installation'],value['context'])
+        self._revision(value)
         if value['phase']=='persistent_qualified':self._receipt(value,value['receipt'])
         return value
 
-    @classmethod
-    def _receipt(cls,value,receipt):
+    def _receipt(self,value,receipt):
         fields={'qualification_id','nonce','source_sha256','context','observation','account_history','qualified','pending_volatile'}
         if 'package_policy' in value:fields.add('package_policy')
         if 'run_parent' in value:fields.add('run_parent_sha256')
@@ -101,8 +114,8 @@ class PostBootQualification:
             raise Conflict('original installed package receipt differs')
         if 'run_parent' in value and receipt['run_parent_sha256']!=fingerprint(value['run_parent']):
             raise Conflict('original current-boot /run parent receipt differs')
-        cls._validate_observation(value,receipt['observation'])
-        cls._histories(value,receipt['account_history'])
+        self._validate_observation(value,receipt['observation'])
+        self._histories(value,receipt['account_history'])
         return deepcopy(receipt)
 
     def prepare(self,operation,installation,current,*,package_policy=None,run_parent=None):
@@ -111,36 +124,42 @@ class PostBootQualification:
         if run_parent is not None:run_parent=validate_run_parent(run_parent,installation,current)
         with self.journal.execution_lock:
             if self.source_reader(installation['id'])!=installation:raise Conflict('original installation reference differs')
+            revision=(self.completed_revision.binding(installation,current) if self.completed_revision is not None else None)
             key=fingerprint([installation['id'],current])
             prior=self.journal.db.execute('SELECT id FROM libvirt_postboot_qualifications WHERE id=? OR context_key=?',
                 (operation,key)).fetchone()
             if prior:
                 value=self.read(prior['id'])
                 if (value['id']!=operation or value['installation']!=installation or value['context']!=current
-                        or value.get('package_policy')!=package_policy or value.get('run_parent')!=run_parent):
+                        or value.get('package_policy')!=package_policy or value.get('run_parent')!=run_parent
+                        or value.get('completed_revision')!=revision):
                     raise Conflict('original post-boot request differs')
                 return value
             value=dict(id=operation,nonce=uuid.uuid4().hex,installation=deepcopy(installation),source_sha256=fingerprint(installation),
                 context=deepcopy(current),plan=layout,phase='prepared',receipt=None)
             if package_policy is not None:value['package_policy']=package_policy
             if run_parent is not None:value['run_parent']=deepcopy(run_parent)
+            if revision is not None:value['completed_revision']=revision
             with self.journal.transaction():
                 self.journal.db.execute('INSERT INTO libvirt_postboot_qualifications VALUES(?,?,?,?)',
                     (operation,key,canonical(value),fingerprint(value)))
             return self.read(operation)
 
-    @staticmethod
-    def _validate_observation(value,observed):
+    def _validate_observation(self,value,observed):
         original=value['installation']
         policy=value.get('package_policy')
         baseline=prerequisites_for_policy(original['prerequisites'],policy);baseline.pop('provisioning_window_sha256',None)
+        revision=self._revision(value)
+        if revision is not None:
+            baseline['profile_sha256']=revision['profile']['profile_sha256']
         if 'run_parent' in value:
             parent=validate_run_parent(value['run_parent'],original,value['context'])
             baseline['os_parents']['/run']=parent['identity']
         if isinstance(observed,dict) and isinstance(observed.get('prerequisites'),dict):
             observed=deepcopy(observed)
             observed['prerequisites']=prerequisites_for_policy(observed['prerequisites'],policy)
-        expected={item['spec']['key']:item['proof'] for item in original['items'] if item['spec']['key'] in value['plan']['persistent']}
+        persistent_source=original if revision is None else revision
+        expected={item['spec']['key']:item['proof'] for item in persistent_source['items'] if item['spec']['key'] in value['plan']['persistent']}
         if (not isinstance(observed,dict) or set(observed)!={'context','prerequisites','persistent','volatile'}
                 or observed['context']!=value['context'] or observed['prerequisites']!=baseline
                 or observed['persistent']!=expected or not isinstance(observed['volatile'],dict)
@@ -161,7 +180,10 @@ class PostBootQualification:
         return deepcopy(observed)
 
     def _observation(self,value):
-        return self._validate_observation(value,self.observer(deepcopy(value)))
+        result=self._validate_observation(value,self.observer(deepcopy(value)))
+        if self.completed_revision is not None:
+            self.completed_revision.observe(value['installation'],value['context'])
+        return result
 
     @staticmethod
     def _histories(value,histories):

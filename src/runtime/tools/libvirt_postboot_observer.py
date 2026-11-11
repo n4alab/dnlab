@@ -10,18 +10,21 @@ from pathlib import Path
 import stat
 
 from dnlab_runtime.libvirt_postboot import context,plan
+from dnlab_runtime.libvirt_configuration import UNIT
 from dnlab_runtime.libvirt_provisioning import account_request
 from dnlab_runtime.manifest import Conflict,fingerprint
 
 
 class PostBootObserver:
-    def __init__(self,root,installation,current,*,source_reader,snapshot,identity,files,directory_dependency):
+    def __init__(self,root,installation,current,*,source_reader,snapshot,identity,files,directory_dependency,
+                 completed_revision=None):
         self.root=Path(root);self.installation=deepcopy(installation);self.context=context(current)
         self.layout=plan(installation,current)
         if (not self.root.is_absolute() or not all(callable(fn) for fn in (source_reader,snapshot,identity,directory_dependency))
                 or getattr(files,'readonly',False) is not True or Path(files.root)!=self.root):
             raise Conflict('explicit readonly post-boot observers required')
         self.source_reader,self.snapshot,self.identity,self.files,self.directory_dependency=source_reader,snapshot,identity,files,directory_dependency
+        self.completed_revision=completed_revision
         self.diagnostics=None
 
     def _source(self):
@@ -52,6 +55,10 @@ class PostBootObserver:
         if (value['installation']!=self.installation or value['context']!=self.context
                 or value['source_sha256']!=fingerprint(self.installation) or value['plan']!=self.layout):
             raise Conflict('original post-boot collection binding differs')
+        binding=(self.completed_revision.binding(self.installation,self.context)
+                 if self.completed_revision is not None else None)
+        if binding!=value.get('completed_revision'):
+            raise Conflict('original post-boot revision observation binding differs')
         self.diagnostics=dict(stage='source',status='requested',targets=[])
         try:
             self._source();before=self._snapshot();persistent={};volatile={}
@@ -69,6 +76,11 @@ class PostBootObserver:
                         if identity!=request['expected'] or item['proof']['identity']!=request['expected']:
                             raise Conflict('current account identity differs: '+key)
                         current=deepcopy(item['proof'])
+                    elif binding is not None and spec.get('path')==UNIT:
+                        current=self.completed_revision.observe(self.installation,self.context)['replacement']
+                        persistent[key]=current
+                        entry.update(proof=deepcopy(current),status='observed')
+                        continue
                     else:current=self.files.observe(deepcopy(item),self.installation['id'])
                     entry['proof']=deepcopy(current)
                     if current!=item['proof']:raise Conflict('original persistent post-boot resource differs: '+key)

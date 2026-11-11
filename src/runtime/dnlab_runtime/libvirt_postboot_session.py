@@ -18,7 +18,7 @@ from .manifest import Conflict,fingerprint,identifier
 
 class PostBootRecoverySession:
     def __init__(self,journal,installation,current,*,qualification_id,recovery_id,run_parent,
-                 source_reader,observer,account_history,files,window,journal_identity,prepare_only=False):
+                 source_reader,observer,account_history,files,window,journal_identity,prepare_only=False,completed_revision=None):
         identifier(qualification_id,'post-boot qualification_id');identifier(recovery_id,'post-boot recovery_id')
         self.journal,self.original,self.context=journal,deepcopy(installation),context(current)
         self.qualification_id,self.recovery_id=qualification_id,recovery_id
@@ -44,7 +44,7 @@ class PostBootRecoverySession:
             return result
 
         self.qualification=PostBootQualification(journal,source_reader=source_reader,
-            observer=observe,account_history=history)
+            observer=observe,account_history=history,completed_revision=completed_revision)
         self.recovery=VolatileDirectories(self.qualification,files,window=window)
 
     def _source(self):

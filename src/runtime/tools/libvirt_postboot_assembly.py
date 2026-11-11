@@ -21,7 +21,7 @@ from tools.libvirt_postboot_observer import PostBootObserver
 
 class PostBootPrepareAssembly:
     def __init__(self,journal,installation,current,*,qualification_id,recovery_id,run_parent,
-                 window,expected_packages,approved_account_inputs,worker_profile,query,nss_query,root='/'):
+                 window,expected_packages,approved_account_inputs,worker_profile,query,nss_query,root='/',completed_revision=None):
         self.source=SessionInstaller(journal,None,readonly=True)
         if self.source.read(installation['id'])!=installation:
             raise Conflict('original prepare assembly installation differs')
@@ -37,15 +37,18 @@ class PostBootPrepareAssembly:
             for role in ('groupadd','useradd')}
         self.history=HistoricalAccountCreation(journal,installation=installation,worker_profile=worker_profile,
             binaries=binaries,source_reader=self.source.read)
-        self.activity=InstallationActivity(installation['profile'],query=query)
-        self.snapshot=InstallationSnapshot(root,installation['request'],expected_packages,approved_account_inputs,
+        observed_source=installation if completed_revision is None else completed_revision.source(installation,current)
+        self.activity=InstallationActivity(observed_source['profile'],query=query)
+        self.snapshot=InstallationSnapshot(root,observed_source['request'],expected_packages,approved_account_inputs,
             namespaces=self.activity.namespaces,services=self.activity)
         self.observer=PostBootObserver(root,installation,current,source_reader=self.source.read,
-            snapshot=self.snapshot,identity=self.identity,files=self.files,directory_dependency=directory)
+            snapshot=self.snapshot,identity=self.identity,files=self.files,directory_dependency=directory,
+            completed_revision=completed_revision)
         self.session=PostBootRecoverySession(journal,installation,current,
             qualification_id=qualification_id,recovery_id=recovery_id,run_parent=run_parent,
             source_reader=self.source.read,observer=self.observer,account_history=self.history,
-            files=self.files,window=window,journal_identity=journal.identity,prepare_only=True)
+            files=self.files,window=window,journal_identity=journal.identity,prepare_only=True,
+            completed_revision=completed_revision)
 
     @property
     def diagnostics(self):

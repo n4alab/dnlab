@@ -8,7 +8,8 @@ from copy import deepcopy
 
 from .libvirt_configuration import UNIT,project_revision
 from .libvirt_configuration_adapter import ConfigurationFileAdapter
-from .manifest import Conflict
+from .libvirt_current_session import CurrentSessionView
+from .manifest import Conflict,fingerprint
 
 
 class ActivationLineage:
@@ -22,9 +23,18 @@ class ActivationLineage:
         with self.view.journal.execution_lock:
             current=self.revision.read(self.reference['id'])
             self.revision._active(current)
-            if current!=self.reference or self.view.read()!=current['installation']:
+            if current!=self.reference:
                 raise Conflict('original activation revision or directory lineage differs')
-            source=project_revision(current)
+            view=self.view.read()
+            if view==current['installation']:
+                source=project_revision(current)
+            elif isinstance(self.view,CurrentSessionView) and 'configuration_revision' in view:
+                qualification=self.view.recovery.qualification.read(view['postboot']['qualification_id'])
+                if qualification.get('completed_revision')!=dict(id=current['id'],sha256=fingerprint(current)):
+                    raise Conflict('original post-boot activation revision binding differs')
+                source=view
+            else:
+                raise Conflict('original activation revision or directory lineage differs')
             if source!=self.source:raise Conflict('original effective activation source differs')
             return deepcopy(source)
 

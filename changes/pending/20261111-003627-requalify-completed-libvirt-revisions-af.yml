@@ -1,0 +1,13 @@
+id: 20261111-003627-requalify-completed-libvirt-revisions-af
+type: internal
+title: Requalify completed libvirt revisions after a reboot
+description: Bind the original completed unit and backup to a fresh post-boot qualification
+  and require current-boot runtime directory proofs for activation.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

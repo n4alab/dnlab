@@ -40,18 +40,20 @@ class PreparedDirectoryFiles(InstallationFiles):
 
 class PostBootDirectoryAssembly:
     def __init__(self,journal,installation,current,*,prepared_reference,qualification_id,recovery_id,
-                 run_parent,window,expected_packages,approved_account_inputs,worker_profile,query,nss_query,root='/'):
+                 run_parent,window,expected_packages,approved_account_inputs,worker_profile,query,nss_query,root='/',
+                 completed_revision=None):
         self.readonly=PostBootPrepareAssembly(journal,installation,current,
             qualification_id=qualification_id,recovery_id=recovery_id,run_parent=run_parent,window=window,
             expected_packages=expected_packages,approved_account_inputs=approved_account_inputs,
-            worker_profile=worker_profile,query=query,nss_query=nss_query,root=root)
+            worker_profile=worker_profile,query=query,nss_query=nss_query,root=root,completed_revision=completed_revision)
         self.reference=deepcopy(prepared_reference)
         self.readonly.session._binding(self.reference)
         self.files=PreparedDirectoryFiles(root,journal=journal,reference=self.reference)
         self.session=PostBootRecoverySession(journal,installation,current,
             qualification_id=qualification_id,recovery_id=recovery_id,run_parent=run_parent,
             source_reader=self.readonly.source.read,observer=self.readonly.observer,
-            account_history=self.readonly.history,files=self.files,window=window,journal_identity=journal.identity)
+            account_history=self.readonly.history,files=self.files,window=window,journal_identity=journal.identity,
+            completed_revision=completed_revision)
         self.session._binding(self.reference)
 
     def apply_original(self):return self.session.apply_original(self.reference)
