@@ -1,5 +1,6 @@
 """Observe the original pinned daemon and the peer on its dedicated socket."""
 
+from contextlib import contextmanager
 from copy import deepcopy
 import os
 from pathlib import PurePosixPath
@@ -21,6 +22,17 @@ def directory_identity(info):
                 mode=stat.S_IMODE(info.st_mode), kind='directory')
 
 
+@contextmanager
+def pin_socket(parent, name, expected):
+    """Retain the socket inode so a client can connect via its procfs FD link."""
+    fd = os.open(name, os.O_PATH | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=parent)
+    try:
+        require(metadata(os.fstat(fd)) == metadata(expected), 'original private service socket changed before pin')
+        yield fd
+    finally:
+        os.close(fd)
+
+
 class ServiceSocketReader:
     def __init__(self, root, installation, *, socket_factory=socket.socket):
         self.root, self.socket_factory = root, socket_factory
@@ -39,7 +51,8 @@ class ServiceSocketReader:
             with entry(self.root, path.lstrip('/')) as (_, _, info):
                 require(directory_identity(info) == expected, 'original dedicated socket directory differs')
 
-    def __call__(self, spec, pid):
+    @contextmanager
+    def pin(self, spec, pid):
         role = spec['role']
         require((role, spec['unit']) in {
             ('libvirtd', 'dnlab-libvirtd.service'), ('virtlogd', 'dnlab-virtlogd.service'),
@@ -50,7 +63,8 @@ class ServiceSocketReader:
         require(PurePosixPath(path).parent == PurePosixPath(runtime),
                 'service socket must be a direct child of its original runtime directory')
         self._verify_directories()
-        with entry(self.root, path.lstrip('/')) as (parent, name, info):
+        with (entry(self.root, path.lstrip('/')) as (parent, name, info),
+              pin_socket(parent, name, info) as fd):
             require(directory_identity(os.fstat(parent)) == self.directories[runtime],
                     'dedicated socket parent replaced before connection')
             require(stat.S_ISSOCK(info.st_mode) and not info.st_mode & 0o077
@@ -58,18 +72,21 @@ class ServiceSocketReader:
                     'original private service socket metadata differs')
             with self.socket_factory(socket.AF_UNIX, socket.SOCK_STREAM) as stream:
                 stream.settimeout(5)
-                # Resolve only the socket name below the already opened parent.
-                stream.connect(f'/proc/self/fd/{parent}/{name}')
+                stream.connect(f'/proc/self/fd/{fd}')
                 peer = peer_credentials(stream)
             require(peer == dict(pid=pid, uid=info.st_uid, gid=info.st_gid),
                     'private socket peer differs from original service process')
             observed = dict(path=path, device=info.st_dev, inode=info.st_ino, mode=info.st_mode,
                             uid=info.st_uid, gid=info.st_gid,
                             peer_pid=peer['pid'], peer_uid=peer['uid'], peer_gid=peer['gid'])
-        with entry(self.root, path.lstrip('/')) as (_, _, current):
-            require(metadata(current) == metadata(info), 'original private service socket replaced')
-        self._verify_directories()
-        return observed
+            yield fd, observed
+            with entry(self.root, path.lstrip('/')) as (_, _, current):
+                require(metadata(current) == metadata(info), 'original private service socket replaced')
+            self._verify_directories()
+
+    def __call__(self, spec, pid):
+        with self.pin(spec, pid) as (_, observed):
+            return observed
 
 
 class NativeServiceObserver:

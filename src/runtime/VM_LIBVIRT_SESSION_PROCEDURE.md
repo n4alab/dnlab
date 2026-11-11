@@ -2218,9 +2218,9 @@ still require qualification on the master.
 
 The native daemon observer checks the active unit against the original
 invocation. It reads the process executable digest, credentials, arguments and
-environment from the retained proc directory. It opens the dedicated Unix
-socket below the original runtime directory and checks kernel peer credentials
-against the pinned PID, UID and GID. The probe sends no libvirt requests.
+environment from the retained proc directory. It pins the dedicated Unix
+socket inode below the original runtime directory and checks kernel peer
+credentials against the pinned PID, UID and GID. The probe sends no libvirt requests.
 The process and socket identities are rechecked before accepting the observation.
 
 ## Supervised D-Bus start worker
@@ -2249,5 +2249,17 @@ file and process observers.
 
 The context manager keeps the subscriptions and descriptors alive for apply
 and recovery. A previously registered activation cannot replace its
-supervisor. Installation lineage, inventory, the provisioning window and the
-empty-domain query remain explicit providers for the host entry point.
+supervisor. Installation lineage, inventory and the provisioning window
+remain explicit providers for the host entry point.
+
+### Empty dedicated session inventory
+
+After all four steps are confirmed, the supervisor rechecks the original
+libvirtd generation and pins its socket inode. The hashed `virsh` client
+inherits the socket descriptor and uses an explicit Unix session URI. It
+queries UUIDs for active and inactive domains with a readonly connection.
+A clean exit with empty output, unchanged socket identity and the same
+original daemon generation are required before recording `ready_empty`.
+This probe still needs qualification against the dedicated daemon on the master.
+[virsh reference](https://libvirt.org/manpages/virsh.html),
+[Libvirt connection URIs](https://libvirt.org/uri.html).

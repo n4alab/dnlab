@@ -1,0 +1,13 @@
+id: 20261111-001720-qualify-the-original-empty-libvirt-sessi
+type: internal
+title: Qualify the original empty libvirt session
+description: List all dedicated domains over the pinned socket with a readonly virsh
+  client before recording readiness.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

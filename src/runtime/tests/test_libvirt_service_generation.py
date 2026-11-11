@@ -36,6 +36,12 @@ def test_socket_probe_binds_original_parent_endpoint_and_peer(tmp_path, monkeypa
             return deepcopy(info)
         return real_stat(path, *args, **kwargs)
 
+    @contextmanager
+    def pin_socket(parent, name, expected):
+        assert name == 'virtlogd-sock' and expected == info
+        assert os.fstat(parent).st_ino == library.stat().st_ino
+        yield 111
+
     class Stream:
         def __enter__(self):
             return self
@@ -47,8 +53,7 @@ def test_socket_probe_binds_original_parent_endpoint_and_peer(tmp_path, monkeypa
             assert seconds == 5
 
         def connect(self, path):
-            assert path.startswith('/proc/self/fd/') and path.endswith('/virtlogd-sock')
-            assert os.fstat(int(path.split('/')[4])).st_ino == library.stat().st_ino
+            assert path == '/proc/self/fd/111'
             if fault == 'replacement':
                 info.st_ino += 1
 
@@ -56,12 +61,14 @@ def test_socket_probe_binds_original_parent_endpoint_and_peer(tmp_path, monkeypa
             return struct.pack('iII', 99 if fault == 'peer' else 42, 1001, 1002)
 
     monkeypatch.setattr(os, 'stat', stat_socket)
+    monkeypatch.setattr('tools.libvirt_service_generation.pin_socket', pin_socket)
     root = os.open(tmp_path, os.O_RDONLY | os.O_DIRECTORY)
     try:
         reader = ServiceSocketReader(root, installation, socket_factory=lambda *_: Stream())
         spec = dict(role='virtlogd', unit='dnlab-virtlogd.service', uid=1001, gid=1002)
         if fault:
-            with pytest.raises(Conflict, match='peer differs|path changed'):
+            expected = 'peer differs' if fault == 'peer' else 'private service socket replaced'
+            with pytest.raises(Conflict, match=expected):
                 reader(spec, 42)
         else:
             result = reader(spec, 42)

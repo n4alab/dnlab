@@ -9,6 +9,7 @@ from dnlab_runtime.libvirt_activation_events import ActivationEventMonitor
 from dnlab_runtime.libvirt_activation_runner import ActivationProcessRunner, ActivationWorkerObserver
 from dnlab_runtime.manifest import Conflict, fingerprint
 from tools.libvirt_bus_worker_runner import BusStartProcessRunner, BusWorkerObserver, NativeActivationRunner
+from tools.libvirt_empty_session import EmptySessionInventory
 from tools.libvirt_service_generation import NativeServiceObserver, ServiceSocketReader
 from tools.libvirt_service_units import ServiceUnitReader, observe_service_files
 from tools.libvirt_systemd_events import open_activation_stream
@@ -40,7 +41,7 @@ def close_worker_pipes(runner):
 @contextmanager
 def open_native_activation(journal, installation, *, root, operation, window, binary,
                            reload_profile, start_profile, sources_sha256, bus_inventory,
-                           read_context, source_reader, resources, inventory, empty, files, unit_query):
+                           read_context, source_reader, resources, inventory, virsh, files, unit_query):
     """Prepare and bind an activation, leaving all command releases to the caller."""
     installation = deepcopy(installation)
     bus_inventory = deepcopy(bus_inventory)
@@ -66,13 +67,19 @@ def open_native_activation(journal, installation, *, root, operation, window, bi
         lifetime.callback(close_worker_pipes, reload_runner)
         lifetime.callback(close_worker_pipes, start_runner)
         runner = NativeActivationRunner(reload_runner, start_runner)
+        socket_reader = ServiceSocketReader(root, installation)
+
+        def read_generation(value, item, receipt):
+            return controller._generation_observer(value, item, receipt)
+
+        empty = EmptySessionInventory(installation, binary=virsh, sockets=socket_reader,
+                                      read_generation=read_generation)
         controller = ActivationController(
             journal, installation, operation=operation, window=window, binary=binary,
             runner=runner, source_reader=source_reader, monitor=monitor, resources=resources,
             inventory=inventory, empty=empty, command_builder=planner)
         unit_reader = ServiceUnitReader(installation, query=unit_query,
                                         files=lambda: observe_service_files(files, installation))
-        socket_reader = ServiceSocketReader(root, installation)
 
         def correlate(request, subscription, event):
             value = controller.driver.read(operation)

@@ -57,7 +57,8 @@ def assembly(controller, monkeypatch):
                       reload_profile=reload_profile, start_profile=start_profile, sources_sha256='e' * 64,
                       bus_inventory=bus_inventory, read_context=lambda: deepcopy(source['context']),
                       source_reader=previous.source_reader, resources=previous.resources,
-                      inventory=previous.inventory, empty=forbidden, files=None, unit_query=forbidden)
+                      inventory=previous.inventory, virsh=dict(path='/usr/bin/virsh', sha256='f' * 64),
+                      files=None, unit_query=forbidden)
         return native.open_native_activation(previous.journal, source, **(kwargs | overrides))
 
     return open_session, observations, state
