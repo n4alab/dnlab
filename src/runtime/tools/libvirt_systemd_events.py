@@ -196,6 +196,20 @@ class SystemdSignals:
             self.continuous = False
             raise
 
+    def verify_worker_connection(self, reference, connection):
+        """Resolve the worker's unique name on the original subscribed bus."""
+        if (not self.continuous or connection['manager_owner'] != self.owner
+                or connection['unique_name'] == self.client
+                or not self.abi.connected(self.handle, self.client)):
+            return False
+        deadline = monotonic() + TIMEOUT
+        query = self.abi._broker_query
+        owner = query(self.handle, 'GetNameOwner', MANAGER, 's', deadline)
+        pid = query(self.handle, 'GetConnectionUnixProcessID', connection['unique_name'], 'u', deadline)
+        uid = query(self.handle, 'GetConnectionUnixUser', connection['unique_name'], 'u', deadline)
+        return (owner == self.owner and pid == reference['process_record']['pid'] and uid == 0
+                and self.abi.connected(self.handle, self.client))
+
 
 class SystemdActivationStream:
     """Convert wire signals to the activation monitor's replayable event batches."""

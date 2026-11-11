@@ -1,0 +1,14 @@
+id: 20261111-000530-supervise-original-d-bus-activation-work
+type: internal
+title: Supervise original D-Bus activation workers
+description: Gate one StartUnit call behind the original worker release and commit
+  the returned job before acknowledgement. Preserve partial replies and refuse duplicate
+  launches.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

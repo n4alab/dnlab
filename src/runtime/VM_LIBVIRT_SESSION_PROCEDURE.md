@@ -2222,3 +2222,17 @@ environment from the retained proc directory. It opens the dedicated Unix
 socket below the original runtime directory and checks kernel peer credentials
 against the pinned PID, UID and GID. The probe sends no libvirt requests.
 The process and socket identities are rechecked before accepting the observation.
+
+## Supervised D-Bus start worker
+
+The start runner launches the pinned Python interpreter and worker source,
+checks the frozen runtime sources and verifies that the worker's unique bus
+name belongs to the original process on the monitored connection. The worker
+waits for the journaled release before calling `StartUnit`. The runner retains
+partial replies from the original pipe and commits the returned job before
+acknowledging it. An uncertain release preserves the original worker reference
+and job intent for recovery.
+
+The targeted tests exercise the handoff with a simulated bus and worker and
+check partial replies using a local pipe. The native activation assembly and
+correlation with a live job remain to be verified.

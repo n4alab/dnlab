@@ -82,7 +82,11 @@ def serve(source,sink,*,bus):
     authenticate the manager sender. It must not reconnect or retry internally.
     The parent's bounded observer owns timeout/exit qualification of this worker.
     """
-    request=frame(source)
+    return serve_request(source, sink, frame(source), bus=bus)
+
+
+def serve_request(source, sink, request, *, bus, announce_connection=False):
+    """Run the release protocol once the original connection is available."""
     require(isinstance(request,dict) and set(request)=={'token','command','connection'} and hex_value(request['token'],32),
         'original D-Bus worker request required')
     command=validate(request['command']);connection=request['connection'];connection_proof(connection)
@@ -90,7 +94,10 @@ def serve(source,sink,*,bus):
     def verify():
         require(bus.verify(deepcopy(connection),deepcopy(command)) is True,'original D-Bus connection or transport changed')
     verify();digest=fingerprint(command)
-    sink.write(canonical(dict(ready=request['token'],command_sha256=digest,connection_sha256=fingerprint(connection)))+'\n');sink.flush()
+    ready = dict(ready=request['token'], command_sha256=digest, connection_sha256=fingerprint(connection))
+    if announce_connection:
+        ready['connection'] = deepcopy(connection)
+    sink.write(canonical(ready)+'\n');sink.flush()
     require(frame(source)==dict(release=request['token'],command_sha256=digest,connection_sha256=fingerprint(connection)),
         'original D-Bus release differs')
     verify()

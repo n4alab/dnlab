@@ -119,29 +119,47 @@ class AccountProcessRunner:
         reference_proof(reference,value['command'])
         return value
 
+    def _request(self, token, command):
+        return dict(token=token, command=command)
+
+    @contextmanager
+    def _launch(self, command):
+        with (self.opener(command['binary']['path']) as binary,
+              self.opener(self.profile['python']['path']) as python,
+              self.opener(self.profile['worker']['path']) as worker):
+            binary_proof(binary,command['binary']['sha256'])
+            binary_proof(python,self.profile['python']['sha256'])
+            source_proof(worker,self.profile['worker']['sha256'])
+            argv=worker_argv(self.profile,binary,python,worker)
+            yield self.spawn(argv,executable='/proc/self/fd/'+str(python),pass_fds=(binary,python,worker),
+                stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,env=deepcopy(ENVIRONMENT),
+                cwd='/',close_fds=True)
+
+    def _accept_ready(self, token, command, live):
+        if self.read_ready(live['process']) != dict(ready=token, command_sha256=fingerprint(command)):
+            raise Conflict('original account worker ready differs')
+
+    def _send_release(self, value, live):
+        reference = value['reference']
+        process = live['process']
+        process.stdin.write((canonical(dict(release=reference['token'],command_sha256=reference['command_sha256']))+'\n').encode())
+        process.stdin.flush();process.stdin.close()
+
     def arm(self,command):
         self.command_validator(command)
         with self.journal.execution_lock:
             token=uuid.uuid4().hex
-            packet=(canonical(dict(token=token,command=command))+'\n').encode()
+            packet=(canonical(self._request(token,command))+'\n').encode()
             if len(packet)>MAX_FRAME:raise Conflict('account worker request exceeds frame bound')
             value=dict(token=token,command=deepcopy(command),profile=deepcopy(self.profile),
                 phase='launch_requested',reference=None,outcome=None)
             with self.journal.transaction():
                 self.journal.db.execute('INSERT INTO '+self.worker_table+' VALUES(?,?,?)',
                     (token,canonical(value),fingerprint(value)))
-            with self.opener(command['binary']['path']) as binary, self.opener(self.profile['python']['path']) as python, self.opener(self.profile['worker']['path']) as worker:
-                binary_proof(binary,command['binary']['sha256'])
-                binary_proof(python,self.profile['python']['sha256'])
-                source_proof(worker,self.profile['worker']['sha256'])
-                argv=worker_argv(self.profile,binary,python,worker)
-                process=self.spawn(argv,executable='/proc/self/fd/'+str(python),pass_fds=(binary,python,worker),
-                    stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,env=deepcopy(ENVIRONMENT),cwd='/',close_fds=True)
-                self.live[token]=dict(process=process,stdout=b'',stderr=b'',eof=set())
+            with self._launch(command) as process:
+                live=self.live[token]=dict(process=process,stdout=b'',stderr=b'',eof=set())
                 process.stdin.write(packet);process.stdin.flush()
-                ready=self.read_ready(process)
-                if ready!=dict(ready=token,command_sha256=fingerprint(command)):
-                    raise Conflict('original account worker ready differs')
+                self._accept_ready(token,command,live)
                 record=self.observer.capture(process)
                 reference=dict(token=token,command_sha256=fingerprint(command),process_record=record)
                 reference_proof(reference,command)
@@ -170,11 +188,11 @@ class AccountProcessRunner:
             if not self.verify(reference,value['command']):raise Conflict('original account worker differs before release')
             value['phase']='release_requested';self._save(value)
             if not self.verify(reference,value['command']):raise Conflict('original account worker differs at release boundary')
-            process=self.live[reference['token']]['process']
+            live=self.live[reference['token']]
+            process=live['process']
             if self.observer.verify(reference,process,value['command'],'armed') is not True:
                 raise Conflict('original blocked worker differs before release write')
-            process.stdin.write((canonical(dict(release=reference['token'],command_sha256=reference['command_sha256']))+'\n').encode())
-            process.stdin.flush();process.stdin.close()
+            self._send_release(value,live)
             value['phase']='released';self._save(value)
 
     def outcome(self,reference):
