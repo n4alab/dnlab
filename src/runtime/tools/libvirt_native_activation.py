@@ -10,6 +10,7 @@ from dnlab_runtime.libvirt_activation_runner import ActivationProcessRunner, Act
 from dnlab_runtime.manifest import Conflict, fingerprint
 from tools.libvirt_bus_worker_runner import BusStartProcessRunner, BusWorkerObserver, NativeActivationRunner
 from tools.libvirt_empty_session import EmptySessionInventory
+from tools.libvirt_initial_state import InitialSessionState
 from tools.libvirt_service_generation import NativeServiceObserver, ServiceSocketReader
 from tools.libvirt_service_units import ServiceUnitReader, observe_service_files
 from tools.libvirt_systemd_events import open_activation_stream
@@ -68,15 +69,22 @@ def open_native_activation(journal, installation, *, root, operation, window, bi
         lifetime.callback(close_worker_pipes, start_runner)
         runner = NativeActivationRunner(reload_runner, start_runner)
         socket_reader = ServiceSocketReader(root, installation)
+        initial_state = InitialSessionState(root, installation)
 
         def read_generation(value, item, receipt):
             return controller._generation_observer(value, item, receipt)
 
         empty = EmptySessionInventory(installation, binary=virsh, sockets=socket_reader,
                                       read_generation=read_generation)
+
+        def check_resources(value, receipts):
+            proof = resources(value, receipts)
+            initial_state(receipts)
+            return proof
+
         controller = ActivationController(
             journal, installation, operation=operation, window=window, binary=binary,
-            runner=runner, source_reader=source_reader, monitor=monitor, resources=resources,
+            runner=runner, source_reader=source_reader, monitor=monitor, resources=check_resources,
             inventory=inventory, empty=empty, command_builder=planner)
         unit_reader = ServiceUnitReader(installation, query=unit_query,
                                         files=lambda: observe_service_files(files, installation))

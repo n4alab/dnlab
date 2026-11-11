@@ -16,6 +16,7 @@ def assembly(controller, monkeypatch):
     previous, reference, _, state, _ = controller
     source = previous.source
     observations = []
+    initial = []
 
     class Signals:
         owner = ':1.42'
@@ -43,6 +44,7 @@ def assembly(controller, monkeypatch):
         pytest.fail('native process, socket or command used during synthetic assembly')
 
     monkeypatch.setattr(native, 'open_activation_stream', open_stream)
+    monkeypatch.setattr(native, 'InitialSessionState', lambda root, installation: initial.append)
     monkeypatch.setattr(native.ActivationProcessRunner, 'arm', forbidden)
     monkeypatch.setattr(native.BusStartProcessRunner, 'arm', forbidden)
 
@@ -61,14 +63,15 @@ def assembly(controller, monkeypatch):
                       files=None, unit_query=forbidden)
         return native.open_native_activation(previous.journal, source, **(kwargs | overrides))
 
-    return open_session, observations, state
+    return open_session, observations, state, initial
 
 
 def test_binds_original_requests_before_any_command(assembly):
-    open_session, observations, state = assembly
+    open_session, observations, state, initial = assembly
     with open_session() as (driver, reference):
         assert observations == ['subscribed']
         assert state['calls'] == []
+        assert initial and all(receipts['dnlab-libvirtd.service'] is None for receipts in initial)
         references = driver._monitors(reference)
         for item in reference['items'][1:]:
             request = driver.monitor_request(reference, item)
@@ -84,7 +87,7 @@ def test_binds_original_requests_before_any_command(assembly):
 
 
 def test_refuses_new_subscription_for_bound_intent(assembly):
-    open_session, observations, _ = assembly
+    open_session, observations, _, _ = assembly
     with open_session():
         pass
     with pytest.raises(Conflict, match='supervisor cannot be replaced'), open_session():
@@ -93,7 +96,7 @@ def test_refuses_new_subscription_for_bound_intent(assembly):
 
 
 def test_partial_registration_preserves_original_supervisor_binding(assembly, monkeypatch):
-    open_session, observations, _ = assembly
+    open_session, observations, _, _ = assembly
     register = native.ActivationEventMonitor.register
 
     def interrupt(monitor, request, subscription):
@@ -111,7 +114,20 @@ def test_partial_registration_preserves_original_supervisor_binding(assembly, mo
 
 
 def test_context_mismatch_does_not_subscribe(assembly):
-    open_session, observations, _ = assembly
+    open_session, observations, _, _ = assembly
     with pytest.raises(Conflict, match='activation context differs'), open_session(read_context=lambda: {}):
         pytest.fail('foreign context was accepted')
     assert observations == []
+
+
+def test_preexisting_state_stops_before_subscription(assembly, monkeypatch):
+    open_session, observations, state, _ = assembly
+
+    def reject(receipts):
+        assert receipts['dnlab-libvirtd.service'] is None
+        raise Conflict('pre-existing libvirt state')
+
+    monkeypatch.setattr(native, 'InitialSessionState', lambda root, installation: reject)
+    with pytest.raises(Conflict, match='pre-existing libvirt state'), open_session():
+        pytest.fail('pre-existing driver state was accepted')
+    assert observations == [] and state['calls'] == []

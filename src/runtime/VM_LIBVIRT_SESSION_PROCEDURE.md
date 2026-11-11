@@ -2263,3 +2263,17 @@ original daemon generation are required before recording `ready_empty`.
 This probe still needs qualification against the dedicated daemon on the master.
 [virsh reference](https://libvirt.org/manpages/virsh.html),
 [Libvirt connection URIs](https://libvirt.org/uri.html).
+
+### Initial driver state before activation
+
+The native preflight checks the original installed configuration, data,
+cache and runtime directories before subscribing and again at the command
+checkpoints. The QEMU configuration tree must contain only the installation's
+files and empty mutable directory. This excludes existing domain XML,
+autostart links and saved state. The private runtime directory allows the
+known sockets and pid files of the already qualified logging and locking
+daemons. Unexpected entries are preserved and prevent release. After the
+original libvirtd generation is qualified, the live observers check its
+state and the all-domain query verifies the empty session.
+[Libvirt QEMU session paths](https://github.com/libvirt/libvirt/blob/v11.3.0/src/qemu/qemu_conf.c),
+[Libvirt startup loading](https://github.com/libvirt/libvirt/blob/v11.3.0/src/qemu/qemu_driver.c).

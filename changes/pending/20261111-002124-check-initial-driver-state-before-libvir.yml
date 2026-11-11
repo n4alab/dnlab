@@ -1,0 +1,13 @@
+id: 20261111-002124-check-initial-driver-state-before-libvir
+type: internal
+title: Check initial driver state before libvirt activation
+description: Reject pre-existing domain, autostart and runtime state in the original
+  dedicated directories before releasing activation commands.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
