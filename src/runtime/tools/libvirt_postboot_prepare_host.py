@@ -22,6 +22,7 @@ OUTPUT_PARENT=Path('/var/lib/dnlab-runtime-spikes')
 INPUTS=('installed.json','journal-reference.json','expected-packages.json','approved-account-inputs.json',
         'worker-profile.json','expected-context.json','postboot.json')
 BOUND_INPUTS=INPUTS+('journal-binding.json',)
+REVISED_INPUTS=BOUND_INPUTS+('completed-revision.json',)
 
 
 def verify_recipe(recipe):
@@ -29,7 +30,7 @@ def verify_recipe(recipe):
     sources={str(path.relative_to(RUNTIME)) for directory in ('dnlab_runtime','tools')
         for path in (RUNTIME/directory).glob('*.py')}
     if (receipt.get('schema_version')!=1 or receipt.get('runtime_root')!=str(RUNTIME)
-            or set(receipt.get('input_sha256',{})) not in (set(INPUTS),set(BOUND_INPUTS)) or not sources
+            or set(receipt.get('input_sha256',{})) not in (set(INPUTS),set(BOUND_INPUTS),set(REVISED_INPUTS)) or not sources
             or set(receipt.get('source_sha256',{}))!=sources
             or receipt.get('entry_sha256')!=hashlib.sha256(Path(__file__).read_bytes()).hexdigest()):
         raise RuntimeError('frozen post-boot prepare recipe differs')
@@ -142,11 +143,15 @@ def run(recipe,*,resume_output=None):
                 journal,_=stack.enter_context(open_postboot_journal(reference['directory'],installed,
                     identity=reference['identity'],initial_sha256=reference['database_sha256'],
                     retain=lambda value:save(output,'journal-binding.json',value),verify=verify,original_binding=binding))
+                revised={}
+                if 'completed-revision.json' in inputs:
+                    from tools.libvirt_postboot_revision_input import completed_revision_input
+                    revised['completed_revision']=completed_revision_input(journal,inputs['completed-revision.json'],installed,expected)
                 assembly=PostBootPrepareAssembly(journal,installed,expected,
                     qualification_id=request['qualification_id'],recovery_id=request['recovery_id'],
                     run_parent=request['run_parent'],window=window,expected_packages=inputs['expected-packages.json'],
                     approved_account_inputs=inputs['approved-account-inputs.json'],worker_profile=inputs['worker-profile.json'],
-                    query=query,nss_query=host_query)
+                    query=query,nss_query=host_query,**revised)
                 with PrepareDelivery(assembly.session,output_fd) as delivery:
                     prepared=delivery.prepare(resume=resume_output is not None)
                 verify();binary_proof(executable,receipt['systemctl_sha256'])

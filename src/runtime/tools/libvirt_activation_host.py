@@ -18,6 +18,8 @@ INPUTS = (
     'activation-source.json', 'activation-window.json', 'expected-packages.json', 'approved-account-inputs.json',
     'worker-profile.json', 'bus-inventory.json', 'activation-binaries.json',
 )
+REVISED_INPUTS = tuple(name for name in INPUTS if name not in ('effective-source.json', 'unit-window.json', 'unit-reference.json')) + (
+    'completed-revision.json',)
 
 
 def sha(data):
@@ -38,12 +40,12 @@ def runtime_sources():
 
 def prepare_recipe(recipe, inputs):
     """Freeze explicit reviewed inputs without reading host state."""
-    if set(inputs) != set(INPUTS):
+    if set(inputs) not in (set(INPUTS), set(REVISED_INPUTS)):
         raise ValueError('complete activation recipe inputs required')
     sources = runtime_sources()
     recipe.mkdir(mode=0o700)
     digests = {}
-    for name in INPUTS:
+    for name in sorted(inputs):
         raw = json.dumps(inputs[name], sort_keys=True).encode() + b'\n'
         (recipe / name).write_bytes(raw)
         digests[name] = sha(raw)
@@ -58,10 +60,11 @@ def verify_recipe(recipe):
     receipt = json.loads((recipe / 'receipt.json').read_bytes())
     if (set(receipt) != {'kind', 'runtime_root', 'source_sha256', 'input_sha256'}
             or receipt['kind'] != 'libvirt-native-activation-v1' or receipt['runtime_root'] != str(RUNTIME)
-            or receipt['source_sha256'] != files or set(receipt['input_sha256']) != set(INPUTS)):
+            or receipt['source_sha256'] != files
+            or set(receipt['input_sha256']) not in (set(INPUTS), set(REVISED_INPUTS))):
         raise ValueError('frozen native activation recipe differs')
     inputs = {}
-    for name in INPUTS:
+    for name in receipt['input_sha256']:
         raw = (recipe / name).read_bytes()
         if sha(raw) != receipt['input_sha256'][name]:
             raise ValueError('native activation input differs: ' + name)
@@ -144,23 +147,34 @@ def activate(inputs, sources_sha256, *, verify, persist):
             return dict(exit_code=response.returncode, stdout=response.stdout.decode('utf-8'),
                         stderr=response.stderr.decode('utf-8'))
 
+        options = {}
+        if 'completed-revision.json' in inputs:
+            from tools.libvirt_postboot_revision_input import completed_revision_input
+            options['completed_revision'] = completed_revision_input(journal, inputs['completed-revision.json'], installed, expected)
         directories = PostBootDirectoryAssembly(
             journal, installed, expected, prepared_reference=inputs['prepared-reference.json'],
             qualification_id=postboot['qualification_id'], recovery_id=postboot['recovery_id'],
             run_parent=postboot['run_parent'], window=ProvisioningWindow(postboot['window'], lambda: None),
             expected_packages=inputs['expected-packages.json'], approved_account_inputs=inputs['approved-account-inputs.json'],
-            worker_profile=inputs['worker-profile.json'], query=query, nss_query=host_query)
-        unit = PostBootUnitRevision(
-            directories, effective_source=inputs['effective-source.json'],
-            window=ProvisioningWindow(inputs['unit-window.json'], lambda: None),
-            unit_reference=inputs['unit-reference.json'])
-        revision = unit.revision.driver
-        completed = revision.read(inputs['unit-reference.json']['id'])
-        if project_revision(completed) != source:
-            raise ValueError('original completed unit projection differs')
-        lineage = ActivationLineage(unit.view, revision, reference=completed, effective_source=source)
+            worker_profile=inputs['worker-profile.json'], query=query, nss_query=host_query, **options)
+        if options:
+            from dnlab_runtime.libvirt_current_session import CurrentSessionView
+            qualified = options['completed_revision']
+            view = CurrentSessionView(directories.session.recovery, postboot['recovery_id'])
+            revision, completed, swap = qualified.revision, qualified.reference, qualified.exchange.swap
+        else:
+            unit = PostBootUnitRevision(
+                directories, effective_source=inputs['effective-source.json'],
+                window=ProvisioningWindow(inputs['unit-window.json'], lambda: None),
+                unit_reference=inputs['unit-reference.json'])
+            revision = unit.revision.driver
+            completed = revision.read(inputs['unit-reference.json']['id'])
+            if project_revision(completed) != source:
+                raise ValueError('original completed unit projection differs')
+            view, swap = unit.view, unit.revision.adapter.swap
+        lineage = ActivationLineage(view, revision, reference=completed, effective_source=source)
         providers = ActivationHostInputs(
-            lineage, swap=unit.revision.adapter.swap, expected_packages=inputs['expected-packages.json'],
+            lineage, swap=swap, expected_packages=inputs['expected-packages.json'],
             approved_account_inputs=inputs['approved-account-inputs.json'], query=query, nss_query=host_query)
 
         def active_window():

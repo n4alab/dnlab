@@ -57,3 +57,15 @@ def test_lost_response_resumes_original_bound_cycle(bound_recipe,monkeypatch):
     assert entry.run(recipe,resume_output=output)==0
     assert (output/'prepared-reference.json').read_bytes()==original
     assert json.loads((output/'journal-binding.json').read_text())==binding and files.calls==[]
+
+
+def test_frozen_completed_revision_conflict_stops_before_prepare(bound_recipe):
+    recipe,output,database,commands,files,_,_=bound_recipe
+    raw=database.read_bytes()
+    (recipe/'completed-revision.json').write_text('{}')
+    receipt=json.loads((recipe/'receipt.json').read_text())
+    receipt['input_sha256']['completed-revision.json']=hashlib.sha256((recipe/'completed-revision.json').read_bytes()).hexdigest()
+    (recipe/'receipt.json').write_text(json.dumps(receipt))
+    assert entry.run(recipe)==1 and database.read_bytes()==raw and commands==[] and files.calls==[]
+    result=json.loads(next(output.glob('result-*.json')).read_text())
+    assert 'explicit completed revision recipe input' in result['error']['message']

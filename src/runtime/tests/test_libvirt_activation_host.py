@@ -171,3 +171,16 @@ def test_uncompleted_revision_precedes_supervisor(recipe):
     result, _ = entry.run(folder)
     assert result['status'] == 'failed'
     assert 'original-journal' in calls and 'original-supervisor' not in calls
+
+
+def test_requalified_recipe_uses_only_explicit_completed_revision_input(recipe):
+    folder, _, calls, _ = recipe
+    inputs, _ = entry.verify_recipe(folder)
+    inputs = {name: value for name, value in inputs.items() if name in entry.REVISED_INPUTS}
+    inputs['completed-revision.json'] = {}
+    revised = folder.with_name('requalified-recipe')
+    entry.prepare_recipe(revised, inputs)
+    result, _ = entry.run(revised)
+    assert result['status'] == 'failed'
+    assert 'explicit completed revision recipe input' in result['error']
+    assert 'original-journal' in calls and 'original-supervisor' not in calls

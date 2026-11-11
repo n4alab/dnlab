@@ -21,6 +21,7 @@ RUNTIME=Path('/opt/dnlab/src/runtime')
 OUTPUT_PARENT=Path('/var/lib/dnlab-runtime-spikes')
 INPUTS=('installed.json','journal-reference.json','expected-packages.json','approved-account-inputs.json',
         'worker-profile.json','expected-context.json','postboot.json','prepared-reference.json','journal-binding.json')
+REVISED_INPUTS=INPUTS+('completed-revision.json',)
 
 
 def verify_recipe(recipe):
@@ -28,7 +29,7 @@ def verify_recipe(recipe):
     sources={str(path.relative_to(RUNTIME)) for directory in ('dnlab_runtime','tools')
         for path in (RUNTIME/directory).glob('*.py')}
     if (receipt.get('schema_version')!=1 or receipt.get('runtime_root')!=str(RUNTIME)
-            or set(receipt.get('input_sha256',{}))!=set(INPUTS) or not sources
+            or set(receipt.get('input_sha256',{})) not in (set(INPUTS),set(REVISED_INPUTS)) or not sources
             or set(receipt.get('source_sha256',{}))!=sources
             or receipt.get('entry_sha256')!=hashlib.sha256(Path(__file__).read_bytes()).hexdigest()):
         raise RuntimeError('frozen directory action recipe differs')
@@ -42,7 +43,7 @@ def verify_recipe(recipe):
 def run(recipe,*,action,resume_output=None):
     if action not in ('apply','recover'):raise RuntimeError('explicit directory action required')
     recipe=Path(recipe);receipt=verify_recipe(recipe)
-    inputs={name:json.loads((recipe/name).read_text()) for name in INPUTS}
+    inputs={name:json.loads((recipe/name).read_text()) for name in receipt['input_sha256']}
     installed=inputs['installed.json'];original=inputs['journal-reference.json'];expected=inputs['expected-context.json']
     request=inputs['postboot.json'];prepared=inputs['prepared-reference.json'];binding=inputs['journal-binding.json']
     nonce=request['nonce']
@@ -107,11 +108,15 @@ def run(recipe,*,action,resume_output=None):
                     identity=original['identity'],initial_sha256=original['database_sha256'],
                     retain=no_new_binding,verify=verify,original_binding=binding))
                 window=ProvisioningWindow(request['window'],lambda:json.loads((recipe/'postboot.json').read_text())['window'])
+                revised={}
+                if 'completed-revision.json' in inputs:
+                    from tools.libvirt_postboot_revision_input import completed_revision_input
+                    revised['completed_revision']=completed_revision_input(journal,inputs['completed-revision.json'],installed,expected)
                 assembly=PostBootDirectoryAssembly(journal,installed,expected,prepared_reference=prepared,
                     qualification_id=request['qualification_id'],recovery_id=request['recovery_id'],run_parent=request['run_parent'],
                     window=window,expected_packages=inputs['expected-packages.json'],
                     approved_account_inputs=inputs['approved-account-inputs.json'],worker_profile=inputs['worker-profile.json'],
-                    query=query,nss_query=host_query)
+                    query=query,nss_query=host_query,**revised)
                 if action=='apply':assembly.apply_original()
                 else:assembly.recover_original()
                 effective=assembly.effective()

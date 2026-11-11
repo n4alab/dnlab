@@ -2265,6 +2265,14 @@ revision and its boot context remain in the journal. This path has been
 exercised with synthetic boots and directory births. The master recipe
 still needs the corresponding current-boot inputs.
 
+The revised prepare, directory and activation recipes all carry the same
+hashed `completed-revision.json`. It contains the archived effective source
+and the original unit revision window. Each entry reopens the revision and
+exchange through readonly adapters on the original journal and compares the
+archived source with the completed revision. The activation recipe also
+requires the current-boot directory result as its activation source. The
+historical same-boot recipe remains available with its original input set.
+
 The one-shot `tools/libvirt_activation_host.py` entry accepts an explicit
 `--activate-host` and a frozen input directory. It matches the completed
 unit projection to the archived source, opens the original journal with its

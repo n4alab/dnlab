@@ -12,9 +12,11 @@ from .manifest import Conflict, canonical, fingerprint
 
 
 class ConfigurationStaging:
-    def __init__(self, journal, files, *, window, preflight):
-        if not callable(preflight):raise Conflict('complete configuration preflight required')
+    def __init__(self, journal, files, *, window, preflight=None, readonly=False):
+        if not readonly and not callable(preflight):raise Conflict('complete configuration preflight required')
         self.journal,self.files,self.window,self.preflight=journal,files,window,preflight
+        self.readonly=readonly
+        if readonly:return
         with journal.transaction():
             journal.db.execute('CREATE TABLE IF NOT EXISTS libvirt_configuration_staging '
                 '(id TEXT PRIMARY KEY,payload TEXT NOT NULL,fingerprint TEXT NOT NULL)')
@@ -26,6 +28,7 @@ class ConfigurationStaging:
         return dict(spec=spec,nonce=value['nonce'])
 
     def _check(self,value,*,require_window=True):
+        if self.readonly:raise Conflict('readonly configuration staging')
         if (value['plan']!=compile_revision(value['installation'])
                 or value['source_sha256']!=fingerprint(value['installation'])
                 or value['phase'] not in ('prepared','replace_requested')

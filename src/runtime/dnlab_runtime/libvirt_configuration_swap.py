@@ -32,10 +32,12 @@ def rename_siblings(parent,source,target,flags):
 
 
 class ConfigurationSwap:
-    def __init__(self,staging,*,preflight):
-        if not callable(preflight):raise Conflict('complete inactive swap preflight required')
+    def __init__(self,staging,*,preflight=None,readonly=False):
+        if not readonly and not callable(preflight):raise Conflict('complete inactive swap preflight required')
         self.staging,self.preflight=staging,preflight
         self.journal,self.files,self.window=staging.journal,staging.files,staging.window
+        self.readonly=readonly
+        if readonly:return
         with self.journal.transaction():
             self.journal.db.execute('CREATE TABLE IF NOT EXISTS libvirt_configuration_swaps '
                 '(id TEXT PRIMARY KEY,payload TEXT NOT NULL,fingerprint TEXT NOT NULL)')
@@ -59,6 +61,7 @@ class ConfigurationSwap:
                 (canonical(record),fingerprint(record),record['revision']['id']))
 
     def _check(self,value,*,window=True):
+        if self.readonly:raise Conflict('readonly configuration swap')
         # Staging already bound all paths, profile and window. Re-read its exact
         # immutable request, without requiring the source at its old leaf.
         stage=self.staging._read(value)

@@ -50,9 +50,11 @@ def project_revision(value):
 
 
 class ConfigurationRevision:
-    def __init__(self,journal,adapter,*,window,generation_source=None):
+    def __init__(self,journal,adapter,*,window,generation_source=None,readonly=False):
         self.journal,self.adapter,self.window=journal,adapter,window
         self.generation_source=generation_source
+        self.readonly=readonly
+        if readonly:return
         with journal.transaction():
             journal.db.execute('CREATE TABLE IF NOT EXISTS libvirt_configuration_revisions '
                 '(id TEXT PRIMARY KEY,installation_id TEXT UNIQUE NOT NULL,payload TEXT NOT NULL,fingerprint TEXT NOT NULL)')
@@ -122,6 +124,7 @@ class ConfigurationRevision:
         return deepcopy(receipt)
 
     def _observe(self,value,*,require_window=True):
+        if self.readonly:raise Conflict('readonly configuration revision')
         self._active(value)
         if self.window.receipt['context']!=value['installation']['context']:
             raise Conflict('original configuration revision window context differs')
@@ -143,6 +146,7 @@ class ConfigurationRevision:
         return current
 
     def prepare(self,operation,installation):
+        if self.readonly:raise Conflict('readonly configuration revision')
         identifier(operation,'configuration revision operation_id')
         plan=compile_revision(installation)
         with self.journal.execution_lock:
@@ -183,6 +187,7 @@ class ConfigurationRevision:
             return self.read(operation)
 
     def apply(self,operation):
+        if self.readonly:raise Conflict('readonly configuration revision')
         with self.journal.execution_lock:
             value=self.read(operation);self._active(value)
             if value['phase']=='completed':return self.effective(operation)
@@ -201,6 +206,7 @@ class ConfigurationRevision:
             return self.effective(operation)
 
     def recover(self,operation):
+        if self.readonly:raise Conflict('readonly configuration revision')
         """Resume only a recorded replacement through its qualified adapter."""
         with self.journal.execution_lock:
             value=self.read(operation);self._active(value)

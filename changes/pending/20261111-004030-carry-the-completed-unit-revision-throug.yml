@@ -1,0 +1,13 @@
+id: 20261111-004030-carry-the-completed-unit-revision-throug
+type: internal
+title: Carry the completed unit revision through host recipes
+description: Reopen the archived unit revision in prepare, directory recovery and
+  activation with readonly journal and filesystem adapters.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

@@ -77,6 +77,17 @@ def test_explicit_mutually_exclusive_action_required(monkeypatch,tmp_path):
         assert error.value.code==2
 
 
+def test_frozen_completed_revision_conflict_stops_before_directory_apply(host_recipe):
+    recipe,output,files,commands,_,_=host_recipe
+    (recipe/'completed-revision.json').write_text('{}')
+    receipt=json.loads((recipe/'receipt.json').read_text())
+    receipt['input_sha256']['completed-revision.json']=hashlib.sha256((recipe/'completed-revision.json').read_bytes()).hexdigest()
+    (recipe/'receipt.json').write_text(json.dumps(receipt))
+    assert entry.run(recipe,action='apply')==1 and commands==[] and files.calls==[]
+    result=json.loads(next(output.glob('*/result-*.json')).read_text())
+    assert 'explicit completed revision recipe input' in result['error']['message']
+
+
 def test_transport_applies_once_and_completed_resume_does_not_recreate(host_recipe):
     recipe,output,files,commands,_,_=host_recipe
     assert entry.run(recipe,action='apply')==0
