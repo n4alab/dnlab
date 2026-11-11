@@ -1,0 +1,13 @@
+id: 20261111-002556-bind-original-host-inputs-to-libvirt-act
+type: internal
+title: Bind original host inputs to libvirt activation
+description: Verify current-boot resources and the original completed unit exchange
+  inside the native supervisor without recursive service inventory.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

@@ -2249,8 +2249,17 @@ file and process observers.
 
 The context manager keeps the subscriptions and descriptors alive for apply
 and recovery. A previously registered activation cannot replace its
-supervisor. Installation lineage, inventory and the provisioning window
-remain explicit providers for the host entry point.
+supervisor. The host input assembly binds the completed current-boot
+installation and unit revision, then supplies fresh unit/process inventory,
+original file and account observations, and the installed-package snapshot.
+The operational entry point still needs to bind the original journal,
+provisioning window, binary proofs and approved input recipe.
+
+The controller owns the live service census. Inside that census, reads of the
+revised unit use the completed exchange journal, original backup and candidate
+file birth directly. The standalone exchange observer still requires its
+independent census. The inactive preflight for staging and rename remains
+separate.
 
 ### Empty dedicated session inventory
 

@@ -62,6 +62,17 @@ class InstallationSnapshot:
 
     def __call__(self):
         spaces=self._namespaces(self.namespaces());services=self._services(self.services())
+        result=self._observe_static(spaces)
+        if self._services(self.services())!=services:
+            raise Conflict('installation namespace/service observation changed')
+        result['prerequisites']['services']=services
+        return result
+
+    def observe_static(self):
+        """Read installation inputs independently of a service lifecycle census."""
+        return self._observe_static(self._namespaces(self.namespaces()))
+
+    def _observe_static(self,spaces):
         parents=collect_parents(self.root,self.profile)
         host=collect_prerequisites(self.root,self.request,self.packages)['observed']
         tools=collect_account_tools(self.root)['observed']
@@ -90,14 +101,14 @@ class InstallationSnapshot:
             raise Conflict('account hooks require separate qualification before provisioning')
         groups=[row for row in host['local_groups'] if row['name']=='kvm' or row['gid']==self.request['kvm_gid']]
         if groups!=[dict(name='kvm',gid=self.request['kvm_gid'])]:raise Conflict('original KVM group differs or is ambiguous')
-        if self._namespaces(self.namespaces())!=spaces or self._services(self.services())!=services:
+        if self._namespaces(self.namespaces())!=spaces:
             raise Conflict('installation namespace/service observation changed')
         if collect_parents(self.root,self.profile)!=parents:
             raise Conflict('installation OS parent identity changed')
         return dict(context=dict(host_id=self.profile['session']['host_id'],boot_id=host['boot_id'],namespaces=spaces),
             prerequisites=dict(profile_sha256=self.profile['profile_sha256'],packages=host['packages'],
                 dpkg_status_sha256=host['source_sha256']['var/lib/dpkg/status'],binaries=binaries,vendor_masks=masks,
-                account_inputs=account_inputs,kvm_group=groups[0],services=services,os_parents=parents))
+                account_inputs=account_inputs,kvm_group=groups[0],os_parents=parents))
 
     def command_preflight(self,command,*,original):
         require_installable(self.profile)

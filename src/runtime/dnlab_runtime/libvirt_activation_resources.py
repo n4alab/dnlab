@@ -13,6 +13,26 @@ from .libvirt_package_policy import prerequisites_for_policy
 from .manifest import Conflict,fingerprint,identifier
 
 
+def observe_activation_targets(lineage, accounts, directory_dependency):
+    source=lineage.read()
+    base=lineage.view.read();proofs={}
+    for item in source['items']:
+        spec=item['spec'];key=spec['key']
+        if spec.get('path')==UNIT:continue
+        if item['phase']=='dependency':current=directory_dependency(deepcopy(spec))
+        elif spec['kind'] in ('group','account'):current=accounts.observe(deepcopy(item),source['id'])
+        elif spec['kind'] in ('file','directory'):
+            creator=base['postboot']['creators'].get(key)
+            if creator is None or item['proof']['intent_id']!=creator:
+                raise Conflict('original activation resource creator differs')
+            current=lineage.view.files.observe(deepcopy(item),creator)
+        else:raise Conflict('unknown activation resource kind')
+        if current!=item['proof']:raise Conflict('original activation resource differs: '+key)
+        proofs[key]=deepcopy(current)
+    if lineage.read()!=source:raise Conflict('original activation source changed')
+    return proofs
+
+
 class ActivationResources:
     def __init__(self,lineage,*,activation_id,snapshot,accounts,directory_dependency,services,state_reader):
         identifier(activation_id,'original resource activation_id');self.activation_id=activation_id
@@ -44,21 +64,7 @@ class ActivationResources:
 
     def _targets(self):
         if self.lineage.read()!=self.source:raise Conflict('original activation source changed')
-        base=self.lineage.view.read();proofs={}
-        for item in self.source['items']:
-            spec=item['spec'];key=spec['key']
-            if spec.get('path')==UNIT:continue
-            if item['phase']=='dependency':current=self.directory_dependency(deepcopy(spec))
-            elif spec['kind'] in ('group','account'):current=self.accounts.observe(deepcopy(item),self.source['id'])
-            elif spec['kind'] in ('file','directory'):
-                creator=base['postboot']['creators'].get(key)
-                if creator is None or item['proof']['intent_id']!=creator:
-                    raise Conflict('original activation resource creator differs')
-                current=self.lineage.view.files.observe(deepcopy(item),creator)
-            else:raise Conflict('unknown activation resource kind')
-            if current!=item['proof']:raise Conflict('original activation resource differs: '+key)
-            proofs[key]=deepcopy(current)
-        return proofs
+        return observe_activation_targets(self.lineage,self.accounts,self.directory_dependency)
 
     def __call__(self,reference):
         if reference!=self.lineage.reference or self.lineage.read()!=self.source:

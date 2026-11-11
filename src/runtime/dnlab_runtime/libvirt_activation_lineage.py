@@ -30,22 +30,22 @@ class ActivationLineage:
 
 
 class ActivationFiles:
-    def __init__(self,lineage,files,*,revision_window,preflight,completed_exchange=None):
-        if (files.journal is not lineage.view.journal or not callable(preflight)
+    def __init__(self,lineage,files,*,revision_window,preflight=None,completed_exchange=None):
+        if (files.journal is not lineage.view.journal
                 or getattr(files,'root',None)!=lineage.view.files.root):
-            raise Conflict('original activation files and explicit complete preflight required')
+            raise Conflict('original activation files required')
         self.lineage,self.files=lineage,files
         reference=lineage.reference
         if revision_window.sha256!=reference['window_sha256']:
             raise Conflict('original revision window binding required for file observation')
         if completed_exchange is not None:
-            from .libvirt_activation_exchange import CompletedExchangeObserver
-            if (not isinstance(completed_exchange,CompletedExchangeObserver)
+            from .libvirt_activation_exchange import CompletedExchangeFiles
+            if (not isinstance(completed_exchange,CompletedExchangeFiles)
                     or completed_exchange.reference!=reference or completed_exchange.swap.files is not files):
                 raise Conflict('original completed activation exchange observer required')
         self.completed_exchange=completed_exchange
-        # Only observe_revised_file is exposed below; no command or file mutation.
-        self.adapter=ConfigurationFileAdapter(files,window=revision_window,preflight=preflight)
+        self.adapter=(ConfigurationFileAdapter(files,window=revision_window,preflight=preflight)
+                      if completed_exchange is None else None)
 
     def observe(self,item,creator):
         source=self.lineage.read()
