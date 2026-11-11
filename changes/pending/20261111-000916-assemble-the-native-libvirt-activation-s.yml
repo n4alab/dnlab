@@ -1,0 +1,13 @@
+id: 20261111-000916-assemble-the-native-libvirt-activation-s
+type: internal
+title: Assemble the native libvirt activation supervisor
+description: Bind the original service monitors and the mixed reload and D-Bus command
+  runner in one activation lifetime.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

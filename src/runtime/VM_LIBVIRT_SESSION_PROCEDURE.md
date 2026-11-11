@@ -2234,5 +2234,20 @@ acknowledging it. An uncertain release preserves the original worker reference
 and job intent for recovery.
 
 The targeted tests exercise the handoff with a simulated bus and worker and
-check partial replies using a local pipe. The native activation assembly and
-correlation with a live job remain to be verified.
+check partial replies using a local pipe. Correlation with a live job still
+requires a host test.
+
+## Native activation supervisor
+
+`open_native_activation` prepares the original activation in the existing
+journal, opens one event stream, and binds all three service monitors before
+handing the controller to the caller. The controller uses the original
+systemctl runner for daemon reload and the D-Bus runner for service starts.
+Live job correlation reads the receipt from that same D-Bus runner. Unit
+files, process identity and socket peer are checked through the original
+file and process observers.
+
+The context manager keeps the subscriptions and descriptors alive for apply
+and recovery. A previously registered activation cannot replace its
+supervisor. Installation lineage, inventory, the provisioning window and the
+empty-domain query remain explicit providers for the host entry point.
