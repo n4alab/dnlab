@@ -1,0 +1,13 @@
+id: 20261111-003119-add-the-frozen-native-libvirt-activation
+type: internal
+title: Add the frozen native libvirt activation entry
+description: Bind one activation to the existing journal, completed unit revision,
+  host context and qualified binary proofs.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

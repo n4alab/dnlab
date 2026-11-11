@@ -2252,8 +2252,16 @@ and recovery. A previously registered activation cannot replace its
 supervisor. The host input assembly binds the completed current-boot
 installation and unit revision, then supplies fresh unit/process inventory,
 original file and account observations, and the installed-package snapshot.
-The operational entry point still needs to bind the original journal,
-provisioning window, binary proofs and approved input recipe.
+The master recipe needs a matching boot context for the revision lineage
+and D-Bus inventory, plus the approved activation window and binary proofs.
+
+The one-shot `tools/libvirt_activation_host.py` entry accepts an explicit
+`--activate-host` and a frozen input directory. It matches the completed
+unit projection to the archived source, opens the original journal with its
+physical binding, verifies the worker and executable hashes, and limits its
+systemctl queries to the two readonly inventories. It writes invocation,
+prepared reference, final journal state and result into a new private
+directory. An uncertain action keeps its original journal records.
 
 The controller owns the live service census. Inside that census, reads of the
 revised unit use the completed exchange journal, original backup and candidate
