@@ -2273,6 +2273,13 @@ archived source with the completed revision. The activation recipe also
 requires the current-boot directory result as its activation source. The
 historical same-boot recipe remains available with its original input set.
 
+The readonly activation input collector records the current `/run` directory
+identity and the SHA-256 of `/usr/bin/virsh` before any operational prepare.
+Two passes must match in the exact boot and namespaces named in the frozen
+request. The collected binary is read as an ELF file and the collector
+opens neither the original journal nor a service socket. The metadata
+prepare and activation steps continue to recheck their own inputs.
+
 The one-shot `tools/libvirt_activation_host.py` entry accepts an explicit
 `--activate-host` and a frozen input directory. It matches the completed
 unit projection to the archived source, opens the original journal with its

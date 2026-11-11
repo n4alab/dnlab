@@ -1,0 +1,13 @@
+id: 20261111-004256-collect-the-fixed-libvirt-activation-pre
+type: internal
+title: Collect the fixed libvirt activation prerequisites
+description: Record /run identity and a pinned virsh hash in the exact boot of the
+  archived D-Bus inventory.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
