@@ -12,10 +12,15 @@ class Cancelled(Exception):
 
 
 class Engine:
-    def __init__(self, journal, backend):
+    def __init__(self, journal, backend, *, vm_tap_tasks=None):
         self.journal = journal
         self.backend = backend
         self.execution_lock = journal.execution_lock
+        if vm_tap_tasks is not None:
+            from .vm_tap_tasks import TapTasks
+            if not isinstance(vm_tap_tasks,TapTasks) or vm_tap_tasks.journal is not journal:
+                raise Conflict('VM TAP tasks must use the original runtime journal')
+        self.vm_tap_tasks = vm_tap_tasks
         from .management_authority import bind_backend
         bind_backend(backend,journal)
         from .link_engine import LinkEngine

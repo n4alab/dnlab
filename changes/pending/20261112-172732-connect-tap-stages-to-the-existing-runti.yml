@@ -1,0 +1,14 @@
+id: 20261112-172732-connect-tap-stages-to-the-existing-runti
+type: internal
+title: Connect TAP stages to the existing runtime worker
+description: Add opt-in journaled TAP tasks to the existing sequential runtime worker
+  with parked uncertain attempts, immutable actor recovery and transaction-consistent
+  status reads, preserving the container API.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

@@ -100,6 +100,12 @@ class Server(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
                     return
                 try:self.engine.links.execute(operation_id)
                 except ExecutionBusy:break
+            if getattr(self.engine,'vm_tap_tasks',None) is not None:
+                for operation_id in self.engine.vm_tap_tasks.pending():
+                    if self.stopping.is_set():
+                        return
+                    try:self.engine.vm_tap_tasks.execute(operation_id)
+                    except ExecutionBusy:break
             self.wake.wait(0.5)
 
     def server_close(self):

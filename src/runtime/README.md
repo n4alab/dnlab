@@ -2825,3 +2825,30 @@ No bridge, address, VM, persistent endpoint or guest traffic was involved.
 These native results cover this master's original context only. Worker launch
 and supervision, the runtime image/sysfs namespace layout, other hosts and
 full VM endpoint lifecycle still need their respective qualifications.
+
+`vm_tap_tasks.TapTasks` connects prepared TAP sets to the existing runtime worker
+when explicitly supplied as `Engine(..., vm_tap_tasks=tasks)`. The default
+container service is unchanged. The same sequential thread processes container,
+link and optional TAP stages under the original journal/execution gate. No new
+placement authority, process launcher or automatic retry is introduced.
+
+Submission binds the qualified original runtime actor before making a task
+queued. Execution records applying before allocation and confirms completion
+only after the whole retained set is independently observed. Ordinary failures
+are parked as recovery_required; applying attempts left by a crash are not
+automatically enqueued. Explicit recovery retains the same command/reference
+and verifies the original actor and pending descriptor leases. A new process,
+missing leases, changed task or lab fence cannot authorize another attempt.
+Committed completion survives a lost response; it is historical TAP-stage
+evidence, never a claim that a VM or guest is currently running. Task records
+also independently protect Docker admission and lab cleanup. Status/pending
+reads share the journal transaction lock so they cannot expose partial writes.
+
+The targeted run passes 260 tests with two Unix tests deselected. Those two
+tests pass separately with real temporary Unix sockets/server threads and
+synthetic Docker/Linux/TUN/actor providers: the original container API still
+works, and one optional TAP stage plus a container operation complete in the
+same service. No native TAP, VM, libvirt connection or installed service was
+used by these worker tests. Native runtime actor provenance, startup profile
+assembly, full cleanup/handoff and public VM lifecycle remain unqualified;
+the CLI does not implicitly enable this optional service.
