@@ -2605,3 +2605,19 @@ is `tools/libvirt_account_worker_main.py`. The final targeted60-test run uses
 fake processes/observers and anonymous pipes only; no real worker/account
 process was launched. Real pidfd/process/exit qualification remains pending,
 and no operational provisioning entrypoint is enabled.
+# Official libvirt SDK boundary (experimental)
+
+`libvirt_sdk.open_connection` accepts an explicit dedicated-session proof and
+socket pin provider. It uses the official Python binding, disables URI aliases,
+requires `LIBVIRT_AUTOSTART=0`, and verifies the original session/socket before
+connecting and around each operation. Readonly is the default; writes require
+an explicit write connection. Domain handles expire when that connection closes.
+SDK failures are not retried. Definition ownership, durable operation tracking,
+event continuity and disk/TAP admission remain responsibilities of the caller.
+
+The binding must be installed in the interpreter running the VM adapter; the
+module performs no system-path fallback or package installation. Debian's
+`python3-libvirt` is available to the system interpreter, which does not imply
+availability in the runtime image or its virtualenv. Native SDK qualification,
+event transport and runtime-image packaging remain pending. The targeted
+30-test run covers this boundary and definition recovery with synthetic SDKs.

@@ -1,0 +1,14 @@
+id: 20261112-105448-add-qualified-official-libvirt-sdk-conne
+type: internal
+title: Add qualified official libvirt SDK connection boundary
+description: Bind official Python libvirt connections and domain handles to the original
+  dedicated session and socket, disable autostart and aliases, and refuse retries
+  or mutations through readonly connections.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
