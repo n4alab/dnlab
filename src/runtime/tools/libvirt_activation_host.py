@@ -20,6 +20,7 @@ INPUTS = (
 )
 REVISED_INPUTS = tuple(name for name in INPUTS if name not in ('effective-source.json', 'unit-window.json', 'unit-reference.json')) + (
     'completed-revision.json',)
+SUCCESSOR_INPUTS = REVISED_INPUTS + ('predecessor-reference.json', 'state-admission.json')
 
 
 def sha(data):
@@ -40,7 +41,7 @@ def runtime_sources():
 
 def prepare_recipe(recipe, inputs):
     """Freeze explicit reviewed inputs without reading host state."""
-    if set(inputs) not in (set(INPUTS), set(REVISED_INPUTS)):
+    if set(inputs) not in (set(INPUTS), set(REVISED_INPUTS), set(SUCCESSOR_INPUTS)):
         raise ValueError('complete activation recipe inputs required')
     sources = runtime_sources()
     recipe.mkdir(mode=0o700)
@@ -61,7 +62,7 @@ def verify_recipe(recipe):
     if (set(receipt) != {'kind', 'runtime_root', 'source_sha256', 'input_sha256'}
             or receipt['kind'] != 'libvirt-native-activation-v1' or receipt['runtime_root'] != str(RUNTIME)
             or receipt['source_sha256'] != files
-            or set(receipt['input_sha256']) not in (set(INPUTS), set(REVISED_INPUTS))):
+            or set(receipt['input_sha256']) not in (set(INPUTS), set(REVISED_INPUTS), set(SUCCESSOR_INPUTS))):
         raise ValueError('frozen native activation recipe differs')
     inputs = {}
     for name in receipt['input_sha256']:
@@ -177,6 +178,14 @@ def activate(inputs, sources_sha256, *, verify, persist, prestart_reference=None
             lineage, swap=swap, expected_packages=inputs['expected-packages.json'],
             approved_account_inputs=inputs['approved-account-inputs.json'], query=query, nss_query=host_query)
 
+        successor = {}
+        if 'predecessor-reference.json' in inputs:
+            from dnlab_runtime.libvirt_activation import SessionActivation
+            previous = inputs['predecessor-reference.json']
+            if SessionActivation(journal, None).read(previous['id']) != previous:
+                raise ValueError('original activation predecessor receipt differs')
+            successor = dict(predecessor_id=previous['id'], state_admission=inputs['state-admission.json'])
+
         def active_window():
             check()
             return agreement
@@ -188,6 +197,7 @@ def activate(inputs, sources_sha256, *, verify, persist, prestart_reference=None
             start_profile=dict(python=binaries['python'], worker=binaries['start']),
             sources_sha256=sources_sha256, bus_inventory=bus, read_context=context, virsh=binaries['virsh'],
             **(dict(prestart_reference=prestart_reference) if prestart_reference is not None else {}),
+            **successor,
         ) as (controller, reference):
             persist('prepared.json', reference)
             try:

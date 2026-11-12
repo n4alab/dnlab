@@ -2655,3 +2655,11 @@ two bounded capability XML files, without claiming current activation admission.
 The current-boot directory recovery and frozen native successor recipe are still
 needed before the dedicated session can be restarted. This path intentionally
 rejects persistent domains until their full workload recovery is implemented.
+
+Frozen `libvirt_activation_host` recipes accept a separate successor input set
+containing both `predecessor-reference.json` and `state-admission.json`, alongside
+the completed unit revision. Partial successor inputs are rejected. The original
+predecessor receipt is compared to the journal before creating the supervisor;
+the explicit predecessor and approved state are passed through to the native
+activation boundary. Existing initial activation recipes retain their schema.
+The targeted host/native assembly run passed 17 synthetic tests.

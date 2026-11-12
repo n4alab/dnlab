@@ -1,0 +1,14 @@
+id: 20261112-111236-carry-explicit-postboot-admission-throug
+type: internal
+title: Carry explicit postboot admission through frozen libvirt recipes
+description: Freeze predecessor activation receipts and empty-state admission together
+  in native successor recipes, verify the original predecessor before supervision,
+  and retain existing initial activation inputs.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

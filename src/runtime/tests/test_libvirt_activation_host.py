@@ -184,3 +184,29 @@ def test_requalified_recipe_uses_only_explicit_completed_revision_input(recipe):
     assert result['status'] == 'failed'
     assert 'explicit completed revision recipe input' in result['error']
     assert 'original-journal' in calls and 'original-supervisor' not in calls
+
+
+def test_successor_recipe_freezes_both_original_receipt_and_state_admission(recipe):
+    folder, _, calls, _ = recipe
+    inputs, _ = entry.verify_recipe(folder)
+    revised = {name:value for name,value in inputs.items() if name in entry.REVISED_INPUTS}
+    revised.update({'completed-revision.json':{}, 'predecessor-reference.json':{'id':'original'},
+                    'state-admission.json':{'binding':'synthetic'}})
+    target = folder.with_name('successor')
+    entry.prepare_recipe(target, revised)
+    assert entry.verify_recipe(target)[0] == revised
+    (target/'predecessor-reference.json').write_text('{"id":"replacement"}')
+    with pytest.raises(ValueError, match='input differs'):entry.run(target)
+    assert calls == []
+
+
+@pytest.mark.parametrize('missing', ['predecessor-reference.json', 'state-admission.json'])
+def test_partial_successor_recipe_refused_before_creation(recipe, missing):
+    folder, _, calls, _ = recipe
+    inputs, _ = entry.verify_recipe(folder)
+    revised = {name:value for name,value in inputs.items() if name in entry.REVISED_INPUTS}
+    revised.update({'completed-revision.json':{}, 'predecessor-reference.json':{}, 'state-admission.json':{}})
+    revised.pop(missing)
+    target = folder.with_name('partial-successor')
+    with pytest.raises(ValueError, match='complete activation'):entry.prepare_recipe(target, revised)
+    assert not target.exists() and calls == []
