@@ -71,20 +71,28 @@ class ConfigurationRevision:
             row=rows[0] if rows else None
         if row is None:raise Conflict('original configuration revision missing')
         value=json.loads(row['payload'])
-        if (fingerprint(value)!=row['fingerprint'] or value['id']!=row['id']
-                or value['installation']['id']!=row['installation_id']
-                or value['plan']!=compile_revision(value['installation'])
-                or value['source_sha256']!=fingerprint(value['installation'])
-                or value['phase'] not in ('prepared','replace_requested','completed')):
-            raise Conflict('original configuration revision differs')
-        nonce=value['nonce']
-        if not isinstance(nonce,str) or len(nonce)!=32 or any(c not in '0123456789abcdef' for c in nonce):
-            raise Conflict('original configuration revision nonce differs')
-        prefix='/etc/systemd/system/.dnlab-libvirtd.'+nonce
-        if value['staging']!=prefix+'.candidate' or value['backup']!=prefix+'.previous':
-            raise Conflict('original configuration staging paths differ')
-        if value['phase']=='completed':self._receipt(value,value['proof'])
-        elif value['proof'] is not None:raise Conflict('unexpected configuration revision proof')
+        # Cache only pure validation of identical bytes and row identity.
+        # Each call still queries both tables, returns a freshly decoded value,
+        # and walks current predecessor/retirement records below this block.
+        key=tuple(row[name] for name in ('id','installation_id','payload','fingerprint'))
+        cache=getattr(self,'_validated_rows',{})
+        if cache.get(operation)!=key:
+            if (fingerprint(value)!=row['fingerprint'] or value['id']!=row['id']
+                    or value['installation']['id']!=row['installation_id']
+                    or value['plan']!=compile_revision(value['installation'])
+                    or value['source_sha256']!=fingerprint(value['installation'])
+                    or value['phase'] not in ('prepared','replace_requested','completed')):
+                raise Conflict('original configuration revision differs')
+            nonce=value['nonce']
+            if not isinstance(nonce,str) or len(nonce)!=32 or any(c not in '0123456789abcdef' for c in nonce):
+                raise Conflict('original configuration revision nonce differs')
+            prefix='/etc/systemd/system/.dnlab-libvirtd.'+nonce
+            if value['staging']!=prefix+'.candidate' or value['backup']!=prefix+'.previous':
+                raise Conflict('original configuration staging paths differ')
+            if value['phase']=='completed':self._receipt(value,value['proof'])
+            elif value['proof'] is not None:raise Conflict('unexpected configuration revision proof')
+            if len(cache)>=8:cache={}
+            cache[operation]=key;self._validated_rows=cache
         if 'predecessor' in value:
             from .libvirt_configuration_retirement import retirement
             predecessor=self.read(value['predecessor']['revision_id'])

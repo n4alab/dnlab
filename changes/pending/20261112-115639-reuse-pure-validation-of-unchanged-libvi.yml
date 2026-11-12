@@ -1,0 +1,14 @@
+id: 20261112-115639-reuse-pure-validation-of-unchanged-libvi
+type: internal
+title: Reuse pure validation of unchanged libvirt revision rows
+description: Cache bounded pure validation results only while row identity, payload
+  and fingerprint are identical; retain fresh SQL reads, independent return values
+  and current predecessor and retirement checks.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

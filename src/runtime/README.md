@@ -2672,3 +2672,12 @@ client validates that transport URI while exposing the qualified logical
 qemu:///session URI to controllers. The corrected actual checkout passed a
 readonly native proof and 32 targeted SDK/definition tests. This does not qualify
 VM definition, guest startup, runtime-image packaging or workload readiness.
+
+Configuration revision readers now retain up to eight pure validation results,
+keyed by exact row identity, payload and fingerprint. They still query both
+revision tables on every read, decode a fresh return value, and check current
+predecessor/retirement records. Changed bytes or metadata are validated again;
+resource observations and service liveness are never cached. The actual checkout
+passed 31 targeted tests. An isolated readonly comparison of the same native
+lineage source measured about 38% less read time; full activation performance
+has not been remeasured and the completed activation used the earlier reader.
