@@ -2637,3 +2637,21 @@ existing libvirt-generated persistent directories must be qualified separately
 before an empty postboot session can be started. Sessions containing persisted
 VM definitions need their own recovery contract and are not covered by this
 empty-session successor path.
+
+`tools.libvirt_postboot_state.PostBootEmptyState` is the separate admission path
+for a previously initialized empty session. It checks original persistent roots,
+private ownership, a bounded directory layout, empty VM-state directories and
+bounded regular qemuCaps XML cache files. Symlinks, hardlinks, unexpected domain
+or saved-state entries and changed approved snapshots are refused. Capture reads
+twice without executing files; native preparation requires the captured admission
+and records it in the successor intent. Retry cannot replace it. First activation
+retains the pristine observer. Confirmed daemon generations remain subject to
+the live service and domain observers.
+
+The 42 targeted synthetic tests cover tree admission, original first-start
+checks, successor persistence and native dispatch. A readonly native diagnostic
+also verified the original persistent roots, seven empty driver directories and
+two bounded capability XML files, without claiming current activation admission.
+The current-boot directory recovery and frozen native successor recipe are still
+needed before the dedicated session can be restarted. This path intentionally
+rejects persistent domains until their full workload recovery is implemented.

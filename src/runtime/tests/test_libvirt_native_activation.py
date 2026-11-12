@@ -134,10 +134,17 @@ def test_preexisting_state_stops_before_subscription(assembly, monkeypatch):
 
 
 def test_explicit_successor_dispatch_precedes_monitor_subscription(assembly, monkeypatch):
+    from tools import libvirt_postboot_state
+    from dnlab_runtime.libvirt_activation import SessionActivation
     open_session, observations, state, _ = assembly
     called = []
-    def successor(controller, predecessor_id):
+    admission = {'synthetic':'dispatch-only'}
+    original_read = SessionActivation.read
+    def read(driver, operation):
+        return {'synthetic':'predecessor'} if operation == 'completed-original' else original_read(driver, operation)
+    def successor(controller, predecessor_id, *, state_admission):
         assert observations == []
+        assert state_admission == admission
         called.append(predecessor_id)
         # Dispatch-only fixture: lineage validation is covered by the real
         # successor coordinator tests, while this assembly has a prepared row.
@@ -145,6 +152,9 @@ def test_explicit_successor_dispatch_precedes_monitor_subscription(assembly, mon
     def forbidden(*args):pytest.fail('initial preparation used for a successor')
     monkeypatch.setattr(native.ActivationController, 'prepare_successor', successor)
     monkeypatch.setattr(native.ActivationController, 'prepare', forbidden)
-    with open_session(predecessor_id='completed-original'):
+    monkeypatch.setattr(SessionActivation, 'read', read)
+    monkeypatch.setattr(libvirt_postboot_state, 'PostBootEmptyState',
+                        lambda root, source, predecessor, approved: lambda receipts: None)
+    with open_session(predecessor_id='completed-original', state_admission=admission):
         assert called == ['completed-original'] and observations == ['subscribed']
     assert state['calls'] == [] and observations == ['subscribed', 'closed']

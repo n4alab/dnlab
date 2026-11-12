@@ -70,6 +70,7 @@ class SessionActivation:
             previous=self.read(prior['id'])
             if fingerprint(previous)!=prior.get('sha256'):raise Conflict('original activation predecessor changed')
             self._successor_source(previous,value['installation'])
+            if 'state_admission' in value:self._state_admission(value['state_admission'],value['installation'],previous)
         return value
 
     def _save(self,value):
@@ -109,20 +110,29 @@ class SessionActivation:
                     or (before['spec']['key'] not in volatile and before!=after)):
                 raise Conflict('post-boot persistent installation proof differs')
 
-    def prepare_successor(self,operation_id,installation,*,predecessor_id):
+    @staticmethod
+    def _state_admission(proof,installation,previous):
+        binding=dict(kind='postboot-empty-state-v1',installation_sha256=fingerprint(installation),
+            predecessor_sha256=fingerprint(previous))
+        if (not isinstance(proof,dict) or set(proof)!={'binding','trees'} or proof['binding']!=binding
+                or not isinstance(proof['trees'],dict) or not proof['trees']):
+            raise Conflict('original postboot empty-state admission differs')
+
+    def prepare_successor(self,operation_id,installation,*,predecessor_id,state_admission=None):
         """Explicit empty-session successor; no old command or birth is reused."""
         identifier(operation_id,'session activation operation_id')
         identifier(predecessor_id,'session activation predecessor_id')
         with self.journal.execution_lock:
             previous=self.read(predecessor_id)
             self._successor_source(previous,installation)
+            if state_admission is not None:self._state_admission(state_admission,installation,previous)
             require_activatable(installation['profile'])
             lineage=dict(id=predecessor_id,sha256=fingerprint(previous))
             table,row=self._row(operation_id)
             if row is not None:
                 saved=self.read(operation_id)
                 if (table!='libvirt_activation_successors' or saved['installation']!=installation
-                        or saved.get('predecessor')!=lineage):
+                        or saved.get('predecessor')!=lineage or saved.get('state_admission')!=state_admission):
                     raise Conflict('original post-boot activation request differs')
                 self._observe(saved);return saved
             occupied=self.journal.db.execute('SELECT id FROM libvirt_activation_successors '
@@ -133,6 +143,7 @@ class SessionActivation:
                 predecessor=lineage,phase='prepared',empty_proof=None,
                 items=[dict(spec=spec,nonce=uuid.uuid4().hex,phase='prepared',proof=None)
                     for spec in steps(installation['profile'])])
+            if state_admission is not None:value['state_admission']=deepcopy(state_admission)
             self._observe(value)
             with self.journal.transaction():
                 self.journal.db.execute('INSERT INTO libvirt_activation_successors VALUES(?,?,?,?,?,?)',

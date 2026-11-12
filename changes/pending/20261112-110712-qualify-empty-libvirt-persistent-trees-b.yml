@@ -1,0 +1,14 @@
+id: 20261112-110712-qualify-empty-libvirt-persistent-trees-b
+type: internal
+title: Qualify empty libvirt persistent trees before postboot activation
+description: Record an explicit successor-bound snapshot of empty driver directories
+  and bounded capability caches, reject foreign state and changed files, and preserve
+  pristine checks for initial activation.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

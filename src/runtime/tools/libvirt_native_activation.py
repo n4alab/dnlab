@@ -43,7 +43,7 @@ def close_worker_pipes(runner):
 def open_native_activation(journal, installation, *, root, operation, window, binary,
                            reload_profile, start_profile, sources_sha256, bus_inventory,
                            read_context, source_reader, resources, inventory, virsh, files, unit_query,
-                           prestart_reference=None, predecessor_id=None):
+                           prestart_reference=None, predecessor_id=None, state_admission=None):
     """Prepare and bind an activation, leaving all command releases to the caller."""
     installation = deepcopy(installation)
     bus_inventory = deepcopy(bus_inventory)
@@ -70,7 +70,7 @@ def open_native_activation(journal, installation, *, root, operation, window, bi
         lifetime.callback(close_worker_pipes, start_runner)
         runner = NativeActivationRunner(reload_runner, start_runner)
         socket_reader = ServiceSocketReader(root, installation)
-        initial_state = InitialSessionState(root, installation)
+        initial_state = None
 
         def read_generation(value, item, receipt):
             return controller._generation_observer(value, item, receipt)
@@ -87,6 +87,14 @@ def open_native_activation(journal, installation, *, root, operation, window, bi
             journal, installation, operation=operation, window=window, binary=binary,
             runner=runner, source_reader=source_reader, monitor=monitor, resources=check_resources,
             inventory=inventory, empty=empty, command_builder=planner)
+        if predecessor_id is None:
+            if state_admission is not None:raise Conflict('postboot state requires explicit predecessor')
+            initial_state = InitialSessionState(root, installation)
+        else:
+            from tools.libvirt_postboot_state import PostBootEmptyState
+            initial_state = PostBootEmptyState(root, installation, controller.driver.read(predecessor_id),
+                                               approved=state_admission)
+            if state_admission is None:raise Conflict('approved postboot state required before native preparation')
         unit_reader = ServiceUnitReader(installation, query=unit_query,
                                         files=lambda: observe_service_files(files, installation))
 
@@ -100,7 +108,7 @@ def open_native_activation(journal, installation, *, root, operation, window, bi
 
         with journal.execution_lock:
             reference = (controller.prepare() if predecessor_id is None
-                         else controller.prepare_successor(predecessor_id))
+                         else controller.prepare_successor(predecessor_id,state_admission=state_admission))
             if prestart_reference is not None:
                 from dnlab_runtime.libvirt_activation_prestart import retire_unused_monitors
                 retire_unused_monitors(controller, prestart_reference)

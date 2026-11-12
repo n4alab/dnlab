@@ -190,8 +190,9 @@ class ActivationController:
 
     def prepare(self):return self.driver.prepare(self.operation,self.source)
 
-    def prepare_successor(self,predecessor_id):
-        return self.driver.prepare_successor(self.operation,self.source,predecessor_id=predecessor_id)
+    def prepare_successor(self,predecessor_id,*,state_admission=None):
+        return self.driver.prepare_successor(self.operation,self.source,predecessor_id=predecessor_id,
+            state_admission=state_admission)
 
     def _reference(self,reference):
         value=self.driver.read(self.operation);self._bound(value)

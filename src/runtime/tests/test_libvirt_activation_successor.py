@@ -98,3 +98,18 @@ def test_third_boot_extends_exact_completed_lineage(activation):
     assert driver.apply('third')['phase'] == 'ready_empty'
     assert driver.read('next') == second and driver.read(previous['id']) == previous
     assert len(adapter.calls) == 12
+
+
+def test_empty_state_admission_is_durable_and_cannot_change_on_retry(activation):
+    driver, _, previous, current = complete_old(activation)
+    admission = dict(binding=dict(kind='postboot-empty-state-v1', installation_sha256=fingerprint(current),
+                                 predecessor_sha256=fingerprint(previous)), trees={'synthetic-root':{}})
+    value = driver.prepare_successor('next', current, predecessor_id=previous['id'], state_admission=admission)
+    assert driver.read('next')['state_admission'] == admission
+    assert driver.prepare_successor('next', current, predecessor_id=previous['id'], state_admission=admission) == value
+    altered = deepcopy(admission);altered['trees']['other-root'] = {}
+    before = driver.journal.db.total_changes
+    for receipt in (None, altered):
+        with pytest.raises(Conflict, match='request differs'):
+            driver.prepare_successor('next', current, predecessor_id=previous['id'], state_admission=receipt)
+    assert driver.journal.db.total_changes == before and driver.read('next') == value
