@@ -57,9 +57,9 @@ class Domain:
 
 
 class Connection:
-    def __init__(self, session, original, socket_fd, raw, readonly):
+    def __init__(self, session, original, socket_fd, raw, readonly, transport_uri):
         self._session, self._original, self._fd = session, deepcopy(original), socket_fd
-        self._raw, self._readonly = raw, readonly
+        self._raw, self._readonly, self._transport_uri = raw, readonly, transport_uri
         self._active, self._broken = True, False
         self._domains = weakref.WeakSet()
 
@@ -68,7 +68,7 @@ class Connection:
         try:
             self._session.verify(fingerprint(self._original))
             require(_socket_identity(self._fd) == self._original['socket'], 'original libvirt socket FD changed')
-            require(self._raw.isAlive() == 1 and self._raw.getURI() == self._session.profile['uri'],
+            require(self._raw.isAlive() == 1 and self._raw.getURI() == self._transport_uri,
                     'original libvirt connection/URI differs')
         except Exception:
             self._broken = True
@@ -155,7 +155,7 @@ def open_connection(session, *, pin_socket, readonly=True, sdk=None):
         uri = 'qemu+unix:///session?' + urlencode(dict(socket=f'/proc/self/fd/{fd}', mode='legacy'))
         raw = sdk.openAuth(uri, [[], lambda credentials, opaque: -1, None], flags)
         require(raw is not None, 'original libvirt SDK connection failed')
-        connection = Connection(session, original, fd, raw, readonly)
+        connection = Connection(session, original, fd, raw, readonly, uri)
         try:
             connection._check()
             yield connection

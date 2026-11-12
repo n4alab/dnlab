@@ -1,0 +1,14 @@
+id: 20261112-115541-verify-the-exact-libvirt-sdk-transport-u
+type: internal
+title: Verify the exact libvirt SDK transport URI
+description: Compare the SDK connection URI against the explicitly requested pinned
+  socket transport, retaining the logical dedicated-session URI for runtime controllers
+  and rejecting other destinations.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

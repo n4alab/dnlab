@@ -2663,3 +2663,12 @@ predecessor receipt is compared to the journal before creating the supervisor;
 the explicit predecessor and approved state are passed through to the native
 activation boundary. Existing initial activation recipes retain their schema.
 The targeted host/native assembly run passed 17 synthetic tests.
+
+Native checkpoint, 2026-11-12: the explicit postboot successor completed
+`ready_empty` with all three dedicated daemon generations confirmed. The official
+Debian libvirt 11.3.0 Python binding connected readonly and observed QEMU with no
+domains. Its `getURI()` returns the exact requested qemu+unix socket URI, so the
+client validates that transport URI while exposing the qualified logical
+qemu:///session URI to controllers. The corrected actual checkout passed a
+readonly native proof and 32 targeted SDK/definition tests. This does not qualify
+VM definition, guest startup, runtime-image packaging or workload readiness.

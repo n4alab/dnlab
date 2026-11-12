@@ -33,11 +33,11 @@ def case(monkeypatch):
         def resume(self):calls.append(('resume',))
     domain = Domain()
     class Raw:
-        uri = profile['uri']
+        uri = None
         error = None
         hook = None
         def isAlive(self):return 1
-        def getURI(self):return self.uri
+        def getURI(self):return self.uri if self.uri is not None else self.requested_uri
         def close(self):calls.append(('close',))
         def listAllDomains(self, flags):return [domain]
         def lookupByUUIDString(self, uuid):
@@ -51,6 +51,7 @@ def case(monkeypatch):
     raw = Raw()
     def open_auth(uri, credentials, flags):
         calls.append(('open', uri, flags))
+        raw.requested_uri = uri
         assert credentials[0] == [] and credentials[1]([], None) == -1
         return raw
     sdk = SimpleNamespace(VIR_CONNECT_RO=1, VIR_CONNECT_NO_ALIASES=2, openAuth=open_auth)
@@ -112,8 +113,9 @@ def test_autostart_must_be_disabled(case, monkeypatch):
     assert case.calls == []
 
 
-def test_uri_mismatch_closes_without_fallback(case):
-    case.raw.uri = 'qemu:///system'
+@pytest.mark.parametrize('uri', ['qemu:///system', 'qemu:///session', 'qemu+unix:///session?socket=/foreign&mode=legacy'])
+def test_uri_mismatch_closes_without_fallback(case, uri):
+    case.raw.uri = uri
     with pytest.raises(RuntimeErrorBase, match='URI'):
         with case.connect():pass
     assert [call[0] for call in case.calls] == ['open', 'close']
