@@ -219,3 +219,13 @@ def test_invalid_kernel_birth_is_not_accepted_before_next_create(taps,monkeypatc
     monkeypatch.setattr(driver.endpoints,'create',bad)
     with pytest.raises(RuntimeErrorBase):driver.apply(value['id'])
     assert len(state['creates'])==1 and driver.read(value['id'])['items'][0]['phase']=='create_requested'
+
+
+def test_host_writer_appearing_during_inventory_invalidates_preflight(taps,monkeypatch):
+    driver,value,state,_,_,_,_=taps;observe=driver.endpoints.observe
+    def changed(item,operation):
+        proof=observe(item,operation);state['writer']=True
+        return proof
+    monkeypatch.setattr(driver.endpoints,'observe',changed)
+    with pytest.raises(RuntimeErrorBase,match='preflight changed'):driver._check(value,mutate=True)
+    assert state['creates']==[] and driver.read(value['id'])==value

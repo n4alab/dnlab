@@ -146,6 +146,9 @@ class VMTaps:
         if held:self._bound(value)
         self.definitions._fence(definition);self.definitions._session(definition)
         require(self.read_context()==value['context'], 'original VM TAP namespace changed')
+        require(self.preflight(deepcopy(value))==expected, 'VM TAP host preflight changed during observation')
+        if held:self._bound(value)
+        self.definitions._fence(definition)
 
     def prepare(self, operation, context, requests):
         definition=self.definitions.read(operation);specs=self._plan(definition,context,requests)

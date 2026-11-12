@@ -2776,3 +2776,28 @@ tracked-worker adapter, cross-process recovery, configuration, handoff and full
 cleanup remain to be connected and qualified before VM deployment. The native
 TAP canaries above qualify only the lower original-FD primitive, not this entire
 VM-wide orchestration path. No public endpoint or scheduler behavior changes.
+
+`vm_tap_local.LocalTapEndpoints` is the concrete original-process provider for
+`VMTaps`. A separately qualified supervisor must supply and continuously verify
+the creator worker reference before allocation. The bound command includes the
+VM birth, definition, namespace and exact NIC specs. The reference must identify
+this same process and boot; replacing it or reconstructing a provider without
+its original live descriptors is refused. No worker is implicitly launched.
+
+The provider journals its original lease before opening TUN and records
+opened/requested/created in order, with host checks after the commits. It then
+uses `TapRetention` on the same descriptor. A lost birth acknowledgement may be
+completed only from the saved original reply and that still-open original FD.
+An uncertain creation with no durable birth stays pending without a new create.
+Retained receipts preserve the original worker/lease/birth and must match fresh
+kernel observations. Actor and creator records independently protect admission
+and cleanup when other VM rows are missing. Complete host preflight is also
+repeated after inventory observation to reject a writer appearing during it.
+
+The 173-test targeted integration run exercises this concrete provider with
+synthetic actor verification and a synthetic kernel using `/dev/null` FDs. It
+does not qualify native worker supervision or cross-process RPC. Descriptors
+remain held: the provider has no implicit close/delete path after uncertainty.
+Its tracked launcher, full cleanup, bridge configuration and QEMU handoff must
+still be connected before operational VM use. Previous native TAP results
+remain evidence for the lower primitive only; no VM was started by this run.

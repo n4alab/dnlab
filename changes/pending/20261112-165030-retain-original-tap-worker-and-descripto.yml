@@ -1,0 +1,14 @@
+id: 20261112-165030-retain-original-tap-worker-and-descripto
+type: internal
+title: Retain original TAP worker and descriptor provenance
+description: Connect VM-wide TAP retention to a concrete original-process provider
+  with durable birth records, immutable worker binding and same-descriptor recovery
+  after lost replies.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
