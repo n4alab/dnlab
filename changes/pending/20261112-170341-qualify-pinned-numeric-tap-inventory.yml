@@ -1,0 +1,13 @@
+id: 20261112-170341-qualify-pinned-numeric-tap-inventory
+type: internal
+title: Qualify pinned numeric TAP inventory
+description: Add namespace-bound readonly iproute2 inventory with pinned executable
+  identity and numeric ownership correlation, connected to the VM TAP provider protocol.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

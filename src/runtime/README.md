@@ -2801,3 +2801,27 @@ remain held: the provider has no implicit close/delete path after uncertainty.
 Its tracked launcher, full cleanup, bridge configuration and QEMU handoff must
 still be connected before operational VM use. Previous native TAP results
 remain evidence for the lower primitive only; no VM was started by this run.
+
+`vm_tap_inventory.TapInventory` supplies the native readonly inventory for that
+provider. The explicit profile pins `/usr/bin/ip` by content and inode/metadata;
+fixed queries execute only through the pinned descriptor, with a fixed
+environment, five-second timeouts, no retry and response size/schema checks.
+The original calling thread's namespace is verified around every query.
+
+Two equal numeric `ip -j tuntap show` results surround `ip -j -d link show`.
+The reader rejects changes, duplicate names/indices, incomplete TUN sets and
+inconsistent type/flags/credential presence. Resolved account names from the
+link dump remain diagnostic; numeric user/group values become the ownership
+fields. An empty link dump is not accepted as evidence of absence. Other link
+types remain available to the caller without treating their changing counters
+as TAP identity. No command configures an interface or attaches existing ones.
+
+The targeted run passes 198 synthetic tests, including complete coordinator →
+concrete provider → TUN protocol → numeric-inventory transport integration.
+A native master canary also passed for two exclusive DOWN, nonpersistent TAPs,
+with/without vnet headers: UID1001/GID1002 were observed numerically, and an
+independent complete link dump verified absence after original-FD closure.
+No bridge, address, VM, persistent endpoint or guest traffic was involved.
+These native results cover this master's original context only. Worker launch
+and supervision, the runtime image/sysfs namespace layout, other hosts and
+full VM endpoint lifecycle still need their respective qualifications.

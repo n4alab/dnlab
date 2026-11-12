@@ -210,3 +210,45 @@ def test_missing_original_creator_record_does_not_reopen_device(local):
     count=len(devices);calls=state['calls'][:]
     with pytest.raises(RuntimeErrorBase):driver.apply(value['id'])
     assert len(devices)==count and state['calls']==calls
+
+
+def test_provider_and_kernel_protocol_use_pinned_numeric_inventory(local,monkeypatch):
+    from contextlib import contextmanager
+    import json
+    from types import SimpleNamespace
+    from dnlab_runtime import vm_tap_inventory as inventory
+    driver,provider,value,state,_,_,_=local
+    profile=dict(path='/usr/bin/ip',sha256='a'*64,identity=[1792,42,0o100755,0,0,1234,15,16])
+    @contextmanager
+    def opener(path):yield 77
+    monkeypatch.setattr(inventory,'binary_proof',lambda fd,sha:tuple(profile['identity']))
+    calls=[]
+    def run(argv,**options):
+        assert options['executable']=='/proc/self/fd/77' and options['pass_fds']==(77,)
+        calls.append(argv[1:]);links=deepcopy(list(state['links'].values()))
+        if tuple(argv[1:])==inventory.LINKS:
+            for link in links:
+                data=link['linkinfo']['info_data']
+                for key in ('user','group'):
+                    if key in data:data[key]='resolved-account-name'
+            payload=[dict(ifname='lo',ifindex=1),*links]
+        else:
+            assert tuple(argv[1:])==inventory.NUMERIC
+            payload=[]
+            for link in links:
+                data=link['linkinfo']['info_data'];flags=['tap']
+                flags.extend(key for key in ('pi','vnet_hdr','persist') if data[key])
+                row=dict(ifname=link['ifname'],flags=flags)
+                row.update({key:data[key] for key in ('user','group') if key in data});payload.append(row)
+        return SimpleNamespace(returncode=0,stdout=json.dumps(payload).encode(),stderr=b'')
+    source=inventory.TapInventory(profile,value['context'],read_context=provider.read_context,run=run,opener=opener)
+    create=provider.device_factory
+    def device_factory(spec,scope,record):
+        device=create(spec,scope,record);device.inventory=source
+        return device
+    provider.inventory=source;provider.device_factory=device_factory
+    retained=driver.apply(value['id'])
+    assert retained['phase']=='retained' and len(calls)>3
+    for item in retained['items']:
+        data=item['proof']['retention']['retained_proof']['link']['linkinfo']['info_data']
+        assert data['user']==item['spec']['uid'] and data['group']==item['spec']['gid']

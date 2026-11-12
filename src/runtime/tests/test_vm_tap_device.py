@@ -61,7 +61,9 @@ def kernel(monkeypatch):
             if any(link['ifindex']==record['index'] for link in state['links'].values()):
                 raise OSError(errno.EEXIST,'ifindex occupied')
             link=dict(ifname=name,ifindex=record['index'],address='02:00:00:00:00:fe',mtu=1500,
-                flags=['BROADCAST','MULTICAST'],linkinfo={'info_kind':'tun','info_data':{'type':'tap'}})
+                flags=['BROADCAST','MULTICAST'],linkinfo={'info_kind':'tun','info_data':{
+                    'type':'tap','pi':not bool(flags&tap.IFF_NO_PI),'vnet_hdr':bool(flags&tap.IFF_VNET_HDR),
+                    'multi_queue':False,'persist':False}})
             state['links'][name]=link;record.update(link=link,flags=flags&~tap.IFF_TUN_EXCL)
             return arg
         if command==tap.TUNGETIFF:
