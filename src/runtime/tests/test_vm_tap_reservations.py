@@ -86,7 +86,33 @@ def test_uncertain_define_preserves_tap_reservations_on_reopen(definition):
     reopened=vm_driver(driver.journal,driver)
     with pytest.raises(Conflict,match='not repeated'):reopened.apply(birth['creator_operation_id'])
     with pytest.raises(Conflict,match='resource reserved'):driver.journal.submit(native())
-    assert driver.journal.db.execute('SELECT count(*) FROM resources').fetchone()[0]==2
+    assert driver.journal.db.execute('SELECT count(*) FROM resources').fetchone()[0]==3
+
+
+def test_different_taps_do_not_allow_shared_overlay_path(definition):
+    driver,birth,xml,state,_,_=definition
+    other=deepcopy(birth)
+    other.update(uuid='22345678-1234-4234-8234-123456789abc',node_id='second-vd',
+                 creator_operation_id='e'*32,nonce='f'*32)
+    root=ET.fromstring(xml)
+    root.find('uuid').text=other['uuid'];root.find('name').text='other-storage-vm'
+    owner=root.find('metadata/{'+OWNER_NS+'}owner')
+    for key in ('node_id','creator_operation_id','nonce'):owner.set(key,other[key])
+    for index,target in enumerate(root.findall('devices/interface/target')):
+        target.set('dev','dt-other'+str(index))
+    before=driver.journal.db.total_changes
+    with pytest.raises(Conflict,match='resource reserved: storage:'):
+        driver.prepare('shared-overlay',other,ET.tostring(root,encoding='unicode'))
+    assert driver.journal.db.total_changes==before and state['domains']=={}
+
+
+def test_missing_storage_reservation_blocks_retry_before_mutations(definition):
+    driver,birth,xml,state,_,_=definition
+    driver.journal.db.execute("DELETE FROM resources WHERE key LIKE 'storage:%'")
+    before=driver.journal.db.total_changes
+    with pytest.raises(Conflict,match='storage reservations changed'):
+        driver.apply(birth['creator_operation_id'])
+    assert driver.journal.db.total_changes==before and state['domains']=={}
 
 
 @pytest.mark.parametrize('competitor',['container','vm'])

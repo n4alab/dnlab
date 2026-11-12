@@ -73,8 +73,8 @@ class VMDefinitionDriver:
             held = self.journal.db.execute('SELECT 1 FROM vm_definition_intents WHERE (lab=? AND node=?) OR domain_uuid=? OR domain_name=?',
                 (birth['lab_id'], birth['node_id'], birth['uuid'], name)).fetchone()
             if held:raise Conflict('VM definition identity already reserved')
-            from .backend_reservations import tap_keys
-            keys = tap_keys(xml)
+            from .backend_reservations import tap_keys, storage_keys
+            keys = tap_keys(xml) | storage_keys(xml)
             for key in sorted(keys):
                 if self.journal.db.execute('SELECT 1 FROM resources WHERE key=?', (key,)).fetchone():
                     raise Conflict(f'resource reserved: {key}')

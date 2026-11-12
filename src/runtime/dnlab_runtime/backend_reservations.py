@@ -20,7 +20,7 @@ def vm_reservations(journal, lab, node):
     with journal.lock:
         tables = {row[0] for row in journal.db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         result = []
-        for table in ('vm_definition_intents', 'vm_event_streams'):
+        for table in ('vm_definition_intents', 'vm_event_streams', 'vm_storage_intents'):
             if table not in tables:continue
             for row in journal.db.execute(f'SELECT * FROM {table} ORDER BY id'):
                 try:
@@ -32,6 +32,8 @@ def vm_reservations(journal, lab, node):
                             or row['node'] != birth['node_id'] or row['id'] != birth['creator_operation_id']
                             or row['domain_uuid'] != birth['uuid']):raise ValueError('owner')
                     if table == 'vm_event_streams' and row['domain_uuid'] != birth['uuid']:raise ValueError('owner')
+                    if table == 'vm_storage_intents' and (row['domain_uuid'] != birth['uuid']
+                            or row['id'] != birth['creator_operation_id']):raise ValueError('owner')
                 except (ValueError, KeyError, TypeError, RuntimeErrorBase) as error:
                     raise BackendOwnershipConflict('VM backend reservation requires qualified recovery') from error
                 if birth['lab_id'] == lab and birth['node_id'] == node:
@@ -58,13 +60,32 @@ def tap_keys(xml):
     return set(keys)
 
 
+def storage_keys(xml):
+    """Reserve writable disk/NVRAM paths, never immutable backing assets."""
+    from .libvirt_xml import absolute
+    root = ET.fromstring(xml)
+    paths = []
+    for disk in root.findall('devices/disk'):
+        sources = disk.findall('source')
+        if (disk.get('type') != 'file' or disk.get('device') != 'disk'
+                or len(sources) != 1 or set(sources[0].attrib) != {'file'}
+                or disk.find('readonly') is not None or disk.find('shareable') is not None):
+            raise BackendOwnershipConflict('exclusive writable VM disk paths required')
+        paths.append(absolute(sources[0].get('file')))
+    for nvram in root.findall('os/nvram'):
+        paths.append(absolute(nvram.text))
+    if not paths or len(paths) != len(set(paths)):
+        raise BackendOwnershipConflict('distinct writable VM storage paths required')
+    return {'storage:' + path for path in paths}
+
+
 def verify_tap_reservations(journal, birth, xml):
-    expected = tap_keys(xml)
+    expected = tap_keys(xml) | storage_keys(xml)
     rows = journal.db.execute('SELECT key,operation_id FROM resources WHERE lab=? AND node=?',
         (birth['lab_id'], birth['node_id'])).fetchall()
     if ({row['key'] for row in rows} != expected
             or any(row['operation_id'] != birth['creator_operation_id'] for row in rows)):
-        raise BackendOwnershipConflict('original VM TAP reservations differ; qualified recovery required')
+        raise BackendOwnershipConflict('original VM TAP reservations differ or storage reservations changed; qualified recovery required')
 
 
 def available(journal, lab, node, backend, *, vm_birth=None):

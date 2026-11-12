@@ -1,0 +1,14 @@
+id: 20261112-000918-persist-vm-overlay-ownership-and-tracked
+type: internal
+title: Persist VM overlay ownership and tracked formatter intents
+description: Reserve writable VM storage paths with TAPs, retain overlay identities
+  and recovery intents, and constrain formatting to the original tracked process and
+  inherited empty inode.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

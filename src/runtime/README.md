@@ -44,6 +44,27 @@ its original activation and returned an empty all-domain inventory. The three
 daemon generations and private sockets were qualified; no VM has been created.
 Earlier package/installation milestones below describe their original scope.
 
+VM definition admission now reserves writable disk/NVRAM paths atomically with
+TAP names in the common journal. `vm_storage.py` binds each local overlay to
+the original definition, template, nonce and inode. Creation is requested once;
+uncertain completion needs the original filesystem adapter's recovery. A ready
+file cannot be recreated when missing or replaced. The whole disk set is checked
+before the next allocation, with original QEMU writer/fence checks. Storage
+intents also veto container admission and cleanup if a definition disappears.
+CephFS and writable NVRAM require separate qualification; no wipe, storage
+retirement or complete native filesystem adapter is implemented yet.
+
+The formatter in `vm_overlay_worker.py` / `vm_overlay_runner.py` reuses the
+original-process observer and blocked-worker protocol. It can execute only
+`qemu-img create` for an inherited, already recorded, empty single-link inode
+with the expected marker. It verifies that inode both before readiness and at
+release, then replaces the same tracked PID. The fixed command uses an explicit
+backing format, without shell commands or arbitrary output paths. A native
+canary formatted a synthetic 1 MiB raw base into an overlay owned by UID1001 /
+GID1002, retaining inode/marker and reopening its durable exit-0 receipt. No VM
+was started. This proves that formatter path only; native overlay ownership,
+writer admission, stop/start, wipe and CephFS still need their own qualification.
+
 `tools/vm_host_inventory.py` prepares the first host prerequisite collection.
 It requires explicit `--collect-host --host-id HOST`, or `--fixture-root` for
 synthetic input. It reports bounded hashes/metadata for fixed QEMU/libvirt and
