@@ -136,7 +136,9 @@ def cleanup_inventory(journal,lab):
     nodes=sorted({r[0] for table,predicate in (('nodes',"state != 'stopped'"),
                   ('workload_generations',"phase != 'cleaned'"),('operations',"phase NOT IN ('completed','cancelled','failed')"))
                   for r in db.execute(f'SELECT DISTINCT node FROM {table} WHERE lab=? AND ({predicate})',(lab,))})
-    for table in ('vm_event_streams','vm_definition_intents','vm_storage_intents','vm_definition_retirements'):
+    from .backend_reservations import verify_vm_tap_claims
+    verify_vm_tap_claims(journal)
+    for table in ('vm_event_streams','vm_definition_intents','vm_storage_intents','vm_definition_retirements','vm_tap_intents'):
         if table not in tables:continue
         # Definition-only retirement does not release disks, TAPs or the
         # node reservation. Full workload cleanup remains a separate step.

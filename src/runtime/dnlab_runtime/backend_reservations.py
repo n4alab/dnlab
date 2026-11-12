@@ -17,11 +17,34 @@ class BackendOwnershipConflict(Conflict):
     pass
 
 
+def verify_vm_tap_claims(journal):
+    """Unattributable or lost TAP claims must not silently unblock cleanup."""
+    tables={row[0] for row in journal.db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    if not {'vm_tap_intents','vm_tap_ifindices'} & tables:return
+    try:
+        wanted=set()
+        if 'vm_tap_intents' in tables:
+            for row in journal.db.execute('SELECT * FROM vm_tap_intents'):
+                value=json.loads(row['payload'])
+                if fingerprint(value)!=row['fingerprint'] or value['id']!=row['id']:raise ValueError('integrity')
+                for item in value['items']:
+                    tap=item['spec']['tap']
+                    if type(tap['ifindex']) is not int or tap['ifindex']<=0:raise ValueError('ifindex')
+                    wanted.add((tap['ifindex'],value['id'],tap['name']))
+        actual=set()
+        if 'vm_tap_ifindices' in tables:
+            actual={tuple(row) for row in journal.db.execute('SELECT ifindex,operation_id,interface_name FROM vm_tap_ifindices')}
+        if actual!=wanted:raise ValueError('claims')
+    except (ValueError,KeyError,TypeError) as error:
+        raise BackendOwnershipConflict('VM TAP ifindex reservation lineage requires qualified recovery') from error
+
+
 def vm_reservations(journal, lab, node):
     with journal.lock:
+        verify_vm_tap_claims(journal)
         tables = {row[0] for row in journal.db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         result = []
-        for table in ('vm_definition_intents', 'vm_event_streams', 'vm_storage_intents', 'vm_definition_retirements'):
+        for table in ('vm_definition_intents', 'vm_event_streams', 'vm_storage_intents', 'vm_definition_retirements', 'vm_tap_intents'):
             if table not in tables:continue
             for row in journal.db.execute(f'SELECT * FROM {table} ORDER BY id'):
                 try:
@@ -34,6 +57,8 @@ def vm_reservations(journal, lab, node):
                             or row['domain_uuid'] != birth['uuid']):raise ValueError('owner')
                     if table == 'vm_event_streams' and row['domain_uuid'] != birth['uuid']:raise ValueError('owner')
                     if table == 'vm_storage_intents' and (row['domain_uuid'] != birth['uuid']
+                            or row['id'] != birth['creator_operation_id']):raise ValueError('owner')
+                    if table == 'vm_tap_intents' and (row['domain_uuid'] != birth['uuid']
                             or row['id'] != birth['creator_operation_id']):raise ValueError('owner')
                     if table == 'vm_definition_retirements' and (row['id'] != value['id']
                             or row['definition_id'] != birth['creator_operation_id']

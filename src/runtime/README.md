@@ -2752,3 +2752,27 @@ the numeric output of `ip -j tuntap show` under the same namespace and repeated
 original-FD observations. This behavior follows the upstream
 [iproute2 TUN/TAP formatter](https://github.com/iproute2/iproute2/blob/main/ip/iptuntap.c).
 No native VM, QEMU handoff, bridge attachment or guest traffic is qualified here.
+
+`vm_taps.VMTaps` binds a complete ordered TAP set to the original VM definition,
+lab epoch, dedicated session and namespace. Names remain in the shared resource
+table alongside writable storage paths; host-local ifindices are reserved
+atomically for the same creator. Every item carries its original interface XML
+(guest MAC, model, PCI address, MTU and carrier request) without reinterpreting
+the host TAP MAC as the guest MAC. Allocation still produces unconfigured TAPs.
+
+The coordinator preflights every prepared/retained item before the next create,
+including checks after durable checkpoints. A requested item can only use its
+original endpoint provider's recovery; it is never sent to create again. The
+provider must keep the original worker/descriptor lease and independently
+observe the same retained receipt. Missing/replaced endpoints, unavailable
+leases, changed session/namespace, lab fences or ambiguous outcomes preserve
+the intent and reservations. Orphaned/mismatched ifindex claims block cleanup.
+The TAP intent independently blocks Docker admission and lab finalization even
+if the definition row is unavailable. Retention is not bridge/traffic readiness
+and this path does not release reservations or clean up a running workload.
+
+The VM-wide provider protocol is currently tested synthetically. Its native
+tracked-worker adapter, cross-process recovery, configuration, handoff and full
+cleanup remain to be connected and qualified before VM deployment. The native
+TAP canaries above qualify only the lower original-FD primitive, not this entire
+VM-wide orchestration path. No public endpoint or scheduler behavior changes.

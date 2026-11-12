@@ -1,0 +1,14 @@
+id: 20261112-163759-bind-complete-vm-tap-sets-to-original-de
+type: internal
+title: Bind complete VM TAP sets to original definitions
+description: Reserve host ifindices atomically for original VM definitions and preflight
+  every TAP before allocation, preserving original-provider recovery and blocking
+  cleanup on unresolved ownership.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
