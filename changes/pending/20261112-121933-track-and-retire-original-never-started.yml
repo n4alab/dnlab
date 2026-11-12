@@ -1,0 +1,14 @@
+id: 20261112-121933-track-and-retire-original-never-started
+type: internal
+title: Track and retire original never-started VM definitions
+description: Persist the original SDK definition response before normalization admission
+  and add one-shot definition-only retirement, retaining resource reservations, rejecting
+  booted or changed domains, and recovering qualified absence without resending undefine.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

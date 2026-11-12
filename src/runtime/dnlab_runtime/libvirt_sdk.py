@@ -49,6 +49,20 @@ class Domain:
         require(type(flags) is int and flags == 0, 'qualified VM managed-save flags required')
         return self._call('hasManagedSaveImage', flags)
 
+    def autostart(self):return self._call('autostart')
+
+    def snapshotNum(self, flags=0):
+        require(type(flags) is int and flags == 0, 'complete snapshot inventory required')
+        return self._call('snapshotNum', flags)
+
+    def checkpointCount(self):
+        # Do not expose SDK checkpoint handles beyond the connection lifetime.
+        return len(self._call('listAllCheckpoints', 0))
+
+    def undefineFlags(self, flags):
+        require(type(flags) is int and flags == 0, 'definition-only undefine flags required')
+        return self._call('undefineFlags', flags, mutate=True)
+
     def createWithFlags(self, flags):
         require(type(flags) is int and flags == 1, 'initial VM start must pause CPUs')
         return self._call('createWithFlags', flags, mutate=True)

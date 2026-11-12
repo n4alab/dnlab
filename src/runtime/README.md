@@ -2681,3 +2681,24 @@ resource observations and service liveness are never cached. The actual checkout
 passed 31 targeted tests. An isolated readonly comparison of the same native
 lineage source measured about 38% less read time; full activation performance
 has not been remeasured and the completed activation used the earlier reader.
+
+VM definitions now retain the original SDK response before normalization
+admission. An unexpected libvirt XML rewrite still blocks boot, but its original
+UUID/name/owner and observed persistent XML remain durably recorded. A lost SDK
+response is not reconstructed by looking up a matching domain.
+
+`UnstartedDefinitionRetirement` prepares definition-only cleanup using that
+original acknowledgement. It requires the original session and open lab epoch,
+no boot history, inactive unchanged XML, no autostart/managed-save/snapshots/
+checkpoints/NVRAM, and explicit writer/resource preflight. Only undefine flags 0
+are allowed. It sends the call once, verifies UUID and name absence, and recovers
+lost responses without resending. Presence or uncertainty stays pending.
+
+This path performs no guest shutdown or disk/TAP deletion. Definition and
+retirement history plus all resource reservations stay held for separately
+qualified full cleanup; retirement records independently veto Docker admission
+and lab finalization. Previously booted VMs, closed-lab teardown, missing creation
+acknowledgements, and native undefine qualification remain outside this initial
+path. The 111-test targeted run covers definition, retirement, SDK, fences,
+boot/storage/TAP interactions on synthetic providers only. No native domain was
+created or undefined by that run.

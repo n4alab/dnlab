@@ -10,11 +10,25 @@ from xml.etree import ElementTree as ET
 from .libvirt_observer import xml_fingerprint
 from .manifest import Conflict, canonical, fingerprint, identifier
 from .vm_events import validate_birth
-from .vm_template import require
+from .vm_template import fields, require
 
 
 def request_part(value):
     return {key: value[key] for key in ('request_id', 'birth', 'xml', 'session_sha256', 'lab_generation')}
+
+
+def creation_acknowledgement(value):
+    ack = value.get('creation_ack')
+    fields(ack, ('uuid','name','xml','persistent_sha256','request_fingerprint','session_sha256'),
+        'original VM definition response')
+    observed = xml_fingerprint(ack['xml'], value['birth'])
+    if (ack['uuid'] != value['birth']['uuid'] or ack['name'] != ET.fromstring(value['xml']).findtext('name')
+            or ET.fromstring(ack['xml']).findtext('name') != ack['name']
+            or ack['request_fingerprint'] != value['request_fingerprint']
+            or ack['session_sha256'] != value['session_sha256']
+            or observed != ack['persistent_sha256']):
+        raise Conflict('original VM definition response differs')
+    return json.loads(canonical(ack))
 
 
 class VMDefinitionDriver:
@@ -40,6 +54,9 @@ class VMDefinitionDriver:
                 or birth['node_id'] != row['node'] or birth['uuid'] != row['domain_uuid']
                 or value['request_id'] != row['request_id'] or ET.fromstring(value['xml']).findtext('name') != row['domain_name']):
             raise Conflict('VM definition owner differs')
+        if value.get('creation_ack') is not None:
+            creation_acknowledgement(value)
+            if value['phase'] == 'prepared':raise Conflict('unexpected early VM definition response')
         return value
 
     def _save(self, operation_id, value):
@@ -55,7 +72,8 @@ class VMDefinitionDriver:
         self._fence({'birth': birth, 'request_id': request_id, 'lab_generation': lab_generation})
         part = {'request_id': request_id, 'birth': birth, 'xml': xml,
                 'session_sha256': fingerprint(self.session.proof()), 'lab_generation': lab_generation}
-        value = json.loads(canonical({**part, 'request_fingerprint': fingerprint(part), 'phase': 'prepared', 'ack': None, 'error_type': ''}))
+        value = json.loads(canonical({**part, 'request_fingerprint': fingerprint(part), 'phase': 'prepared',
+            'creation_ack': None, 'ack': None, 'error_type': ''}))
         with self.journal.transaction():
             self._fence(value)
             prior = self.journal.db.execute('SELECT id FROM vm_definition_intents WHERE lab=? AND request_id=?',
@@ -134,6 +152,22 @@ class VMDefinitionDriver:
         return {'uuid': value['birth']['uuid'], 'name': name, 'persistent_sha256': actual,
                 'session_sha256': value['session_sha256']}
 
+    def _creation(self, value, domain):
+        """Capture the original define response before normalization admission.
+
+        This is ownership/observation evidence, never boot approval. It must
+        not be synthesized later from discovery of a matching UUID or name.
+        """
+        name = ET.fromstring(value['xml']).findtext('name')
+        if (domain.UUIDString() != value['birth']['uuid'] or domain.name() != name
+                or domain.isPersistent() != 1 or domain.isActive() != 0):
+            raise Conflict('original inactive definition response differs')
+        xml = domain.XMLDesc(2)
+        observed = xml_fingerprint(xml, value['birth'])
+        self._session(value)
+        return dict(uuid=value['birth']['uuid'],name=name,xml=xml,persistent_sha256=observed,
+            request_fingerprint=value['request_fingerprint'],session_sha256=value['session_sha256'])
+
     def apply(self, operation_id):
         with self.journal.execution_lock:
             value = self.read(operation_id)
@@ -156,6 +190,11 @@ class VMDefinitionDriver:
                 # Recheck after the durable write and before the only define.
                 self._preflight(value)
                 domain = self.connection.defineXMLFlags(value['xml'], 1)
+                value['creation_ack'] = self._creation(value, domain)
+                # Preserve the original response even if later normalization
+                # admission fails. Recording an observation does not authorize
+                # a boot or another definition after an uncertain response.
+                with self.journal.transaction():self._save(operation_id, value)
                 ack = self._ack(value, domain)
                 self._session(value)
                 self._fence(value)

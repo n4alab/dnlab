@@ -31,6 +31,10 @@ def case(monkeypatch):
         def name(self):return 'sample'
         def createWithFlags(self, flags):calls.append(('start', flags))
         def resume(self):calls.append(('resume',))
+        def autostart(self):return 0
+        def snapshotNum(self, flags):assert flags == 0;return 0
+        def listAllCheckpoints(self, flags):assert flags == 0;return []
+        def undefineFlags(self, flags):calls.append(('undefine',flags));return 0
     domain = Domain()
     class Raw:
         uri = None
@@ -86,14 +90,15 @@ def test_write_connection_defines_once_and_starts_paused(case):
     assert [call[0] for call in case.calls] == ['open', 'define', 'start', 'resume', 'close']
 
 
-@pytest.mark.parametrize('action', ['define', 'start', 'resume'])
+@pytest.mark.parametrize('action', ['define', 'start', 'resume', 'undefine'])
 def test_readonly_mutation_rejected_before_sdk(case, action):
     with case.connect() as connection:
         domain = connection.lookupByUUIDString(UUID)
         with pytest.raises(Conflict, match='readonly'):
             if action == 'define':connection.defineXMLFlags(XML, 1)
             elif action == 'start':domain.createWithFlags(1)
-            else:domain.resume()
+            elif action == 'resume':domain.resume()
+            else:domain.undefineFlags(0)
     assert [call[0] for call in case.calls] == ['open', 'close']
 
 
@@ -151,3 +156,19 @@ def test_unpaused_start_refused(case, flags):
     with case.connect(False) as connection:
         with pytest.raises(RuntimeErrorBase, match='pause'):connection.lookupByUUIDString(UUID).createWithFlags(flags)
     assert not any(call[0] == 'start' for call in case.calls)
+
+
+def test_retained_state_queries_and_definition_only_undefine(case):
+    with case.connect(False) as connection:
+        domain = connection.lookupByUUIDString(UUID)
+        assert domain.autostart() == domain.snapshotNum(0) == domain.checkpointCount() == 0
+        assert domain.undefineFlags(0) == 0
+    assert ('undefine',0) in case.calls
+
+
+@pytest.mark.parametrize('flags', [1, 2, False])
+def test_undefine_cannot_delete_external_state_through_flags(case, flags):
+    with case.connect(False) as connection:
+        with pytest.raises(RuntimeErrorBase, match='definition-only'):
+            connection.lookupByUUIDString(UUID).undefineFlags(flags)
+    assert not any(call[0] == 'undefine' for call in case.calls)

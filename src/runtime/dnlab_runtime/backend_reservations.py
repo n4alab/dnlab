@@ -3,7 +3,8 @@
 Existing operation/birth records are the reservations: no second ownership
 ledger is introduced. Mutating callers must check inside BEGIN IMMEDIATE, so
 native submission and VM preparation cannot both win on different connections.
-VM retirement is not implemented, so definition and stream records stay held.
+Workload resource release is not implemented, so definition, retirement and
+stream records stay held even after definition-only undefine.
 """
 import json
 import re
@@ -20,7 +21,7 @@ def vm_reservations(journal, lab, node):
     with journal.lock:
         tables = {row[0] for row in journal.db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         result = []
-        for table in ('vm_definition_intents', 'vm_event_streams', 'vm_storage_intents'):
+        for table in ('vm_definition_intents', 'vm_event_streams', 'vm_storage_intents', 'vm_definition_retirements'):
             if table not in tables:continue
             for row in journal.db.execute(f'SELECT * FROM {table} ORDER BY id'):
                 try:
@@ -34,6 +35,10 @@ def vm_reservations(journal, lab, node):
                     if table == 'vm_event_streams' and row['domain_uuid'] != birth['uuid']:raise ValueError('owner')
                     if table == 'vm_storage_intents' and (row['domain_uuid'] != birth['uuid']
                             or row['id'] != birth['creator_operation_id']):raise ValueError('owner')
+                    if table == 'vm_definition_retirements' and (row['id'] != value['id']
+                            or row['definition_id'] != birth['creator_operation_id']
+                            or value['definition']['birth'] != birth
+                            or value['definition_sha256'] != fingerprint(value['definition'])):raise ValueError('owner')
                 except (ValueError, KeyError, TypeError, RuntimeErrorBase) as error:
                     raise BackendOwnershipConflict('VM backend reservation requires qualified recovery') from error
                 if birth['lab_id'] == lab and birth['node_id'] == node:

@@ -155,3 +155,21 @@ def test_request_content_cannot_be_changed_on_retry(definition):
     changed_xml=xml.replace(birth['nonce'],changed['nonce'])
     with pytest.raises(Conflict,match='content differs'):driver.prepare('first-define',changed,changed_xml)
     assert driver.read(birth['creator_operation_id'])['birth']==birth
+
+
+def test_original_creation_response_is_durable_before_normalization_admission(definition):
+    from dnlab_runtime.vm_definition import creation_acknowledgement
+    driver,birth,_,state,_,_=definition;state['normalize']=True
+    with pytest.raises(Conflict,match='normalization'):driver.apply(birth['creator_operation_id'])
+    value=driver.read(birth['creator_operation_id'])
+    receipt=creation_acknowledgement(value)
+    assert receipt['uuid']==birth['uuid'] and 'unexpected default' in receipt['xml']
+    assert value['phase']=='recovery_required' and value['ack'] is None
+    with pytest.raises(Conflict,match='not repeated'):driver.apply(birth['creator_operation_id'])
+    assert state['calls'].count(('define',))==1
+
+
+def test_missing_sdk_response_does_not_synthesize_creation_evidence(definition):
+    driver,birth,_,state,_,_=definition;state['lost']=True
+    with pytest.raises(OSError):driver.apply(birth['creator_operation_id'])
+    assert driver.read(birth['creator_operation_id'])['creation_ack'] is None

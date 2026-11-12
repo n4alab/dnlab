@@ -136,10 +136,10 @@ def cleanup_inventory(journal,lab):
     nodes=sorted({r[0] for table,predicate in (('nodes',"state != 'stopped'"),
                   ('workload_generations',"phase != 'cleaned'"),('operations',"phase NOT IN ('completed','cancelled','failed')"))
                   for r in db.execute(f'SELECT DISTINCT node FROM {table} WHERE lab=? AND ({predicate})',(lab,))})
-    for table in ('vm_event_streams','vm_definition_intents','vm_storage_intents'):
+    for table in ('vm_event_streams','vm_definition_intents','vm_storage_intents','vm_definition_retirements'):
         if table not in tables:continue
-        # VM retirement is not enabled yet. Definition intents and event
-        # streams veto owner finalization even before a QEMU process exists.
+        # Definition-only retirement does not release disks, TAPs or the
+        # node reservation. Full workload cleanup remains a separate step.
         for row in db.execute(f'SELECT payload,fingerprint FROM {table}'):
             try:
                 value=json.loads(row['payload'])
