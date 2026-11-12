@@ -1,0 +1,14 @@
+id: 20261112-155641-add-exclusive-namespace-bound-ephemeral
+type: internal
+title: Add exclusive namespace-bound ephemeral TAP primitive
+description: Create temporary TAPs through one original TUN descriptor with preassigned
+  ifindex, kernel exclusive creation and thread namespace checks; expose no persistence,
+  bridge/IP configuration or QEMU handoff.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

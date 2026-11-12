@@ -2702,3 +2702,26 @@ acknowledgements, and native undefine qualification remain outside this initial
 path. The 111-test targeted run covers definition, retirement, SDK, fences,
 boot/storage/TAP interactions on synthetic providers only. No native domain was
 created or undefined by that run.
+
+`vm_tap_device.EphemeralTap` provides the first native TAP kernel primitive. It
+opens its own TUN descriptor after checking the calling thread's original
+namespace, requests an explicit ifindex, and uses exclusive creation. Namespace,
+FD flags and the original unconfigured/down TAP are checked before reporting
+birth. The record callback must durably retain the opened/requested/created
+observations. Reopening or repeating an uncertain attempt is refused.
+
+This primitive exposes no persistence, owner change, bridge/IP configuration or
+QEMU FD handoff. It closes only its own original descriptor; it never deletes a
+link by name. Seventeen synthetic tests pass. A native master canary passed with
+and without vnet headers, rejected both name and ifindex collisions despite an
+intentionally stale inventory, preserved the original links, and verified absence
+after descriptor closure. No VM, bridge or address was created by that canary.
+
+Persistent VM endpoints still need full journal/worker integration, kernel birth
+and ownership receipts, resource reservations, configuration, writer checks,
+QEMU handoff, and qualified cleanup/move/rollback. The TAP's host MAC recorded
+here is distinct from the guest NIC MAC supplied in domain XML. The native
+canary does not qualify guest traffic, MTU/carrier management or QEMU networking.
+The protocol follows the upstream [Linux TUN/TAP driver](https://github.com/torvalds/linux/blob/v6.12/drivers/net/tun.c)
+and [UAPI](https://github.com/torvalds/linux/blob/v6.12/include/uapi/linux/if_tun.h);
+other hosts and packaging contexts require their own qualification.
