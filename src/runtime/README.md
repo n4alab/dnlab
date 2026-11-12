@@ -2725,3 +2725,30 @@ canary does not qualify guest traffic, MTU/carrier management or QEMU networking
 The protocol follows the upstream [Linux TUN/TAP driver](https://github.com/torvalds/linux/blob/v6.12/drivers/net/tun.c)
 and [UAPI](https://github.com/torvalds/linux/blob/v6.12/include/uapi/linux/if_tun.h);
 other hosts and packaging contexts require their own qualification.
+
+`vm_tap_retention.TapRetention` adds journaled UID/GID assignment and persistence
+through `RetainedTapDevice`, keeping the original creator descriptor attached.
+The unconfigured/down TAP birth must be durably acknowledged before retention.
+Each ioctl has a prior durable requested step. Recovery observes an applied
+change without resending it; an uncertain unapplied change remains pending.
+Release clears persistence on that same descriptor. Absence is recorded only
+after descriptor closure and a new complete name/ifindex inventory.
+
+The creator lease cannot be restored by finding an interface with the same
+name, index or configuration. A lost process/descriptor remains unresolved;
+this component supplies no adoption, forced deletion or cross-process recovery.
+Its mandatory caller preflight must qualify resource reservations and absence
+of guest writers. Integration with the VM worker/common reservations, bridge
+configuration and QEMU handoff remains required before workload use.
+
+Forty targeted synthetic tests cover ephemeral creation plus retention,
+checkpoint conflicts, lost replies and cleanup. Native master canaries pass
+with and without vnet headers: UID1001/GID1002, persistence, replay, original-FD
+release and verified absence. Failed diagnostic runs retain their failure and
+verified-cleanup records. The fixture keeps unrelated bridge GC countdowns as
+diagnostics rather than configuration. TAP ownership inputs must be numeric:
+`ip -j -d link show` resolves account names even with `-N`; the fixture correlates
+the numeric output of `ip -j tuntap show` under the same namespace and repeated
+original-FD observations. This behavior follows the upstream
+[iproute2 TUN/TAP formatter](https://github.com/iproute2/iproute2/blob/main/ip/iptuntap.c).
+No native VM, QEMU handoff, bridge attachment or guest traffic is qualified here.

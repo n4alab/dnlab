@@ -26,7 +26,7 @@ def kernel(monkeypatch):
         return fd
     def closed(fd):
         record=state['fds'].pop(fd,None)
-        if record and record['link'] is not None:
+        if record and record['link'] is not None and not record['flags']&0x800:
             link=record['link']
             if state['links'].get(link['ifname']) is link:state['links'].pop(link['ifname'])
         original_close(fd)
@@ -37,6 +37,17 @@ def kernel(monkeypatch):
         return original_fstat(fd)
     def ioctl(fd,command,arg=None):
         state['calls'].append(command);record=state['fds'][fd]
+        if command in (0x400454cc,0x400454ce,0x400454cb):
+            assert type(arg) is int
+            if state.get('before_change')==command:raise OSError('uncertain change')
+            data=record['link']['linkinfo']['info_data']
+            if command==0x400454cc:data['user']=arg
+            elif command==0x400454ce:data['group']=arg
+            else:
+                record['flags']=(record['flags']|0x800) if arg else (record['flags']&~0x800)
+                data['persist']=bool(arg)
+            if state.get('lost_change')==command:raise OSError('lost change response')
+            return 0
         if command==tap.TUNGETFEATURES:return struct.pack('=I',state['features'])
         if command==tap.TUNSETIFINDEX:
             record['index']=struct.unpack('=I',arg)[0]
@@ -64,7 +75,7 @@ def kernel(monkeypatch):
         if state.get('fail_record')==value['phase']:raise OSError('synthetic durability failure')
         if value['phase']=='create_requested' and state.get('checkpoint_conflict'):
             state['links'][spec['name']]=dict(ifname=spec['name'],ifindex=999,foreign=True)
-    def device():return tap.EphemeralTap(spec,namespace,read_context=lambda:deepcopy(state['scope']),
+    def device(cls=tap.EphemeralTap):return cls(spec,namespace,read_context=lambda:deepcopy(state['scope']),
         inventory=inventory,record=save,ioctl=ioctl)
     monkeypatch.setattr(tap.os,'open',opened);monkeypatch.setattr(tap.os,'close',closed);monkeypatch.setattr(tap.os,'fstat',fstat)
     return spec,namespace,state,device

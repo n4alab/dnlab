@@ -52,6 +52,7 @@ class EphemeralTap:
                 'qualified 64-bit Linux TAP providers required')
         self.read_context, self.inventory, self.record, self.ioctl = read_context, inventory, record, ioctl
         self._fd, self._entered, self._requested, self._identity = None, False, False, None
+        self._lease_token, self._birth_proof = uuid.uuid4().hex, None
 
     def _scope(self):
         if self.read_context() != self.context:raise Conflict('original TAP namespace changed')
@@ -96,8 +97,7 @@ class EphemeralTap:
         raw = self.ioctl(self._fd,TUNGETIFF,bytes(IFREQ.size))
         require(isinstance(raw,bytes) and len(raw) == IFREQ.size, 'complete original TAP ioctl reply required')
         name, flags = IFREQ.unpack(raw)
-        expected = IFF_TAP | IFF_NO_PI | (IFF_VNET_HDR if self.spec['vnet_header'] else 0)
-        require(name.split(b'\0')[0] == self.spec['name'].encode('ascii') and flags == expected,
+        require(name.split(b'\0')[0] == self.spec['name'].encode('ascii') and flags in self._accepted_flags(),
                 'original ephemeral TAP FD identity/flags differ')
         ns = self.ioctl(self._fd,TUNGETDEVNETNS)
         require(type(ns) is int and ns >= 0 and ns != self._fd, 'original TAP namespace FD required')
@@ -108,6 +108,9 @@ class EphemeralTap:
         finally:os.close(ns)
         self._scope()
         return flags
+
+    def _accepted_flags(self):
+        return {IFF_TAP | IFF_NO_PI | (IFF_VNET_HDR if self.spec['vnet_header'] else 0)}
 
     def capture(self):
         flags = self._iff();matches = self._links()
@@ -140,7 +143,7 @@ class EphemeralTap:
         self._scope();self._device()
         # No fallback attaches an existing device: the kernel checks EXCL.
         self.ioctl(self._fd,TUNSETIFF,IFREQ.pack(self.spec['name'].encode('ascii'),flags | IFF_TUN_EXCL))
-        proof = self.capture();self._record('created',proof)
+        proof = self.capture();self._record('created',proof);self._birth_proof = deepcopy(proof)
         return proof
 
     def close(self):
