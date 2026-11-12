@@ -1,12 +1,13 @@
 """Reuse the qualified original-process runner for the constrained formatter."""
 from contextlib import contextmanager
 from copy import deepcopy
+import json
 import subprocess
 
 from .libvirt_account_process import AccountWorkerObserver
 from .libvirt_account_runner import AccountProcessRunner, source_proof, worker_argv
 from .libvirt_account_worker import ENVIRONMENT, binary_proof
-from .manifest import Conflict
+from .manifest import Conflict, fingerprint
 from .vm_overlay_worker import validate_command
 
 
@@ -17,6 +18,23 @@ class OverlayWorkerObserver(AccountWorkerObserver):
 class OverlayProcessRunner(AccountProcessRunner):
     worker_table = 'vm_overlay_workers'
     command_validator = staticmethod(validate_command)
+
+    def original_reference(self, command):
+        """Read the sole original arm receipt after a lost caller response."""
+        validate_command(command)
+        with self.journal.lock:
+            values = []
+            for row in self.journal.db.execute('SELECT payload,fingerprint FROM ' + self.worker_table):
+                value = json.loads(row['payload'])
+                if fingerprint(value) != row['fingerprint']:raise Conflict('original formatter worker journal differs')
+                if value['command'] == command:values.append(value)
+        if not values:return None
+        if len(values) != 1:raise Conflict('ambiguous original formatter arm')
+        value = values[0]
+        if value['reference'] is None:return None
+        original = self._read(value['reference'])
+        if original['phase'] != 'armed':raise Conflict('original formatter was not left armed')
+        return deepcopy(original['reference'])
 
     @contextmanager
     def _launch(self, command):

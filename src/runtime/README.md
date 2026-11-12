@@ -51,8 +51,8 @@ uncertain completion needs the original filesystem adapter's recovery. A ready
 file cannot be recreated when missing or replaced. The whole disk set is checked
 before the next allocation, with original QEMU writer/fence checks. Storage
 intents also veto container admission and cleanup if a definition disappears.
-CephFS and writable NVRAM require separate qualification; no wipe, storage
-retirement or complete native filesystem adapter is implemented yet.
+CephFS and writable NVRAM require separate qualification; wipe and storage
+retirement are not implemented yet.
 
 The formatter in `vm_overlay_worker.py` / `vm_overlay_runner.py` reuses the
 original-process observer and blocked-worker protocol. It can execute only
@@ -62,8 +62,36 @@ release, then replaces the same tracked PID. The fixed command uses an explicit
 backing format, without shell commands or arbitrary output paths. A native
 canary formatted a synthetic 1 MiB raw base into an overlay owned by UID1001 /
 GID1002, retaining inode/marker and reopening its durable exit-0 receipt. No VM
-was started. This proves that formatter path only; native overlay ownership,
-writer admission, stop/start, wipe and CephFS still need their own qualification.
+was started. This proves that formatter path only; native VM writer admission,
+stop/start, wipe and CephFS still need their own qualification.
+
+`vm_overlay_files.py` now connects those intents to the formatter for the first
+local ext4 profile. It requires an original parent identity and explicit
+preflight/runner providers, creates no directories, records file birth before
+initialization, synchronizes file and parent, and resumes only the original
+formatter. Unknown birth identity or an unverified release stays pending until
+qualified original evidence is available.
+Readonly mode requires the original tables and never creates or recovers files.
+Immutable base hashes are reused only while complete file metadata is unchanged.
+The bounded [qcow2 header reader](https://www.qemu.org/docs/master/interop/qcow2.html)
+verifies backing path, explicit backing format and virtual size through the
+original inode, without opening backing files or using `qemu-img --force-share`.
+It does not acquire a QEMU writer lease or check allocation tables.
+Dirty headers require a qualified original writer; snapshots, encryption,
+external data and unqualified feature flags are refused in this first profile.
+
+A native synthetic-SDK canary exercised `VMStorage`, this filesystem adapter and
+real QEMU formatting for normal, lost-arm-response and lost-release-response
+cases. Each used one original worker and reopened the same proof. A separate
+query-only observation verified all three histories without journal writes.
+No libvirt connection, domain or guest was used by this canary: it does not
+qualify NOS lifecycle, actual VM writers, CephFS or runtime-image packaging.
+The response-loss cases retain the original supervisor/waiter. Losing it before
+a durable exit receipt remains pending; runtime-crash recovery is not qualified
+by these cases and cannot adopt a PID or repeat an uncertain command.
+Filesystem integration tests need a fresh exclusive basetemp on ext4 and mapped
+UID1001/GID1002; the formatter remains simulated in those tests. The ordinary
+`/tmp` mount can be tmpfs and is correctly rejected by the native ext4 profile.
 
 `tools/vm_host_inventory.py` prepares the first host prerequisite collection.
 It requires explicit `--collect-host --host-id HOST`, or `--fixture-root` for

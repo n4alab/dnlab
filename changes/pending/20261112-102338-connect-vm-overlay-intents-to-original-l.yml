@@ -1,0 +1,14 @@
+id: 20261112-102338-connect-vm-overlay-intents-to-original-l
+type: internal
+title: Connect VM overlay intents to original local filesystem births
+description: Add the ext4 overlay adapter, bounded backing-header verification and
+  recovery of only the original formatter, with query-only observation and no implicit
+  file recreation.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
