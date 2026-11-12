@@ -190,6 +190,9 @@ class ActivationController:
 
     def prepare(self):return self.driver.prepare(self.operation,self.source)
 
+    def prepare_successor(self,predecessor_id):
+        return self.driver.prepare_successor(self.operation,self.source,predecessor_id=predecessor_id)
+
     def _reference(self,reference):
         value=self.driver.read(self.operation);self._bound(value)
         if (reference.get('id')!=self.operation or reference.get('phase')!='prepared'

@@ -43,7 +43,7 @@ def close_worker_pipes(runner):
 def open_native_activation(journal, installation, *, root, operation, window, binary,
                            reload_profile, start_profile, sources_sha256, bus_inventory,
                            read_context, source_reader, resources, inventory, virsh, files, unit_query,
-                           prestart_reference=None):
+                           prestart_reference=None, predecessor_id=None):
     """Prepare and bind an activation, leaving all command releases to the caller."""
     installation = deepcopy(installation)
     bus_inventory = deepcopy(bus_inventory)
@@ -99,7 +99,8 @@ def open_native_activation(journal, installation, *, root, operation, window, bi
             return start_runner.jobs.correlate(command, subscription, event)
 
         with journal.execution_lock:
-            reference = controller.prepare()
+            reference = (controller.prepare() if predecessor_id is None
+                         else controller.prepare_successor(predecessor_id))
             if prestart_reference is not None:
                 from dnlab_runtime.libvirt_activation_prestart import retire_unused_monitors
                 retire_unused_monitors(controller, prestart_reference)

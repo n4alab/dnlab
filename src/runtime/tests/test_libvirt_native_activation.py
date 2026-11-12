@@ -131,3 +131,20 @@ def test_preexisting_state_stops_before_subscription(assembly, monkeypatch):
     with pytest.raises(Conflict, match='pre-existing libvirt state'), open_session():
         pytest.fail('pre-existing driver state was accepted')
     assert observations == [] and state['calls'] == []
+
+
+def test_explicit_successor_dispatch_precedes_monitor_subscription(assembly, monkeypatch):
+    open_session, observations, state, _ = assembly
+    called = []
+    def successor(controller, predecessor_id):
+        assert observations == []
+        called.append(predecessor_id)
+        # Dispatch-only fixture: lineage validation is covered by the real
+        # successor coordinator tests, while this assembly has a prepared row.
+        return controller.driver.read(controller.operation)
+    def forbidden(*args):pytest.fail('initial preparation used for a successor')
+    monkeypatch.setattr(native.ActivationController, 'prepare_successor', successor)
+    monkeypatch.setattr(native.ActivationController, 'prepare', forbidden)
+    with open_session(predecessor_id='completed-original'):
+        assert called == ['completed-original'] and observations == ['subscribed']
+    assert state['calls'] == [] and observations == ['subscribed', 'closed']

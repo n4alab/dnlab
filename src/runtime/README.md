@@ -2621,3 +2621,19 @@ module performs no system-path fallback or package installation. Debian's
 availability in the runtime image or its virtualenv. Native SDK qualification,
 event transport and runtime-image packaging remain pending. The targeted
 30-test run covers this boundary and definition recovery with synthetic SDKs.
+
+`SessionActivation.prepare_successor` provides a separate, journaled activation
+for a newly qualified boot after a completed `ready_empty` predecessor. It keeps
+the installation ID and persistent proofs, requires separate postboot lineage,
+and allocates fresh command nonces. A successor cannot fork its predecessor or
+share its installation/boot slot with another activation. Initial preparation
+continues to refuse successor IDs. The native supervisor accepts an explicit
+`predecessor_id`; it never selects a historical activation automatically.
+
+The targeted 41-test run covers coordinator lineage, lost replies, controller
+and bus recovery, and synthetic native assembly. Operational successor activation
+is pending: the initial-start state observer still requires pristine state;
+existing libvirt-generated persistent directories must be qualified separately
+before an empty postboot session can be started. Sessions containing persisted
+VM definitions need their own recovery contract and are not covered by this
+empty-session successor path.

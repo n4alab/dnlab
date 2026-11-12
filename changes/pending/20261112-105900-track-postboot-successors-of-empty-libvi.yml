@@ -1,0 +1,14 @@
+id: 20261112-105900-track-postboot-successors-of-empty-libvi
+type: internal
+title: Track postboot successors of empty libvirt activations
+description: Preserve completed activation receipts while preparing a separate boot
+  generation with fresh command nonces and qualified persistent lineage; refuse forks,
+  pending predecessors and occupied targets.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
