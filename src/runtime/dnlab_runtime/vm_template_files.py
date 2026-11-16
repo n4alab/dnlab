@@ -30,13 +30,14 @@ def identity(info):
 
 
 class TemplateAssetFiles:
-    def __init__(self, journal, *, root, parent_identity, preflight, readonly=False):
+    def __init__(self, journal, *, root, parent_identity, preflight, readonly=False, source_opener=open_resource):
         absolute(root)
-        if not callable(preflight) or type(readonly) is not bool:
+        if not callable(preflight) or not callable(source_opener) or type(readonly) is not bool:
             raise Conflict('explicit template import preflight and observer mode required')
         self.journal, self.root = journal, root
         self.parent, self.preflight = deepcopy(parent_identity), preflight
         self.readonly = readonly
+        self.source_opener = source_opener
         if (set(self.parent) != {'device', 'inode', 'uid', 'gid', 'mode'}
                 or any(type(value) is not int or value < 0 for value in self.parent.values())
                 or self.parent['inode'] == 0
@@ -90,7 +91,7 @@ class TemplateAssetFiles:
         request = value['request']
         def source_identity():
             if value['phase'] in ('prepared', 'create_requested', 'copying') and 'source_metadata' in value:
-                with open_resource(request['source']) as fd:
+                with self.source_opener(request['source']) as fd:
                     if list(metadata(os.fstat(fd))) != value['source_metadata']:
                         raise Conflict('original template source identity changed')
         def destination_identity():
@@ -125,7 +126,7 @@ class TemplateAssetFiles:
                 return saved
             value = dict(request=request, phase='prepared', nonce=uuid.uuid4().hex, file=None, proof=None)
             self._guard(value)
-            with self._parent() as parent, open_resource(source) as fd:
+            with self._parent() as parent, self.source_opener(source) as fd:
                 before = metadata(os.fstat(fd)); hashed = hashlib.sha256(); total = 0
                 if before[5] != size:raise Conflict('original template source size differs')
                 while block := os.read(fd, CHUNK):
@@ -174,7 +175,7 @@ class TemplateAssetFiles:
         if length > request['size']:raise Conflict('template copy exceeds original size')
         if not extend and length != request['size']:raise Conflict('original template copy incomplete')
         os.lseek(fd, 0, os.SEEK_SET)
-        with open_resource(request['source']) as source:
+        with self.source_opener(request['source']) as source:
             if list(metadata(os.fstat(source))) != value['source_metadata']:
                 raise Conflict('original template source identity changed')
             remaining = length; hashed = hashlib.sha256(); total = 0
@@ -219,7 +220,8 @@ class TemplateAssetFiles:
                 or named.st_nlink != 1 or os.getxattr(fd, MARKER) != self._marker(value)):
             raise Conflict('original template copy changed before confirmation')
         proof = dict(request_sha256=fingerprint(value['request']), identity=identity(os.fstat(fd)),
-                     sha256=value['request']['sha256'], size=value['request']['size'])
+                     sha256=value['request']['sha256'], size=value['request']['size'],
+                     metadata=list(metadata(os.fstat(fd))))
         value.update(phase='ready', proof=proof);self._save(value)
         return proof
 
@@ -269,6 +271,30 @@ class TemplateAssetFiles:
                 if stat.S_IMODE(os.fstat(fd).st_mode) != 0o444:raise Conflict('immutable template asset mode changed')
                 self._hash(value, fd)
                 proof = dict(request_sha256=fingerprint(value['request']), identity=identity(os.fstat(fd)),
-                             sha256=value['request']['sha256'], size=value['request']['size'])
+                             sha256=value['request']['sha256'], size=value['request']['size'],
+                             metadata=list(metadata(os.fstat(fd))))
                 if proof != value['proof']:raise Conflict('original template asset proof differs')
                 return proof
+
+    def preflight_observe(self, operation):
+        """Identity-only view inside the caller's full import preflight.
+
+        Never invokes that preflight recursively, writes, resumes or claims an
+        unfinished copy is durable. Ready content was hashed before its saved
+        full metadata; changed bytes/metadata cannot inherit that receipt.
+        """
+        with self.journal.execution_lock:
+            value = self.read(operation)
+            with self._parent() as parent:
+                if value['file'] is None:
+                    try:os.stat(PurePosixPath(value['request']['destination']).name,
+                                dir_fd=parent, follow_symlinks=False)
+                    except FileNotFoundError:return dict(phase=value['phase'], exists=False, proof=None)
+                    raise Conflict('unqualified template copy occupies destination')
+                with self._file(parent, value, writable=False) as fd:
+                    if os.fstat(fd).st_size > value['request']['size']:
+                        raise Conflict('original template copy exceeds its declared size')
+                    if value['phase'] == 'ready' and (list(metadata(os.fstat(fd))) != value['proof'].get('metadata')
+                            or stat.S_IMODE(os.fstat(fd).st_mode) != 0o444):
+                        raise Conflict('immutable template metadata changed since verification')
+                    return dict(phase=value['phase'], exists=True, proof=deepcopy(value['proof']))

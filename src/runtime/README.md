@@ -2899,3 +2899,36 @@ faults, together with bundle/template contracts (38 tests). No NOS image, host
 store, libvirt domain, service or worker is used. Full directory/manifest
 installation, complete-bundle publication, QEMU access and sync to worker hosts
 remain separate requirements; these tests do not qualify storage on CephFS.
+
+`vm_template_install.TemplateBundleInstall` composes those asset copies with
+the existing tracked directory adapter. A qualified store parent, journal and
+explicit provisioning window are required. Its pure `bundle_plan` enumerates
+all directories/files before mutations and rejects overlapping file/directory
+paths. The digest directory is reserved once; an existing matching bundle is
+never adopted. Native store-parent provisioning remains a caller responsibility.
+
+Every member has an original intent and birth; the manifest is copied last.
+Complete preflight checks the source bundle, store, every target and directory
+inventory before allocations/checkpoints. Per-member preflight reads original
+inode/marker/full metadata without recursively invoking the import controller
+or rehashing completed multi-gigabyte siblings at each copy chunk. Final
+publication rehashes the complete bundle and rechecks the active window. File
+presence, matching contents or an unfinished journal never publish a template.
+
+Explicit recovery reuses original directory/asset intents, resumes qualified
+prefixes and accepts a completed original child after a lost reply. Missing
+births, foreign additions, source replacement and ambiguous durability remain
+pending. Published bundles can be observed readonly after the import window
+closes or the staging source disappears; their original journal and file proofs
+remain mandatory. That observation hashes all declared members again.
+
+The source opener used by the bundle assembler binds the original bundle root
+and member paths, with no symlink traversal and rechecked visible root identity.
+An unrelated change outside that subtree does not replace the source bundle.
+The generic source reader's existing stricter default is unchanged.
+
+The targeted run passes 108 temporary-file/template/definition tests, including
+lost child/publication replies, directory fsync failure, partial asset recovery,
+foreign late members, source replacement, window expiry during final hashing,
+and readonly consumption without staging. No installed store, NOS image,
+QEMU-access qualification, worker sync or VM lifecycle is proved by these tests.

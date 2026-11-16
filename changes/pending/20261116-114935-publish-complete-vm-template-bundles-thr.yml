@@ -1,0 +1,15 @@
+id: 20261116-114935-publish-complete-vm-template-bundles-thr
+type: internal
+title: Publish complete VM template bundles through persistent import intents
+description: Assemble original directory births, immutable asset and manifest copies
+  into a content-addressed bundle. Require complete preflight, explicit import window
+  and final hash verification before publication; recover original partial members
+  without adoption or replacement.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
