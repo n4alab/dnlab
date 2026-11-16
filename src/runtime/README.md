@@ -2878,3 +2878,24 @@ closed; no child, signal, TAP, libvirt connection or VM was involved. This
 qualifies that identity primitive in the observed context, not the production
 runtime image/bootstrap or full VM lifecycle. Native startup profile assembly
 and source verification still need qualification before enabling VM tasks.
+
+`vm_template_files.TemplateAssetFiles` copies individual immutable template
+assets into an already qualified root-owned `0755` directory. The caller must
+provide the complete import preflight and exclusive provisioning window. This
+component creates neither directories nor domains and does not publish a bundle
+or enable VM admission. It preserves the source image and never overwrites an
+occupied destination.
+
+The journal records intent before creation and the original inode before copy.
+A lost birth cannot be adopted. Explicit recovery resumes only the same inode,
+marker and verified source prefix, rejecting replaced sources/files, added hard
+links and corrupt prefixes. An uncertain fsync remains pending; sealing recovery
+uses a readonly descriptor for already readonly content. Completion requires
+the expected hash/size, `0444` mode and file/parent fsync. Completed assets can be
+observed by their original proof after the build staging source is removed.
+
+Twelve temporary-file cases pass, including actual interrupted writes and fsync
+faults, together with bundle/template contracts (38 tests). No NOS image, host
+store, libvirt domain, service or worker is used. Full directory/manifest
+installation, complete-bundle publication, QEMU access and sync to worker hosts
+remain separate requirements; these tests do not qualify storage on CephFS.

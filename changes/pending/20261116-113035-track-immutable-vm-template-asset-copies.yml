@@ -1,0 +1,14 @@
+id: 20261116-113035-track-immutable-vm-template-asset-copies
+type: internal
+title: Track immutable VM template asset copies and original-file recovery
+description: Add a filesystem-only template asset adapter with durable birth records,
+  exclusive destination creation, verified-prefix recovery, readonly sealing and source-independent
+  observation. Full bundle installation and VM admission remain separate.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
