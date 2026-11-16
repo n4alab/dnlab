@@ -1,0 +1,14 @@
+id: 20261116-161741-observe-original-dedicated-session-vm-wr
+type: internal
+title: Observe original dedicated-session VM writers
+description: Add a bounded readonly credential census and correlate dedicated daemon
+  and QEMU candidates only to original service and boot receipts, rechecking process
+  and journal state around storage admission.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

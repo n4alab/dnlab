@@ -3027,3 +3027,25 @@ ownership syscall case excluded (already verified separately). The composition
 cases simulate filesystem/formatter IO; native assembly with qualified writer
 census, immutable assets, formatter transport and cleanup remains to be verified.
 No domain, guest, operational disk or host service is created by those tests.
+
+`vm_writer_census.DedicatedProcessInventory` reads a qualified procfs/context
+without signals or subprocesses. UID/GID (including supplementary group)
+select candidates only; they never prove process ownership. Procfs identity,
+caller context, boot and namespaces are checked before/after the bounded scan.
+Missing transient entries can disappear; unreadable/malformed observations and
+symlinked/replaced candidate directories refuse.
+
+`SessionWriterCensus` matches those candidates to the three original dedicated
+service observations and persisted QEMU boot records. The caller must provide
+fresh verification of the original daemon generations. QEMU uses the existing
+libvirt configuration observer plus pinned original process/pidfd provider;
+unknown processes, duplicates, missing originals, uncertain boot and changes
+across the inventory/journal observations refuse. It returns only the requested
+VM's original guest writer, with other registered session VMs verified too.
+
+This is a dedicated-session guest-process census, not an arbitrary host FD or
+memory-map writer scan. Exclusive runtime/storage ownership and the original
+service/provider qualification remain mandatory separate preflights. Eighteen
+synthetic census cases plus a directory/storage composition case pass; the
+combined storage/QEMU/composition run passes 86 tests. No service, VM, disk,
+account or native process is created by these tests.
