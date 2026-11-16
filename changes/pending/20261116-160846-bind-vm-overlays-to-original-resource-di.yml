@@ -1,0 +1,14 @@
+id: 20261116-160846-bind-vm-overlays-to-original-resource-di
+type: internal
+title: Bind VM overlays to original resource directory receipts
+description: Compose tracked VM directories with local overlay storage, checking original
+  parent, owner, assets, writer and lab fences at formatter checkpoints without directory
+  creation or domain start.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

@@ -107,16 +107,8 @@ class VMStorage:
                 and creation['exit_code'] == 0, 'original successful overlay creation required')
         return deepcopy(proof)
 
-    def _check(self, value, *, mutate):
+    def _writer_state(self, value):
         definition = self.definitions.read(value['id'])
-        require(definition['request_fingerprint'] == value['definition_sha256'], 'VM storage definition changed')
-        if mutate:self.definitions._fence(definition)
-        available(self.journal, value['birth']['lab_id'], value['birth']['node_id'], 'libvirt', vm_birth=value['birth'])
-        self.definitions._session(definition)
-        verify_tap_reservations(self.journal, value['birth'], definition['xml'])
-        observed = self.assets(deepcopy(value))
-        require(observed == dict(template_sha256=template_digest(value['template']), assets_verified=True),
-                'original immutable VM bundle verification required')
         writers = self.writers(deepcopy(value))
         require(type(writers) is list and len(writers) <= 1, 'single qualified VM disk writer required')
         original = definition.get('boot', {}).get('process_record')
@@ -127,6 +119,19 @@ class VMStorage:
                     and writer['gid'] == self.definitions.session.profile['gid'], 'VM disk writer differs from original QEMU')
         elif original is not None:
             raise Conflict('original VM disk writer absence needs verified shutdown')
+        return writers
+
+    def _check(self, value, *, mutate):
+        definition = self.definitions.read(value['id'])
+        require(definition['request_fingerprint'] == value['definition_sha256'], 'VM storage definition changed')
+        if mutate:self.definitions._fence(definition)
+        available(self.journal, value['birth']['lab_id'], value['birth']['node_id'], 'libvirt', vm_birth=value['birth'])
+        self.definitions._session(definition)
+        verify_tap_reservations(self.journal, value['birth'], definition['xml'])
+        observed = self.assets(deepcopy(value))
+        require(observed == dict(template_sha256=template_digest(value['template']), assets_verified=True),
+                'original immutable VM bundle verification required')
+        writers = self._writer_state(value)
         if mutate and writers:raise Conflict('VM overlays cannot be created while a writer exists')
         # Check the whole set before allocating the next disk. The sole
         # create_requested item is handled by the original adapter's create or

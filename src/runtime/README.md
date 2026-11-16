@@ -3006,3 +3006,24 @@ The targeted combined run passes 199 tests (one ownership syscall case excluded)
 That single real filesystem case passes separately with temporary directories,
 UID/GID1001 ownership, markers and fsync; SDK/context/preflight remain simulated.
 No operational VD parent, VM or installed service is created by these tests.
+
+`vm_directory_storage.DirectoryVMStorage` composes the ready `VMDirectories`
+receipt with `VMStorage` and `OverlayFiles`. It derives the overlay root and
+parent inode/credentials from the original directory proof, rather than caller
+paths. It pins the directory controller/journal, VM birth and definition request.
+No directory is created by this composition.
+
+The overlay adapter's internal preflight checks the exact persisted storage
+item, original directory receipt, qualified assets and writer state. Allocation
+requires lab/management fences to permit it, the definition still prepared and
+both domain UUID/name absent, including after callback/checkpoint observations.
+Ready storage remains inspectable after domain definition. Lost formatter replies
+use the existing original overlay recovery; a missing directory blocks recovery
+without recreating either resource.
+
+Nineteen synthetic composition cases pass; the combined storage/directory/
+definition/fence/template-provider run passes 105 tests, with the directory
+ownership syscall case excluded (already verified separately). The composition
+cases simulate filesystem/formatter IO; native assembly with qualified writer
+census, immutable assets, formatter transport and cleanup remains to be verified.
+No domain, guest, operational disk or host service is created by those tests.
