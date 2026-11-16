@@ -3074,3 +3074,26 @@ process, insufficient drain proof, changed cleanup and invalid lifecycle reopen.
 Native observer/command/window/cleanup providers remain explicitly required and
 unqualified by these tests. No service is stopped or started, no signal is sent,
 and no live hold or gate is granted by importing or testing this controller.
+
+`tools.image_build_observation.ImageBuildObservation` bridges qualified readonly
+Docker/proc observations to `ImageBuildHold`. Its pinned profile covers the
+original container/image, policy-normalized configuration, network IDs, execution
+artifact, full process capture, Docker generation and host/boot context. It
+accepts only the original policy or tracked `no/0`; other configuration/network
+changes refuse. A new running process needs the original start command receipt,
+full capture/generation and unchanged invocation/import environment/artifact.
+Stopped Docker state alone is insufficient: the original command's exit/drain
+receipt and unchanged ledger/binding/activity are mandatory.
+
+Namespace API, filesystem binding, terminal job ledger/logs, complete activity,
+exit and startup observations remain trusted caller providers. API terminal job
+IDs/status are compared in stable order; API log projection is not a history
+proof (startup may truncate it). The separate ledger provider must qualify the
+original job metadata and log assets, including inventory/content changes.
+Health/jobs never prove absence of in-flight validation; the controller still
+requires its separate operator window and qualified shutdown/drain.
+
+Eighteen synthetic observer cases plus the eighteen hold-controller cases pass.
+They include a real temporary hold journal prepare and refusal before commands
+with a closed window. Docker/process/API/ledger IO is simulated; native provider
+wiring and qualification remain incomplete. No host service or VM is changed.

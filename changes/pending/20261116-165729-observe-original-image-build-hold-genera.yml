@@ -1,0 +1,14 @@
+id: 20261116-165729-observe-original-image-build-hold-genera
+type: internal
+title: Observe original image-build hold generations
+description: Bind hold snapshots to Docker configuration and network IDs, original
+  process/source captures, aligned binding, terminal job identities and immutable
+  ledger evidence; require original command receipts for stopped or restored generations.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
