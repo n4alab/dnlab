@@ -2932,3 +2932,24 @@ lost child/publication replies, directory fsync failure, partial asset recovery,
 foreign late members, source replacement, window expiry during final hashing,
 and readonly consumption without staging. No installed store, NOS image,
 QEMU-access qualification, worker sync or VM lifecycle is proved by these tests.
+
+`vm_template_assets.PublishedTemplateAssets` connects a published local bundle
+to the `VMStorage` asset preflight. It requires an already opened readonly
+`TemplateBundleInstall`, its original journal identity and the exact publication
+receipt. Opening and qualifying the original physical catalog/store remain
+caller responsibilities; this provider initializes no journal or catalog.
+
+VM birth template, declared hardware/template, host placement and exact bundle
+path must agree. Every call re-observes the original publication and rejects a
+withdrawn/pending publication, changed receipt, journal replacement, capability
+drift or closure before/after observation. Matching files at another path or in
+another import do not provide a fallback. It neither defines a domain nor
+replaces `VMStorage`'s definition, lab-fence, reservation and writer checks.
+
+Fifteen targeted cases pass, including real temporary bundle publication and
+the real `VMStorage` controller with synthetic formatter/hypervisor providers.
+Changed published bytes block storage; an alternate root is refused before
+overlay intent/allocation. The combined targeted run passes 118 tests. Native
+readonly catalog capability assembly and use with actual overlay resources
+remain to be qualified; no QEMU/domain/host-service operation is performed by
+these tests.

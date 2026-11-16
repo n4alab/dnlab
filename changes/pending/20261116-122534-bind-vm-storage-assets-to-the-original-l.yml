@@ -1,0 +1,15 @@
+id: 20261116-122534-bind-vm-storage-assets-to-the-original-l
+type: internal
+title: Bind VM storage assets to the original local template publication
+description: Add a readonly published-template provider for VMStorage. Pin the catalog
+  journal and publication; require matching template, placement and exact bundle path,
+  and recheck capability and live publication before and after verification without
+  path/import fallback.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
