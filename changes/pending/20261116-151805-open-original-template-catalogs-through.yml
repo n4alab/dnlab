@@ -1,0 +1,15 @@
+id: 20261116-151805-open-original-template-catalogs-through
+type: internal
+title: Open original template catalogs through expiring readonly capabilities
+description: Pin original catalog directory, database and lock identities; hold the
+  existing quiet gate, refuse pending SQLite state, and observe the original store
+  birth through an immutable readonly connection. Expire catalog capabilities on close
+  without initialization, retries or imports.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

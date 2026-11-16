@@ -2953,3 +2953,25 @@ overlay intent/allocation. The combined targeted run passes 118 tests. Native
 readonly catalog capability assembly and use with actual overlay resources
 remain to be qualified; no QEMU/domain/host-service operation is performed by
 these tests.
+
+`tools.vm_template_catalog.open_catalog` opens a previously qualified, quiescent
+local template catalog as a bounded readonly capability. It requires the
+original logical/physical journal binding, an explicitly qualified lock inode,
+the original store directory birth/receipt, historical import window and a
+mandatory current context/source verifier. It follows no symlinks, creates no
+lock, uses an existing exclusive nonblocking flock, and refuses SQLite sidecars.
+The pinned database is opened with `mode=ro&immutable=1` and `query_only`.
+
+Directory/database/lock stamps, logical identity and store marker/birth are
+rechecked before/after each catalog read and publication observation. Closing
+the context expires the capability before closing its connection/descriptors.
+Its import/recovery methods always refuse, and it preserves an original error
+when the final observation also fails. This does not initialize or reopen a
+writable journal; the lock identity is an explicit readonly qualification input,
+not retrospective proof that an untracked file was created by an old process.
+
+Twelve temporary-file cases pass, including no-write/no-sidecar assertions,
+busy/replaced/missing lock, physical/logical/store mismatch, pending SQLite,
+context drift and connection/capability closure. Combined template/storage/
+definition/file-adapter checks pass 150 tests. No native catalog or VM operation
+is implied by these tests; host use needs its explicit original bindings.
