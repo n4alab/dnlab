@@ -1,0 +1,14 @@
+id: 20261116-101624-anchor-vm-commands-to-the-original-runti
+type: internal
+title: Anchor VM commands to the original runtime process
+description: Add pidfd-backed runtime epochs and immutable per-command references,
+  checking original process and calling-thread namespaces and preserving historical
+  ownership across runtime restarts.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

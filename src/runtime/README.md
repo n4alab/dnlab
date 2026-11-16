@@ -2852,3 +2852,29 @@ same service. No native TAP, VM, libvirt connection or installed service was
 used by these worker tests. Native runtime actor provenance, startup profile
 assembly, full cleanup/handoff and public VM lifecycle remain unqualified;
 the CLI does not implicitly enable this optional service.
+
+`vm_runtime_process.RuntimeProcess` anchors TAP actor references to the current
+runtime process. Explicit startup opens a pidfd for `getpid()`, verifies two
+matching process snapshots against the interpreter/command/namespace profile,
+checks the supplied source verifier, and durably records a new runtime epoch.
+It checks the calling thread's PID/mount/network/user namespaces as well as the
+process snapshot, including proc identity, starttime, credentials and hashes.
+It neither discovers an external worker nor claims child-process parentage.
+
+Each original command receives one immutable reference in that epoch. Repeated
+issuance reuses it; another epoch cannot adopt it even if process metadata
+matches. Changed sources/context/process, any pidfd event, closed descriptors
+or changed journal evidence refuse authorization. Closing this witness closes
+only its own pidfd and does not attest that the runtime process exited.
+Per-command references independently protect the original VM node from Docker
+admission or lab finalization. They do not allocate a TAP or define a domain.
+
+The targeted run passes 309 tests (two Unix cases excluded), including the real
+process-verifier/provider/task implementation with synthetic proc/kernel inputs
+and the account observer's regression tests. A native current-process canary
+also passed with real proc/pidfd: same-reference replay, refusal by a second
+epoch, and refusal after closing the original witness. All owned pidfds were
+closed; no child, signal, TAP, libvirt connection or VM was involved. This
+qualifies that identity primitive in the observed context, not the production
+runtime image/bootstrap or full VM lifecycle. Native startup profile assembly
+and source verification still need qualification before enabling VM tasks.

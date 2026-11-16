@@ -54,13 +54,18 @@ class AccountWorkerObserver:
         finally:os.close(fd)
 
     def _snapshot(self,process):
+        return self.read_process(process.pid)
+
+    def read_process(self,pid):
+        """Readonly fields only; this alone is not parentage or birth proof."""
+        if type(pid) is not int or pid<=0:raise Conflict('positive original process PID required')
         with ExitStack() as stack:
             proc=os.open(self.proc_root,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW|os.O_CLOEXEC)
             stack.callback(os.close,proc)
-            root=os.open(str(process.pid),os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW|os.O_CLOEXEC,dir_fd=proc)
+            root=os.open(str(pid),os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW|os.O_CLOEXEC,dir_fd=proc)
             stack.callback(os.close,root)
             first=self._read_file(root,'stat',16384)
-            ticks=stat_start(first,process.pid)
+            ticks=stat_start(first,pid)
             credentials={}
             for line in self._read_file(root,'status',65536).splitlines():
                 key,sep,value=line.partition(b':')
@@ -93,10 +98,10 @@ class AccountWorkerObserver:
             boot=self._read_file(proc,'sys/kernel/random/boot_id',128).decode('ascii').strip()
             if not boot:raise Conflict('helper boot identity missing')
             identity=self._identity(os.fstat(root))
-            if (self._identity(os.stat(str(process.pid),dir_fd=proc,follow_symlinks=False))!=identity
-                    or stat_start(self._read_file(root,'stat',16384),process.pid)!=ticks):
+            if (self._identity(os.stat(str(pid),dir_fd=proc,follow_symlinks=False))!=identity
+                    or stat_start(self._read_file(root,'stat',16384),pid)!=ticks):
                 raise Conflict('original helper proc incarnation changed')
-            return dict(record=dict(boot_id=boot,pid=process.pid,start_ticks=ticks,uid=0,gid=0,
+            return dict(record=dict(boot_id=boot,pid=pid,start_ticks=ticks,uid=0,gid=0,
                 executable_sha256=hashed.hexdigest(),namespace_sha256=fingerprint(spaces)),
                 namespaces=spaces,proc_identity=identity,cmdline_sha256=hashlib.sha256(command).hexdigest())
 
