@@ -1,0 +1,14 @@
+id: 20261116-164350-persist-scoped-image-build-hold-and-rest
+type: internal
+title: Persist scoped image-build hold and restore dispatches
+description: Track original image-build policy, stop/drain, held state and same-container
+  restore per gate, retaining uncertain command receipts and preventing retries or
+  restart before qualified cleanup.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

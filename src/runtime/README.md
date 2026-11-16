@@ -3049,3 +3049,28 @@ service/provider qualification remain mandatory separate preflights. Eighteen
 synthetic census cases plus a directory/storage composition case pass; the
 combined storage/QEMU/composition run passes 86 tests. No service, VM, disk,
 account or native process is created by these tests.
+
+`image_build_hold.ImageBuildHold` coordinates one gate's image-build exclusion
+in the existing journal, with an exclusive `image-build-control:<Docker ID>`
+claim. It preserves the original actor, policy, binding/jobs and scope. Policy
+suspension precedes the sole original stop command; held state requires ordinary
+pidfd exit/drain evidence, including the original process digest and no force.
+Exit code 0/143 alone is insufficient.
+
+Every command has a durable arm/reference/release/outcome sequence. Lost arm
+responses require the provider's original reference; uncertain release/exit
+never causes another release. Scope/window and actor state are checked after
+checkpoints, including immediately before release. Restore requires the same
+gate's qualified workload cleanup receipt, rechecked before start/policy restore,
+and the original container with a verified new process, aligned binding and
+preserved jobs/config/artifact. The control claim is released only after the
+original restart policy is verified. The cleanup provider counts the gate's
+workload resources/operations; the still-held control metadata is not itself an
+uncleaned workload. Other operations cannot remove this claim.
+
+Eighteen inert cases pass (54 with storage/composition regressions), covering
+lost arm/update/TERM/start/policy responses, missing outcomes, changed window/
+process, insufficient drain proof, changed cleanup and invalid lifecycle reopen.
+Native observer/command/window/cleanup providers remain explicitly required and
+unqualified by these tests. No service is stopped or started, no signal is sent,
+and no live hold or gate is granted by importing or testing this controller.
