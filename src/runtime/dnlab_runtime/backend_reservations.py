@@ -39,13 +39,13 @@ def verify_vm_tap_claims(journal):
         raise BackendOwnershipConflict('VM TAP ifindex reservation lineage requires qualified recovery') from error
 
 
-def vm_reservations(journal, lab, node):
+def vm_reservations(journal, lab, node, *, domain_uuid=None):
     with journal.lock:
         verify_vm_tap_claims(journal)
         tables = {row[0] for row in journal.db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         result = []
         for table in ('vm_definition_intents', 'vm_event_streams', 'vm_storage_intents', 'vm_definition_retirements',
-                      'vm_tap_intents','vm_tap_actors','vm_tap_creators','vm_tap_tasks','vm_runtime_references'):
+                      'vm_tap_intents','vm_tap_actors','vm_tap_creators','vm_tap_tasks','vm_runtime_references','vm_directory_intents'):
             if table not in tables:continue
             for row in journal.db.execute(f'SELECT * FROM {table} ORDER BY id'):
                 try:
@@ -59,6 +59,9 @@ def vm_reservations(journal, lab, node):
                     if table == 'vm_event_streams' and row['domain_uuid'] != birth['uuid']:raise ValueError('owner')
                     if table == 'vm_storage_intents' and (row['domain_uuid'] != birth['uuid']
                             or row['id'] != birth['creator_operation_id']):raise ValueError('owner')
+                    if table == 'vm_directory_intents' and (row['domain_uuid'] != birth['uuid']
+                            or row['id'] != birth['creator_operation_id'] or value['id'] != row['id']
+                            or value['spec']['path'] != row['path']):raise ValueError('owner')
                     if table == 'vm_tap_intents' and (row['domain_uuid'] != birth['uuid']
                             or row['id'] != birth['creator_operation_id']):raise ValueError('owner')
                     if table == 'vm_tap_actors' and (row['domain_uuid'] != birth['uuid']
@@ -81,7 +84,8 @@ def vm_reservations(journal, lab, node):
                             or value['definition_sha256'] != fingerprint(value['definition'])):raise ValueError('owner')
                 except (ValueError, KeyError, TypeError, RuntimeErrorBase) as error:
                     raise BackendOwnershipConflict('VM backend reservation requires qualified recovery') from error
-                if birth['lab_id'] == lab and birth['node_id'] == node:
+                if ((birth['lab_id'] == lab and birth['node_id'] == node)
+                        or domain_uuid is not None and birth['uuid'] == domain_uuid):
                     result.append({'table': table, 'birth': birth, 'fingerprint': row['fingerprint']})
         return result
 
@@ -136,7 +140,8 @@ def verify_tap_reservations(journal, birth, xml):
 def available(journal, lab, node, backend, *, vm_birth=None):
     if backend not in ('docker', 'libvirt'):raise BackendOwnershipConflict('unknown node backend')
     with journal.lock:
-        reservations = vm_reservations(journal, lab, node)
+        reservations = vm_reservations(journal, lab, node,
+            domain_uuid=vm_birth.get('uuid') if backend=='libvirt' and isinstance(vm_birth,dict) else None)
         if backend == 'docker':
             if reservations:raise BackendOwnershipConflict('node is reserved by VM definition or recovery')
             return reservations

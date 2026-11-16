@@ -1,0 +1,15 @@
+id: 20261116-155920-track-original-vm-resource-directories-b
+type: internal
+title: Track original VM resource directories before domain definition
+description: Add UUID-scoped private disk/console parent intents with existing filesystem
+  births, durable recovery, unstarted-domain checks and lab/session/window fences.
+  Keep directory ownership in cleanup/backend guards and reject retained VM UUID reuse
+  across nodes when definition bookkeeping is missing.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

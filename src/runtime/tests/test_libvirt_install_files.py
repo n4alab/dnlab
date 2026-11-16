@@ -33,6 +33,30 @@ def test_exclusive_birth_is_recoverable_and_never_overwrites(files):
     assert receipt==InstallationFiles(root,journal=adapter.journal).observe(item,'install')
 
 
+def test_directory_request_is_durable_before_mkdir_and_is_not_a_birth(files):
+    from dnlab_runtime.libvirt_provisioning import ProvisioningWindow
+    adapter,file_item,root = files
+    with pytest.raises(Conflict,match='directory request ordering'):
+        adapter.directory_requested(file_item,'directory-case')
+    item = dict(spec=dict(key='directory:/config/child',kind='directory',path='/config/child',
+                          uid=os.getuid(),gid=os.getgid(),mode=0o700),nonce='d'*32)
+    assert adapter.directory_requested(item,'directory-case') is False
+    agreement = dict(operation_id='directory-case',context={'synthetic':True},
+                     targets=[item['spec']['key']],nonce='e'*32)
+    calls = []
+    def before_mkdir():
+        calls.append(True)
+        if len(calls)==2:raise OSError('stopped after pre-mkdir intent')
+        return agreement
+    with pytest.raises(OSError,match='pre-mkdir intent'):
+        adapter.create(item,'directory-case',window=ProvisioningWindow(agreement,before_mkdir))
+    assert adapter.directory_requested(item,'directory-case') is True
+    assert not (root/'config/child').exists()
+    with pytest.raises(Conflict,match='birth missing'):
+        adapter.recover(item,'directory-case',window=ProvisioningWindow(agreement,lambda:agreement))
+    assert not (root/'config/child').exists()
+
+
 def test_readonly_observer_uses_existing_births_without_initializing_or_writing(files,monkeypatch):
     import sqlite3
     import threading

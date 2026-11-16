@@ -2975,3 +2975,34 @@ busy/replaced/missing lock, physical/logical/store mismatch, pending SQLite,
 context drift and connection/capability closure. Combined template/storage/
 definition/file-adapter checks pass 150 tests. No native catalog or VM operation
 is implied by these tests; host use needs its explicit original bindings.
+
+`vm_directories.VMDirectories` prepares one private disk/Unix-console parent per
+original VM UUID under an already qualified root:root `0755` administrative
+root. Every declared disk/NVRAM/console path must be a distinct direct child of
+that UUID directory. The directory uses the dedicated session UID/GID and
+`0700`, with the existing tracked filesystem adapter's nonce, inode and fsync
+receipt. This component creates no disk, socket, account or domain.
+
+Directory preparation/creation checks the original definition, common backend
+and path reservations, lab epoch/management fences, session, domain absence,
+parent/assets preflight and explicit provisioning window. The context reader
+must qualify the calling thread's current host/boot/namespaces. The window given
+to the filesystem adapter rechecks those constraints at its internal checkpoints,
+including after durable intent writes. Ready-directory observation remains
+readonly after definition or fencing; it does not authorize further provisioning.
+
+Retry never recreates a missing/replaced ready directory. Explicit recovery
+reuses the original filesystem birth. If only the outer request was saved,
+the adapter's directory-only `directory_requested` observation plus target
+absence can prove that the lower creator was never released; only then may
+recovery release its first mkdir. A persisted lower request without an original
+inode remains uncertain, even if absent. An entirely prepared operation cannot
+be started by `recover`. Qualified cleanup/post-boot recovery remain separate.
+
+Directory intents independently retain backend/cleanup ownership. VM admission
+also checks retained UUID claims across nodes, preventing reuse of an orphaned
+directory/storage/TAP/process UUID when definition bookkeeping is missing.
+The targeted combined run passes 199 tests (one ownership syscall case excluded).
+That single real filesystem case passes separately with temporary directories,
+UID/GID1001 ownership, markers and fsync; SDK/context/preflight remain simulated.
+No operational VD parent, VM or installed service is created by these tests.

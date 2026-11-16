@@ -162,6 +162,17 @@ class InstallationFiles:
             except OSError as error:
                 raise Conflict('installation filesystem observation is not qualified') from error
 
+    def directory_requested(self, item, operation_id):
+        """Whether the original pre-mkdir intent was persisted; no filesystem IO.
+
+        Only directories have this ordering guarantee. A caller may release the
+        first mkdir after a lost outer checkpoint only if this is false AND
+        ordinary observation proves the target absent. True never permits a
+        second create, even if its original inode was not recorded.
+        """
+        if item['spec']['kind'] != 'directory':raise Conflict('directory request ordering required')
+        with self.journal.execution_lock:return self._birth(item,operation_id) is not None
+
     def observe_relocated(self, item, operation_id, destination):
         """Read the same durable birth at an explicit sibling path; never adopt.
 
