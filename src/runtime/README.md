@@ -3097,3 +3097,26 @@ Eighteen synthetic observer cases plus the eighteen hold-controller cases pass.
 They include a real temporary hold journal prepare and refusal before commands
 with a closed window. Docker/process/API/ledger IO is simulated; native provider
 wiring and qualification remain incomplete. No host service or VM is changed.
+
+`tools.image_build_ledger.capture_ledger` explicitly binds terminal API jobs to
+already-qualified host metadata/log directories and the original image-build
+actor/context. Host paths must come from the original Docker mount/configuration
+proof; job source/log paths are data and are never followed. The capture requires
+two equal readonly scans. JSON filenames must cover the complete API job set;
+metadata must match the original API fields and declared container log directory.
+All original log assets, including orphan job logs, are retained in the proof.
+A missing log is accepted only as explicit original absence with an empty API log.
+
+`JobLedger` rechecks that pinned receipt instead of learning a new baseline.
+It covers directory identities/inventories and file inode/credentials, size,
+mtime/ctime and SHA256. Regular single-link root-controlled files are checked
+with O_PATH before any data open; symlinks, devices, FIFOs and hardlinks refuse.
+Ancestors are walked without symlinks before/after the complete scan. Reads are
+bounded to 1 MiB per metadata file, 256 MiB per log, 1 GiB total and 8192 entries.
+There are no filesystem writes, API requests, process or service operations.
+
+Sixteen temporary-file cases pass, including an actual file-ledger provider
+composed with the simulated running/stopped image-build observer. Cold stopped
+observation makes no API call; history changes still refuse. The combined
+ledger/observer/hold run passes 52 tests. Host mount/binding provenance and native
+operational wiring remain separate qualifications; no live hold or VM is created.

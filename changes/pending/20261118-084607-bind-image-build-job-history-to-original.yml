@@ -1,0 +1,14 @@
+id: 20261118-084607-bind-image-build-job-history-to-original
+type: internal
+title: Bind image-build job history to original ledger files
+description: Capture and recheck original terminal job metadata and log inventories
+  with pinned no-symlink paths, content hashes and actor/context binding, including
+  stopped-service observation without API access.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
