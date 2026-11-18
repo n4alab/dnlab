@@ -1,0 +1,13 @@
+id: 20261118-093948-query-original-image-build-api-through-a
+type: internal
+title: Query original image-build API through a pinned namespace
+description: Add bounded readonly API queries with original process and namespace
+  checks, guaranteed restoration attempts and no helper processes or retries.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

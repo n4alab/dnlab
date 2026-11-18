@@ -3214,3 +3214,21 @@ observer, executor, Docker framing and pidfd adapter with simulated native I/O;
 142 related tests pass. The runnable native assembly, provider qualification and
 isolated operational canary are still required. No live service, signal or VM is
 involved in these tests, and the VM gate remains closed.
+
+`tools.image_build_query.ImageBuildNamespaceQuery` implements the readonly API
+provider without spawning namespace helpers. It holds the original process/source
+capture, verifies container/configuration/generation, pins its network namespace
+FD and the caller thread's original namespace, then performs only loopback GETs
+for `/health`, `/jobs` and `/vrnetlab/binding`. The original thread namespace is
+restored and verified even on query failure; restoration errors preserve the
+original error with an additional diagnostic. Both namespace FDs are closed.
+
+HTTP uses a fixed loopback destination, no proxies/redirects/retries, an overall
+15-second read deadline, per-connection limits and bounded response sizes. JSON
+duplicate keys and non-finite constants are refused. Process, container and host
+context are checked again after restoration. Eleven synthetic query/namespace
+cases pass; 153 tests pass across the related suites. A separate readonly native
+qualification completed the three GETs on the original image-build process with
+ten unchanged terminal jobs and matching API binding, without extra helper
+processes, signals or service changes. This qualifies the query provider only;
+filesystem lock/checkout binding and the complete operational hold remain separate.
