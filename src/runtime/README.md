@@ -3534,13 +3534,32 @@ UUID/command, executable hash and the original query receipt. Task and leader
 identities are checked again after the final domain/receipt observation.
 
 The returned complete process record and task evidence are input to the original
-creation operation, not authority to reacquire/adopt a VM on retry. The creator
-still must persist them before releasing CPUs and use `PinnedQEMUProcess` for
+creation operation, not authority to reacquire/adopt a VM on retry. The persistent
+adapter below saves them before releasing CPUs and uses `PinnedQEMUProcess` for
 later observations. No process-name scan, pidfile, signal, domain action or new
 monitor query is used by correlation. Proc helpers are shared with the existing
 replay verifier without changing its checks. The correlation/process/query/
 observer/boot/event suites pass 124 synthetic tests. Native procfs, LXC permission
-and namespace qualification, durable creation integration and first VM boot remain
+and namespace qualification, native creation integration and first VM boot remain
 open. The kernel's [`NSpid` generation](https://github.com/torvalds/linux/blob/v6.12/fs/proc/array.c#L197)
 and [proc status fields](https://docs.kernel.org/filesystems/proc.html) define the
 namespace/Tgid semantics used here. No host process or VM was probed by these tests.
+
+`VMQEMUCreation` supplies the boot capture adapter. It requires the shared
+original journal/connection/runtime, a qualified original-start query request
+provider and process policy. A capture intent precedes QMP/kernel acquisition;
+complete correlation, process record and libvirt reference are saved before the
+boot driver can release CPUs. Replays use the saved record and pinned observation,
+without another query or correlation. Pending capture cannot become an implicit
+reacquisition. A lost commit reply preserves the completed immutable receipt.
+
+Explicit `VMBootDriver.recover_creation` can install only that existing original
+receipt in a still-paused boot checkpoint. It verifies fences, resources, session,
+event-source continuity and process identity, and does not start/resume a VM.
+Missing/replaced proof or a new runtime epoch remains a conflict. The birth entry
+protects its lab from cleanup even when no other VM record is present. Creation,
+correlation, process/query, boot/event and cleanup suites pass 149 synthetic tests,
+including original proc-file correlation through the boot path and lost completion
+recovery with one start/query/capture. The concrete original libvirt-event binding
+for the request/policy providers, native qualification and full VM lifecycle
+remain outstanding; no native VM, QMP query or worker was used in these tests.

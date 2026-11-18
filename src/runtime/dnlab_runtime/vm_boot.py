@@ -169,6 +169,34 @@ class VMBootDriver:
                 self._error(operation_id,error)
                 raise
 
+    def recover_creation(self, operation_id):
+        """Recover a saved original paused-process receipt, without start/resume."""
+        with self.journal.execution_lock:
+            value=self.definitions.read(operation_id)
+            require(self._boot(value)['phase']=='start_requested', 'original uncertain creation checkpoint required')
+            try:
+                self._check(value);self._source_ack(value)
+                domain=self._domain(value)
+                require(domain.state(0)[0]==3, 'original creation is not paused during receipt recovery')
+                recover=getattr(self.capture_started,'read_original',None)
+                require(callable(recover), 'qualified original creation receipt reader required')
+                receipt=recover(deepcopy(value))
+                fields(receipt,('reference','process_record'),'original paused creation receipt')
+                reference,record=receipt['reference'],receipt['process_record']
+                self._process_record(value,reference,record)
+                require(reference['uri']==self.definitions.session.profile['uri']
+                        and reference['persistent_sha256']==value['ack']['persistent_sha256'], 'original creation recovery differs')
+                self.observer(deepcopy(reference),deepcopy(record))(value['birth'])
+                self._check(value);self._source_ack(value)
+                require(domain.state(0)[0]==3, 'original guest ran before recovered durable proof')
+                value=self._advance(operation_id,'start_requested','paused',reference=reference,process_record=record)
+                self._check(value);self._source_ack(value);self._observer(value)(value['birth'])
+                require(self._domain(value).state(0)[0]==3, 'original recovered creation is not paused')
+                return value
+            except Exception as error:
+                self._error(operation_id,error)
+                raise
+
     def apply(self, operation_id):
         with self.journal.execution_lock:
             self.prepare(operation_id)

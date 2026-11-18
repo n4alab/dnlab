@@ -1,0 +1,14 @@
+id: 20261118-153609-persist-original-qemu-creation-proofs-be
+type: internal
+title: Persist original QEMU creation proofs before CPU release
+description: Bind paused-boot capture to the original operation and preserve completed
+  process receipts after lost replies, with explicit observation-only recovery and
+  lab-scoped cleanup protection.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
