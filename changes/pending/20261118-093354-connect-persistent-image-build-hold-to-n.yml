@@ -1,0 +1,14 @@
+id: 20261118-093354-connect-persistent-image-build-hold-to-n
+type: internal
+title: Connect persistent image-build hold to native action adapters
+description: Compose original command dispatch with policy, pidfd shutdown and verified
+  startup capture; preserve uncertain attempts without resending and require complete
+  stop postconditions.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

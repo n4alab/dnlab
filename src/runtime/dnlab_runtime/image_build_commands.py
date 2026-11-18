@@ -86,6 +86,9 @@ class ImageBuildCommands:
                 and value['phase'] in ('armed','release_requested','completed')
                 and (value['outcome'] is not None)==(value['phase']=='completed')
                 and (value['details'] is not None)==(value['phase']=='completed'), 'original control command journal differs')
+        require('native_dispatch_started' not in value or
+                (value['native_dispatch_started'] is True and value['phase'] in ('release_requested','completed')),
+                'original native dispatch checkpoint differs')
         source=self.journal.db.execute('SELECT * FROM vm_runtime_epochs WHERE id=?',(value['epoch_id'],)).fetchone()
         require(source is not None and source['fingerprint']==value['epoch_sha256'], 'original control runtime epoch missing')
         epoch=json.loads(source['payload'])
@@ -158,6 +161,8 @@ class ImageBuildCommands:
             require(type(result['evidence']) is dict and type(result['details']) is dict
                     and len(canonical(result).encode())<=1024*1024, 'bounded original control result required')
             self._epoch(command,value)
+            value=self._read(reference)
+            require(value['phase']=='release_requested', 'original control result no longer pending')
             value.update(phase='completed',details=deepcopy(result['details']),outcome=dict(reference=deepcopy(reference),
                 command_sha256=fingerprint(command),dispatch_count=1,evidence=deepcopy(result['evidence'])))
             self._save(value)

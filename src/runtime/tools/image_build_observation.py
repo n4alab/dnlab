@@ -98,11 +98,11 @@ class ImageBuildObservation:
                 and not value['State'].get('Error'), 'qualified image-build Docker lifecycle required')
         return value
 
-    def _running(self, value, observed):
+    def _running(self, value, observed, *, startup_proof=None):
         profile = self.profile;start = value['actions'].get('start')
         expected_actor,capture,generation = profile['actor'],profile['capture'],profile['generation']
         if start is not None:
-            proof = self.startup(deepcopy(value))
+            proof = self.startup(deepcopy(value)) if startup_proof is None else startup_proof
             fields(proof,('reference','command_sha256','capture','generation','actor','original_start_verified'),
                    'original image-build startup receipt')
             require(proof['reference']==start['reference'] and proof['command_sha256']==fingerprint(start['command'])
@@ -133,12 +133,12 @@ class ImageBuildObservation:
             self._conditions(value,pid=capture['process']['pid'])
         return deepcopy(expected_actor)
 
-    def _stopped(self, value, observed):
+    def _stopped(self, value, observed, *, stop_outcome=None):
         stop = value['actions'].get('stop')
         require(stop is not None and stop['reference'] is not None and observed['State']['Status']=='exited'
                 and observed['State']['Pid']==0 and observed['RestartCount']==self.profile['generation']['restart_count'],
                 'original tracked image-build stop required')
-        outcome = self.exit_receipt(deepcopy(value))
+        outcome = self.exit_receipt(deepcopy(value)) if stop_outcome is None else stop_outcome
         require(outcome is not None, 'original stop/drain receipt unavailable')
         ImageBuildHold._outcome(stop,outcome)
         proof = outcome['evidence']
@@ -152,9 +152,10 @@ class ImageBuildObservation:
         self._conditions(value,pid=None)
         return deepcopy(self.profile['actor'])
 
-    def __call__(self, value):
+    def _observe(self, value, *, stop_outcome=None, startup_proof=None):
         before = self._inspect()
-        current_actor = self._running(value,before) if before['State']['Running'] else self._stopped(value,before)
+        current_actor = (self._running(value,before,startup_proof=startup_proof) if before['State']['Running']
+                         else self._stopped(value,before,stop_outcome=stop_outcome))
         after = self._inspect()
         stable = lambda row: dict(config_sha256=config_digest(row),Id=row['Id'],Image=row['Image'],RestartCount=row['RestartCount'],
             state={key:row['State'].get(key) for key in ('Pid','Running','Status','StartedAt','FinishedAt','ExitCode','OOMKilled','Error')},
@@ -163,3 +164,34 @@ class ImageBuildObservation:
         self._conditions(value,pid=before['State']['Pid'] if before['State']['Running'] else None)
         return dict(actor=current_actor,running=before['State']['Running'],restart_policy=before['HostConfig']['RestartPolicy'],
                     idle=True,binding_aligned=True,binding_sha256=fingerprint(self.profile['binding']),jobs_sha256=value['jobs_sha256'])
+
+    def verify_stop(self, value, outcome):
+        """Qualify the executor's original exit before its durable completion."""
+        require(outcome is not None, 'original stop outcome required')
+        return self._observe(value,stop_outcome=outcome)
+
+    def capture_start(self, value, reference):
+        """Capture after a known start ACK; never called to adopt an uncertain start.
+
+        Readiness queries must be bounded by their provider. Failure leaves the
+        command uncertain; neither this method nor the executor repeats start.
+        """
+        start=value['actions'].get('start')
+        require(start is not None and start['reference']==reference and start['phase']=='release_requested',
+                'original released start reference required')
+        observed=self._inspect();generation=dict(started_at=observed['State']['StartedAt'],restart_count=observed['RestartCount'])
+        require(observed['State']['Running'] and observed['State']['Status']=='running'
+                and observed['HostConfig']['RestartPolicy']==NO_RESTART
+                and generation['started_at']!=self.profile['generation']['started_at']
+                and generation['restart_count']==self.profile['generation']['restart_count'],
+                'original explicit start generation required')
+        with self.process.capture(observed['State']['Pid'],self.profile['actor']['container_id'],self.profile['copies']) as capture:
+            capture=deepcopy(capture)
+        current_actor=deepcopy(self.profile['actor']);current_actor['process_sha256']=process_digest(capture,generation)
+        proof=dict(reference=deepcopy(reference),command_sha256=fingerprint(start['command']),capture=capture,
+                   generation=generation,actor=current_actor,original_start_verified=True)
+        self._observe(value,startup_proof=proof)
+        return proof
+
+    def __call__(self, value):
+        return self._observe(value)

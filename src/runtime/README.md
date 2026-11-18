@@ -3189,3 +3189,28 @@ hold, process, observation, ledger and activity suites. HTTP, pidfd observation 
 signal sending are simulated. Wiring these primitives to the persistent command
 producer, verifying complete postconditions and capturing startup readiness remain
 necessary before an operational hold. No service or VM was affected by these tests.
+
+`tools.image_build_executor.ImageBuildExecutor` now connects the persistent
+command producer, hold, observer and native action adapters. It requires matching
+original parent/producer releases and epoch, saves a native-attempt checkpoint,
+then repeats the complete preflight before effects. Even a direct second executor
+call is refused after that checkpoint; completion preserves it in the command row.
+
+Policy updates require qualified post-observation. Stop combines the pinned TERM,
+bounded readonly waiting for Docker exit, generation-specific shutdown logs,
+original exit code, unchanged binding/ledger and empty activity census before
+returning ordinary drain evidence. A log, ledger, process/window or lifecycle
+conflict leaves the original command pending without another TERM.
+
+Only the known original HTTP 204 start response permits acquisition of a new
+process capture. The observer verifies its artifact, invocation, Docker generation,
+health, jobs and binding; the producer saves that full startup proof before the
+hold can advance or restore policy. Lost start ACK, HTTP 304 or failed qualification
+remains pending without starting again or adopting a currently running service.
+Readiness queries remain the explicitly qualified, bounded provider's responsibility.
+
+Thirteen new synthetic composition cases exercise the real controller, producer,
+observer, executor, Docker framing and pidfd adapter with simulated native I/O;
+142 related tests pass. The runnable native assembly, provider qualification and
+isolated operational canary are still required. No live service, signal or VM is
+involved in these tests, and the VM gate remains closed.
