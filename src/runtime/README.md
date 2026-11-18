@@ -3428,8 +3428,31 @@ close still attempts every deregistration and the underlying connection close
 when cleanup reports errors.
 
 The SDK/event-feed/boot/event suites pass 66 synthetic tests. The feed alone is
-not a durable boot event source: the supervised loop, journal consumer and
-original QEMU creation capture still need integration and native qualification.
+not a durable boot event source: the consumer below adds journal integration;
+the supervised loop and original QEMU creation capture still need integration
+and native qualification.
 It does not interpret a reboot/crash notification as readiness, ordinary shutdown
 or authorization to restart a VM. No native libvirt connection or VM was opened
 by these tests; worker hosts are not needed for this step.
+
+`LibvirtBootEvents` now implements the boot driver's arm/activate/verify contract
+over that original feed. It pins the collector/runtime epoch and commits raw
+events before acknowledging the in-memory queue. Each source consumes its own
+ordered events; events for other UUIDs are retained without adopting domains.
+The inactive definition is verified before arming. Activation requires the
+original paused process receipt and an observed boot notification within a
+bounded deadline; a timeout leaves the guest paused. Initial boot/pause/resume
+notifications are checked against the original boot checkpoints. A guest reboot
+is reduced by `VMEventTracker` only after re-observation of the same QEMU
+incarnation, and resets readiness. Unexpected, repeated, stop or crash events
+require recovery; none authorize a restart or qualify an ordinary shutdown.
+
+Explicit `VMBootDriver.recover_events` can recover a lost arm/activation reply
+only from the already saved receipt and still-live original collector. It does
+not register/activate a source, start a domain or resume CPUs. Missing receipts,
+lost collectors, changed generations and incomplete raw history remain conflicts.
+The boot/source/feed/SDK/process-record/event suites pass 98 synthetic tests,
+including lost queue acknowledgement and a lost reduction checkpoint without
+double-counting reboot. Native event-loop supervision, QEMU birth capture and
+their integration with qualified storage/TAPs are still outstanding. No native
+connection, service or VM was changed in this implementation step.

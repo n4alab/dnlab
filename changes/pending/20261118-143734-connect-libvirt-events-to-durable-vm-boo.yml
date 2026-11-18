@@ -1,0 +1,14 @@
+id: 20261118-143734-connect-libvirt-events-to-durable-vm-boo
+type: internal
+title: Connect libvirt events to durable VM boot monitoring
+description: Persist raw events before queue acknowledgement, bind monitoring to original
+  paused creation proofs, and recover only saved event-source receipts without repeating
+  VM actions.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

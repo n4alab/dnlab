@@ -135,6 +135,40 @@ class VMBootDriver:
                 boot.update(error_type=type(error).__name__, recovery_required=True)
                 self.definitions._save(operation_id, value)
 
+    def recover_events(self, operation_id):
+        """Resolve only original saved monitor receipts, without VM actions.
+
+        This explicit path never arms/activates a source, starts a VM or resumes
+        CPUs. An absent original receipt or lost collector stays uncertain.
+        """
+        with self.journal.execution_lock:
+            value=self.definitions.read(operation_id);stage=self._boot(value)['phase']
+            require(stage in ('arming_requested','activation_requested'), 'uncertain original event checkpoint required')
+            try:
+                self._check(value)
+                name='recover_arm' if stage=='arming_requested' else 'recover_activation'
+                recover=getattr(self.source,name,None)
+                require(callable(recover), 'qualified original event receipt recovery provider required')
+                if stage=='arming_requested':
+                    self._inactive(value)
+                    ack=recover(deepcopy(value))
+                    candidate=deepcopy(value);candidate['boot']['source_ack']=ack
+                    self._source_ack(candidate)
+                    value=self._advance(operation_id,stage,'armed',source_ack=ack)
+                    self._check(value);self._inactive(value);self._source_ack(value)
+                else:
+                    self._source_ack(value);self._observer(value)(value['birth'])
+                    require(self._domain(value).state(0)[0]==3, 'original VM is not paused during monitor recovery')
+                    ack=recover(deepcopy(value))
+                    candidate=deepcopy(value);candidate['boot']['activation_ack']=ack
+                    self._activation(candidate)
+                    value=self._advance(operation_id,stage,'monitored_paused',activation_ack=ack)
+                    self._instance(value,3)
+                return value
+            except Exception as error:
+                self._error(operation_id,error)
+                raise
+
     def apply(self, operation_id):
         with self.journal.execution_lock:
             self.prepare(operation_id)
