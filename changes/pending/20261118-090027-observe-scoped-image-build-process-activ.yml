@@ -1,0 +1,14 @@
+id: 20261118-090027-observe-scoped-image-build-process-activ
+type: internal
+title: Observe scoped image-build process activity before VM gates
+description: Add a readonly procfs census of original container members and declared
+  host builder entrypoints, with context and generation checks across two observations.
+  Reuse procfs context binding for VM writer census.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

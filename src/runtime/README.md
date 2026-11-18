@@ -3120,3 +3120,26 @@ composed with the simulated running/stopped image-build observer. Cold stopped
 observation makes no API call; history changes still refuse. The combined
 ledger/observer/hold run passes 52 tests. Host mount/binding provenance and native
 operational wiring remain separate qualifications; no live hold or VM is created.
+
+`tools.image_build_activity.ImageBuildActivity` supplies readonly process
+activity to the image-build hold observer. It binds the caller's procfs, boot
+and namespace context, then brackets two process scans with the original Docker
+ID/image/lifecycle. All members of that container cgroup remain visible, even
+unknown children or residual processes after Docker reports exit. Host candidates
+cover the declared make/ninja roots, image-build Python entrypoints, Docker/
+BuildKit build clients and scoped qemu-img writes; shell text and arbitrary
+payload arguments are never executed or searched as executable entrypoints.
+
+Selected generations, argv/cgroup hashes, cwd where needed and proc directory
+identities are rechecked; malformed/inaccessible live records, changed candidates
+or context refuse completeness. Unrelated cwd is not read. Kernel-only/vanished
+processes are distinguished from missing fields of a still-present process.
+No raw host argv is returned, only candidate metadata/hashes. The shared procfs
+context guard is also used by the existing dedicated VM writer inventory.
+
+Twenty synthetic activity cases and the related writer/ledger/observer/hold
+checks pass 91 tests. The native reader composes with a simulated hold observer,
+which refuses extra container children. This covers a declared entrypoint/root
+scope, not arbitrary opaque automation, remote builds, in-flight HTTP requests or
+future activity; the qualified operator window and shutdown/drain remain required.
+No service is stopped, process signalled or VM created by these tests.

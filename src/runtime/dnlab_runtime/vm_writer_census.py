@@ -13,6 +13,7 @@ from .libvirt_account_process import AccountWorkerObserver
 from .libvirt_observer import LibvirtDomainObserver
 from .manifest import Conflict, fingerprint
 from .qemu_process import PinnedQEMUProcess, validate_process_record
+from .procfs_context import check as check_procfs
 from .vm_template import digest, fields, require
 
 UNITS = ('dnlab-virtlogd.service','dnlab-virtlockd.service','dnlab-libvirtd.service')
@@ -47,19 +48,8 @@ class DedicatedProcessInventory:
         self.proc_identity,self.proc_root = deepcopy(proc_identity),proc_root
 
     def _check(self, proc):
-        require(self.read_context()==self.context, 'session census calling context differs')
-        info = os.fstat(proc)
-        require(dict(device=info.st_dev,inode=info.st_ino)==self.proc_identity,
-                'qualified session census procfs replaced')
-        require(os.readlink('self',dir_fd=proc)==str(os.getpid()), 'session census procfs PID namespace differs')
-        boot = AccountWorkerObserver._read_file(proc,'sys/kernel/random/boot_id',128).decode('ascii').strip()
-        require(boot==self.context['boot_id'], 'session census boot differs')
-        for name,expected in self.context['namespaces'].items():
-            info = os.stat('self/ns/'+name,dir_fd=proc)
-            require(dict(device=info.st_dev,inode=info.st_ino)==expected, 'session census procfs namespace differs')
-        visible = os.stat(self.proc_root,follow_symlinks=False)
-        require((visible.st_dev,visible.st_ino)==(self.proc_identity['device'],self.proc_identity['inode']),
-                'session census procfs path replaced')
+        check_procfs(proc,context=self.context,read_context=self.read_context,
+                     proc_identity=self.proc_identity,proc_root=self.proc_root)
 
     def __call__(self):
         with ExitStack() as stack:
