@@ -17,9 +17,18 @@ from dnlab_runtime.libvirt_account_process import AccountWorkerObserver
 from dnlab_runtime.libvirt_xml import absolute
 from dnlab_runtime.manifest import fingerprint
 from dnlab_runtime.procfs_context import check as check_procfs
-from dnlab_runtime.vm_template import require
+from dnlab_runtime.vm_template import TemplateError, require
 
 DIRECTORY = os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW|os.O_CLOEXEC
+
+
+class ActivityChanged(TemplateError):
+    def __init__(self, pid, changes, *, container, reason, command, observed_command):
+        self.diagnostic=dict(pid=pid,changed_fields=changes,original_container_member=container,
+            original_builder_reason=reason,command_sha256=hashlib.sha256(command).hexdigest(),
+            observed_command_sha256=hashlib.sha256(observed_command).hexdigest())
+        super().__init__('process changed during activity census '
+            f'(pid={pid}, fields={",".join(changes)}, container={container}, builder={reason is not None})')
 
 
 def _under(path, roots, cwd=None):
@@ -118,9 +127,12 @@ class ImageBuildActivity:
                     if needs_cwd:
                         cwd=os.readlink('cwd',dir_fd=root);require(len(os.fsencode(cwd))<=4096, 'bounded activity cwd required')
                     reason=builder_reason(argv,cwd,self.roots)
-                    again=read('stat',16384)
-                    require(_stat(again,pid)==ticks and read('cmdline',1024*1024)==command and read('cgroup',65536)==cgroup,
-                            'process changed during activity census')
+                    again=read('stat',16384);next_command=read('cmdline',1024*1024);next_cgroup=read('cgroup',65536)
+                    changes=[name for name,changed in (('stat',_stat(again,pid)!=ticks),
+                             ('cmdline',next_command!=command),('cgroup',next_cgroup!=cgroup)) if changed]
+                    if changes:
+                        raise ActivityChanged(pid,changes,container=belongs,reason=reason,
+                                              command=command,observed_command=next_command)
                     if needs_cwd:require(os.readlink('cwd',dir_fd=root)==cwd, 'process cwd changed during activity census')
                     original=os.fstat(root);visible=os.stat(name,dir_fd=proc,follow_symlinks=False)
                     require((original.st_dev,original.st_ino)==(visible.st_dev,visible.st_ino), 'activity proc directory replaced')

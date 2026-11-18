@@ -7,7 +7,7 @@ import sys
 import pytest
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'tools'))
-from image_build_activity import ImageBuildActivity, builder_reason
+from image_build_activity import ActivityChanged, ImageBuildActivity, builder_reason
 from image_build_observation import ImageBuildObservation
 from test_image_build_observation import observation
 from dnlab_runtime.manifest import fingerprint
@@ -123,3 +123,21 @@ def test_native_activity_reader_composes_with_running_hold_observer(activity,obs
     assert observer(owner)['idle'] is True
     add(45,['unrecognized-child'],container=True)
     with pytest.raises(TemplateError,match='busy or ambiguous'):observer(owner)
+
+
+def test_changing_argv_is_still_refused_with_private_diagnostic_not_raw_arguments(activity,monkeypatch):
+    driver,value,_,add,proc=activity;add(88,['python3','private-a'])
+    original=os.read;changed=[]
+    def read(fd,size):
+        data=original(fd,size)
+        path=os.readlink('/proc/self/fd/'+str(fd))
+        if path==str(proc/'88'/'cmdline') and data and not changed:
+            (proc/'88'/'cmdline').write_bytes(b'python3\0private-b\0');changed.append(True)
+        return data
+    monkeypatch.setattr(os,'read',read)
+    with pytest.raises(ActivityChanged) as error:driver(value)
+    diagnostic=error.value.diagnostic
+    assert diagnostic['pid']==88 and diagnostic['changed_fields']==['cmdline']
+    assert diagnostic['original_container_member'] is False and diagnostic['original_builder_reason'] is None
+    assert diagnostic['command_sha256']!=diagnostic['observed_command_sha256']
+    assert 'private-a' not in str(error.value)+str(diagnostic) and 'private-b' not in str(error.value)+str(diagnostic)

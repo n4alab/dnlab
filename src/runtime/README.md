@@ -3370,3 +3370,19 @@ Six new recovery cases cover log failure, checkpoint immutability, missing event
 successor observation, missing claim and malformed saved proof. The related hold,
 producer, executor and session suites pass 61 tests using simulated native I/O.
 No proof is added to the historical failed canary, which lacks this checkpoint.
+
+A second native canary passed initial readiness and policy suspension, then the
+activity census refused a process that changed while being read. The stop stayed
+armed, never released; no pidfd exit checkpoint exists. Its original runtime
+has exited, so a successor cannot release that old reference. The isolated canary
+remains running with restart disabled while an explicit unreleased-arm retirement
+and separate qualified-disposal contract is decided. No generic stop fallback or
+new canary is authorized by that pending state.
+
+Activity-change diagnostics now preserve PID, changed field names, original
+container/builder classification and before/after command hashes without raw
+arguments. The census still refuses the change; no unrelated-process exemption
+or candidate adoption was added. The activity/observer suites pass 39 tests,
+including a changing-argv case that verifies refusal and diagnostic privacy.
+The exact process behind the earlier native failure was not captured and remains
+unknown; the new diagnostic does not retroactively identify it.

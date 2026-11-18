@@ -1,0 +1,14 @@
+id: 20261118-135315-preserve-private-diagnostics-for-changin
+type: internal
+title: Preserve private diagnostics for changing activity processes
+description: Report PID, changed fields, original classification and command hashes
+  when the activity census refuses a concurrent process change, preserving the guard
+  and avoiding raw argument disclosure.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
