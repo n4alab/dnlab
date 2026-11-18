@@ -3350,3 +3350,23 @@ historical incomplete hold and failed result were preserved. The installed
 image-build service was verified unchanged. No new canary or VM gate was started;
 durable intermediate exit evidence/recovery and full lifecycle qualification
 remain open before an installed-service hold.
+
+The native stop executor now saves the original pidfd exit event in the command
+journal immediately after it is verified, before Docker-exit waiting and log
+collection. The checkpoint binds the original actor/reference and producer epoch,
+is immutable, and survives later observation failure. An absent checkpoint never
+permits learning an exit event from an exited container or reconstructed logs.
+
+Explicit hold recovery can complete that same stop through readonly observations
+of the qualified original Docker generation, logs, binding, ledger and census.
+It never arms/releases a command, updates policy or sends another signal. A
+qualified successor runtime with the same source/context profile can perform
+these observations while preserving the original producer epoch/reference; it
+cannot adopt or release the previous epoch's command. Window, exclusive claim
+and original parent state are checked throughout. Ordinary `outcome` stays a
+readonly receipt lookup; observational completion requires explicit recovery.
+
+Six new recovery cases cover log failure, checkpoint immutability, missing event,
+successor observation, missing claim and malformed saved proof. The related hold,
+producer, executor and session suites pass 61 tests using simulated native I/O.
+No proof is added to the historical failed canary, which lacks this checkpoint.

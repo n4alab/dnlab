@@ -27,11 +27,11 @@ class ImageBuildExecutor:
         self.clock,self.pause=clock,pause
         require(self.engine.container_id==observation.profile['actor']['container_id'], 'original Docker engine target required')
 
-    def _current(self, command, reference, *, before=False):
-        original=self.commands._read(reference)
+    def _current(self, command, reference, *, before=False, observation_only=False):
+        original=(self.commands.qualified_snapshot(reference) if observation_only else self.commands._read(reference))
         require(original['command']==command and original['phase']=='release_requested',
                 'original producer release required for native action')
-        self.commands._epoch(command,original)
+        if not observation_only:self.commands._epoch(command,original)
         value,item=self.commands._bound(command)
         require(item['reference']==reference and item['phase']=='release_requested', 'original parent release required')
         self.hold._window(value)
@@ -40,12 +40,13 @@ class ImageBuildExecutor:
         if before:self.commands._pre(command)
         return value
 
-    def _exited(self, command, reference):
+    def _exited(self, command, reference, *, check=None):
         # Docker may publish exit after the original pidfd becomes readable.
         # Wait only for observation; this loop never sends another command.
         deadline=self.clock()+10;generation=self.observation.profile['generation']
+        if check is None:check=lambda:self._current(command,reference)
         while True:
-            self._current(command,reference)
+            check()
             observed=self.observation._inspect()
             require(observed['State']['StartedAt']==generation['started_at']
                     and observed['RestartCount']==generation['restart_count']
@@ -57,6 +58,31 @@ class ImageBuildExecutor:
                     'unexpected lifecycle after original TERM')
             require(self.clock()<deadline, 'original Docker exit observation timed out; no resend')
             self.pause(0.05)
+
+    def _finish_stop(self, command, reference, exited, *, check):
+        profile=self.observation.profile
+        observed=self._exited(command,reference,check=check)
+        logs=self.engine.shutdown_logs(profile['generation']['started_at'],exited['namespace_pid'])
+        require(logs.get('ordinary_shutdown_log_verified') is True, 'original shutdown logs required')
+        value=check()
+        evidence=dict(process_sha256=command['actor']['process_sha256'],pidfd_exit_verified=True,
+                      ordinary_shutdown_verified=True,drain_verified=True,term_count=1,force_used=False,
+                      exit_code=observed['State']['ExitCode'])
+        outcome=dict(reference=deepcopy(reference),command_sha256=fingerprint(command),dispatch_count=1,evidence=evidence)
+        snapshot=self.observation.verify_stop(value,outcome)
+        require(snapshot['running'] is False and snapshot['restart_policy']==NO_RESTART,
+                'original exited no-restart service required')
+        check()
+        return dict(evidence=evidence,details=dict(pidfd=deepcopy(exited),shutdown_logs=logs))
+
+    def recover_stop(self, reference):
+        """No arm/release, policy update or signal: original exit + fresh reads."""
+        original=self.commands.qualified_snapshot(reference);command=original['command']
+        require(command['action']=='stop' and original.get('exit_progress') is not None,
+                'original durable pidfd exit required for recovery')
+        def check():return self._current(command,reference,observation_only=True)
+        check()
+        return self._finish_stop(command,reference,original['exit_progress']['pidfd'],check=check)
 
     def __call__(self, command, reference):
         with self.commands.journal.execution_lock:
@@ -88,19 +114,8 @@ class ImageBuildExecutor:
                 exited=pinned.term(preflight=preflight)
             require(exited.get('pidfd_exit_verified') is True and exited.get('term_count')==1
                     and exited.get('force_used') is False, 'original single TERM exit required')
-            observed=self._exited(command,reference)
-            logs=self.engine.shutdown_logs(profile['generation']['started_at'],exited['namespace_pid'])
-            require(logs.get('ordinary_shutdown_log_verified') is True, 'original shutdown logs required')
-            value=self._current(command,reference)
-            evidence=dict(process_sha256=command['actor']['process_sha256'],pidfd_exit_verified=True,
-                          ordinary_shutdown_verified=True,drain_verified=True,term_count=1,force_used=False,
-                          exit_code=observed['State']['ExitCode'])
-            outcome=dict(reference=deepcopy(reference),command_sha256=fingerprint(command),dispatch_count=1,evidence=evidence)
-            snapshot=self.observation.verify_stop(value,outcome)
-            require(snapshot['running'] is False and snapshot['restart_policy']==NO_RESTART,
-                    'original exited no-restart service required')
-            self._current(command,reference)
-            return dict(evidence=evidence,details=dict(pidfd=exited,shutdown_logs=logs))
+            self.commands.checkpoint_exit(reference,exited)
+            return self._finish_stop(command,reference,exited,check=lambda:self._current(command,reference))
         require(action=='start', 'original image-build action required')
         self.engine.start()  # Only a known HTTP 204 permits capture; no adoption after a lost ACK.
         value=self._current(command,reference)

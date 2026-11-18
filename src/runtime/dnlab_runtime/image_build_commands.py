@@ -31,11 +31,13 @@ def validate_command(command):
 
 
 class ImageBuildCommands:
-    def __init__(self, runtime, *, read_hold, preflight, execute):
+    def __init__(self, runtime, *, read_hold, preflight, execute, recover=None):
         require(isinstance(runtime,RuntimeProcess) and all(callable(fn) for fn in (read_hold,preflight,execute)),
                 'qualified current runtime and original control providers required')
         self.runtime,self.journal=runtime,runtime.journal
         self.read_hold,self.preflight,self.execute=read_hold,preflight,execute
+        require(recover is None or callable(recover), 'qualified readonly recovery callback required')
+        self.recover_callback=recover
         with self.journal.transaction():
             self.journal.db.execute('CREATE TABLE IF NOT EXISTS image_build_control_commands '
                 '(id TEXT PRIMARY KEY,operation_id TEXT NOT NULL,action TEXT NOT NULL,container_id TEXT NOT NULL,'
@@ -68,12 +70,23 @@ class ImageBuildCommands:
         hold,item=self._bound(command)
         require(STEPS.get(hold['phase'])==command['action'] and item['phase'] in ('arming_requested','armed','release_requested'),
                 'original hold command no longer executable')
-        row=self.journal.db.execute('SELECT * FROM resources WHERE key=?',('image-build-control:'+command['actor']['container_id'],)).fetchone()
-        require(row is not None and (row['lab'],row['node'],row['operation_id'])==
-                (command['scope']['lab_id'],'image-build',command['operation_id']), 'original control claim missing')
+        self._claim(command)
         wanted=dict(command_sha256=fingerprint(command),scope_sha256=fingerprint(command['scope']),
                     actor_sha256=fingerprint(command['actor']),window_active=True)
         require(self.preflight(deepcopy(command))==wanted, 'qualified current command preflight differs')
+
+    def _claim(self, command):
+        row=self.journal.db.execute('SELECT * FROM resources WHERE key=?',('image-build-control:'+command['actor']['container_id'],)).fetchone()
+        require(row is not None and (row['lab'],row['node'],row['operation_id'])==
+                (command['scope']['lab_id'],'image-build',command['operation_id']), 'original control claim missing')
+
+    @staticmethod
+    def _exit_proof(proof):
+        fields(proof,('pidfd_exit_verified','term_count','force_used','namespace_pid'),'original pidfd exit proof')
+        require(proof['pidfd_exit_verified'] is True and type(proof['term_count']) is int
+                and proof['term_count']==1 and proof['force_used'] is False
+                and type(proof['namespace_pid']) is int and proof['namespace_pid']>0,
+                'original single TERM pidfd exit required')
 
     def _read(self, reference):
         row=self.journal.db.execute('SELECT * FROM image_build_control_commands WHERE id=?',(reference['token'],)).fetchone()
@@ -89,6 +102,12 @@ class ImageBuildCommands:
         require('native_dispatch_started' not in value or
                 (value['native_dispatch_started'] is True and value['phase'] in ('release_requested','completed')),
                 'original native dispatch checkpoint differs')
+        if 'exit_progress' in value:
+            progress=value['exit_progress'];fields(progress,('actor_sha256','pidfd'),'original exit checkpoint')
+            require(command['action']=='stop' and value.get('native_dispatch_started') is True
+                    and value['phase'] in ('release_requested','completed')
+                    and progress['actor_sha256']==fingerprint(command['actor']), 'original exit checkpoint owner differs')
+            self._exit_proof(progress['pidfd'])
         source=self.journal.db.execute('SELECT * FROM vm_runtime_epochs WHERE id=?',(value['epoch_id'],)).fetchone()
         require(source is not None and source['fingerprint']==value['epoch_sha256'], 'original control runtime epoch missing')
         epoch=json.loads(source['payload'])
@@ -108,6 +127,21 @@ class ImageBuildCommands:
         with self.journal.transaction():
             self.journal.db.execute('UPDATE image_build_control_commands SET payload=?,fingerprint=? WHERE id=?',
                 (canonical(value),fingerprint(value),value['id']))
+
+    def checkpoint_exit(self, reference, proof):
+        """Only the original live producer can record the observed pidfd event."""
+        with self.journal.execution_lock:
+            self._exit_proof(proof);value=self._read(reference);command=value['command']
+            require(command['action']=='stop' and value['phase']=='release_requested'
+                    and value.get('native_dispatch_started') is True, 'original stop dispatch required')
+            self._epoch(command,value);self._claim(command)
+            progress=dict(actor_sha256=fingerprint(command['actor']),pidfd=deepcopy(proof))
+            if 'exit_progress' in value:
+                require(value['exit_progress']==progress, 'original pidfd exit checkpoint cannot be replaced')
+                return deepcopy(progress)
+            value['exit_progress']=progress;self._save(value)
+            self._epoch(command,value);self._claim(command)
+            return deepcopy(progress)
 
     def arm(self, command):
         with self.journal.execution_lock:
@@ -167,13 +201,39 @@ class ImageBuildCommands:
                 command_sha256=fingerprint(command),dispatch_count=1,evidence=deepcopy(result['evidence'])))
             self._save(value)
 
-    def outcome(self, reference):
+    def qualified_snapshot(self, reference):
         with self.journal.execution_lock:
             value=self._read(reference);current=self._epoch(value['command'])
             source=self.journal.db.execute('SELECT payload FROM vm_runtime_epochs WHERE id=?',(value['epoch_id'],)).fetchone()
             original=json.loads(source[0])
             require(current['profile']['sources_sha256']==original['profile']['sources_sha256'],
                     'original command producer sources need separate qualification')
+            return value
+
+    def outcome(self, reference):
+        with self.journal.execution_lock:
+            value=self.qualified_snapshot(reference)
+            return deepcopy(value['outcome'])
+
+    def recover_outcome(self, reference):
+        """Complete only from an original durable exit plus fresh readonly proof."""
+        with self.journal.execution_lock:
+            value=self.qualified_snapshot(reference)
+            if value['outcome'] is not None:return deepcopy(value['outcome'])
+            if self.recover_callback is None or 'exit_progress' not in value:return None
+            require(value['phase']=='release_requested' and value['command']['action']=='stop',
+                    'only original exited stop permits observational recovery')
+            progress=deepcopy(value['exit_progress']);self._claim(value['command'])
+            result=self.recover_callback(deepcopy(reference))
+            fields(result,('evidence','details'),'qualified observed stop result')
+            require(type(result['evidence']) is dict and type(result['details']) is dict
+                    and len(canonical(result).encode())<=1024*1024, 'bounded original recovery result required')
+            value=self.qualified_snapshot(reference);self._claim(value['command'])
+            require(value['phase']=='release_requested' and value.get('exit_progress')==progress,
+                    'original stop checkpoint changed during observation')
+            value.update(phase='completed',details=deepcopy(result['details']),outcome=dict(reference=deepcopy(reference),
+                command_sha256=fingerprint(value['command']),dispatch_count=1,evidence=deepcopy(result['evidence'])))
+            self._save(value)
             return deepcopy(value['outcome'])
 
     def details(self, reference):

@@ -1,0 +1,14 @@
+id: 20261118-103318-persist-original-pidfd-exit-before-shutd
+type: internal
+title: Persist original pidfd exit before shutdown log collection
+description: Save immutable stop exit checkpoints and allow explicit observation-only
+  completion across qualified runtime epochs without resending commands or learning
+  missing events.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

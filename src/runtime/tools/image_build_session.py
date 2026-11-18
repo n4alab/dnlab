@@ -33,7 +33,8 @@ class ImageBuildSession:
             binding=binding,ledger=ledger,activity=activity,process=process,
             exit_receipt=self._exit_receipt,startup=self._startup)
         self.commands=ImageBuildCommands(runtime,read_hold=lambda operation:self.hold.read(operation),
-            preflight=self._preflight,execute=lambda command,reference:self.executor(command,reference))
+            preflight=self._preflight,execute=lambda command,reference:self.executor(command,reference),
+            recover=lambda reference:self.executor.recover_stop(reference))
         self.hold=ImageBuildHold(runtime.journal,observe=self.observation,commands=self.commands,
                                  window=window,cleanup=cleanup)
         self.executor=ImageBuildExecutor(self.commands,self.hold,self.observation,engine=engine,term=term)
