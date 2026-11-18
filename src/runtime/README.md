@@ -3292,3 +3292,20 @@ Foreign/extra mounts, writable checkout and owner substitutions are conflicts.
 Twelve new pure payload/guard cases plus ten existing fixture birth/recovery cases
 pass. No image was built, container created or service changed by this preparation;
 the runnable canary driver and its operational evidence remain outstanding.
+
+Startup readiness now waits for the already captured original API process after
+the known start ACK. Only `ImageBuildApiNotReady`, emitted by a refused loopback
+API connection, permits another readonly observation, within a 30-second limit.
+The executor rechecks the original runtime/command, window and cleanup at each
+iteration. The process capture, PID and Docker generation remain fixed: no start
+is resent and no replacement process is adopted. Docker transport failures,
+HTTP errors and binding/ledger/source/generation conflicts are not readiness waits.
+
+Before the API is ready, startup may still await its original subprocesses; no
+idle/readiness result is returned at that stage. Full activity completeness and
+absence of residual builders are mandatory after the API query and before the
+startup proof can complete. Eight new cases cover refused-then-ready, timeout,
+process/window changes, transient startup activity, non-API connection failures,
+explicit query error typing and residual activity. The related observer/query/
+executor/session suites pass 56 tests with simulated native I/O. No service or
+container is started by these tests; the operational canary remains pending.

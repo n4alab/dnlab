@@ -13,7 +13,7 @@ import pytest
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'tools'))
 from image_build_control import ImageBuildEngine, OriginalImageBuildTerm
 from image_build_executor import ImageBuildExecutor
-from image_build_observation import process_digest
+from image_build_observation import ImageBuildApiNotReady, process_digest
 from dnlab_runtime.image_build_commands import ImageBuildCommands
 from dnlab_runtime.image_build_hold import ImageBuildHold
 from dnlab_runtime.manifest import Conflict, fingerprint
@@ -183,3 +183,67 @@ def test_native_dispatch_checkpoint_rechecks_window_before_first_docker_mutation
     value=hold.read(op);item=value['actions']['disable_restart']
     assert value['phase']=='prepared' and commands.outcome(item['reference']) is None
     assert state['actions']==[]
+
+
+def test_readiness_refused_connection_waits_on_same_generation_without_second_start(executor):
+    hold,op,state,_,_,adapter=executor;hold.acquire(op);state['cleanup']=True
+    query=adapter.observation.query;attempts=[];pauses=[]
+    def ready(value,capture):
+        attempts.append(capture['process']['pid'])
+        if len(attempts)==1:raise ImageBuildApiNotReady('original API starting')
+        return query(value,capture)
+    adapter.observation.query=ready;adapter.pause=pauses.append
+    assert hold.restore(op)['phase']=='restored'
+    assert attempts[:2]==[45,45] and pauses==[0.05] and state['actions'].count('start')==1
+
+
+@pytest.mark.parametrize('fault',['timeout','process','window'])
+def test_startup_wait_conflict_keeps_original_start_pending_without_adoption(executor,fault):
+    hold,op,state,native,commands,adapter=executor;hold.acquire(op);state['cleanup']=True
+    attempts=[];now=[0]
+    def unavailable(value,capture):
+        attempts.append(capture['process']['pid'])
+        raise ImageBuildApiNotReady('original API starting')
+    def pause(delay):
+        if fault=='timeout':now[0]=31
+        elif fault=='process':native['inspect']['State']['Pid']=99
+        else:state['window']=False
+    adapter.observation.query=unavailable;adapter.pause=pause;adapter.clock=lambda:now[0]
+    with pytest.raises(TemplateError):hold.restore(op)
+    assert attempts==[45] and state['actions'].count('start')==1
+    assert commands.outcome(hold.read(op)['actions']['start']['reference']) is None
+    with pytest.raises(TemplateError,match='uncertain'):hold.restore(op,recover=True)
+
+
+def test_startup_readiness_still_requires_full_activity_after_api_is_ready(executor):
+    hold,op,state,native,_,adapter=executor;hold.acquire(op);state['cleanup']=True
+    start=adapter.engine.start;query=adapter.observation.query
+    def starting():start();native['activity']=False
+    adapter.engine.start=starting
+    def ready(value,capture):
+        native['activity']=True
+        return query(value,capture)
+    adapter.observation.query=ready
+    assert hold.restore(op)['phase']=='restored'
+    assert state['actions'].count('start')==1
+
+
+def test_non_api_connection_refusal_is_not_a_readiness_retry(executor):
+    hold,op,state,_,_,adapter=executor;hold.acquire(op);state['cleanup']=True
+    start=adapter.engine.start;pauses=[]
+    def unavailable(value):raise ConnectionRefusedError('Docker lock transport unavailable')
+    def started():
+        start();adapter.observation.binding=unavailable
+    adapter.engine.start=started;adapter.pause=pauses.append
+    with pytest.raises(ConnectionRefusedError,match='Docker lock'):hold.restore(op)
+    assert pauses==[] and state['actions'].count('start')==1
+
+
+def test_ready_api_with_residual_activity_does_not_complete_start(executor):
+    hold,op,state,native,commands,adapter=executor;hold.acquire(op);state['cleanup']=True
+    start=adapter.engine.start;pauses=[]
+    def started():start();native['activity']=False
+    adapter.engine.start=started;adapter.pause=pauses.append
+    with pytest.raises(TemplateError,match='activity'):hold.restore(op)
+    assert commands.outcome(hold.read(op)['actions']['start']['reference']) is None
+    assert pauses==[] and state['actions'].count('start')==1

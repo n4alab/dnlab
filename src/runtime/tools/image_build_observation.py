@@ -6,11 +6,16 @@ none is inferred from a name, stopped state, health or a bare exit code.
 """
 from copy import deepcopy
 import re
+import time
 
 from cleanup_container_observer import LinuxProcess, config_digest
 from dnlab_runtime.image_build_hold import ImageBuildHold, NO_RESTART, actor, policy
 from dnlab_runtime.manifest import fingerprint
-from dnlab_runtime.vm_template import digest, fields, require
+from dnlab_runtime.vm_template import TemplateError, digest, fields, require
+
+
+class ImageBuildApiNotReady(TemplateError):
+    """Only the pinned loopback API connection was refused during startup."""
 
 
 def process_digest(capture, generation):
@@ -65,7 +70,7 @@ class ImageBuildObservation:
                 and capture['executable']['sha256']==self.profile['capture']['executable']['sha256'],
                 'qualified image-build execution artifact differs')
 
-    def _conditions(self, value, *, pid):
+    def _conditions(self, value, *, pid, check_activity=True):
         profile = self.profile
         require(fingerprint(profile)==self.profile_sha256 and self.context()==profile['context'],
                 'original image-build observation context/profile changed')
@@ -76,11 +81,12 @@ class ImageBuildObservation:
         require(self.binding(deepcopy(value))==profile['binding'], 'original runtime lock/checkout binding differs')
         require(self.ledger(deepcopy(value))==dict(ledger_sha256=profile['ledger_sha256'],jobs_sha256=value['jobs_sha256']),
                 'original terminal job ledger changed')
-        current = self.activity(deepcopy(value))
-        fields(current,('container_pids','host_build_processes','complete'),'complete image-build activity census')
-        require(type(current['container_pids']) is list and all(type(v) is int and v>0 for v in current['container_pids'])
-                and current['complete'] is True and current['container_pids']==([] if pid is None else [pid])
-                and current['host_build_processes']==[], 'image-build activity missing, busy or ambiguous')
+        if check_activity:
+            current = self.activity(deepcopy(value))
+            fields(current,('container_pids','host_build_processes','complete'),'complete image-build activity census')
+            require(type(current['container_pids']) is list and all(type(v) is int and v>0 for v in current['container_pids'])
+                    and current['complete'] is True and current['container_pids']==([] if pid is None else [pid])
+                    and current['host_build_processes']==[], 'image-build activity missing, busy or ambiguous')
         require(self.context()==profile['context'], 'image-build context changed during conditions')
 
     def _inspect(self):
@@ -98,7 +104,7 @@ class ImageBuildObservation:
                 and not value['State'].get('Error'), 'qualified image-build Docker lifecycle required')
         return value
 
-    def _running(self, value, observed, *, startup_proof=None):
+    def _running(self, value, observed, *, startup_proof=None, starting=False):
         profile = self.profile;start = value['actions'].get('start')
         expected_actor,capture,generation = profile['actor'],profile['capture'],profile['generation']
         if start is not None:
@@ -120,7 +126,9 @@ class ImageBuildObservation:
         stable_process = lambda row:{key:part for key,part in row.items() if key not in ('pid','start_ticks','namespaces')}
         require(stable_process(capture['process'])==stable_process(profile['capture']['process']),
                 'original image-build invocation/import environment differs')
-        self._conditions(value,pid=capture['process']['pid'])
+        # Startup may still be awaiting its original subprocesses. No idle or
+        # readiness proof is returned until the full census after the API query.
+        self._conditions(value,pid=capture['process']['pid'],check_activity=not starting)
         with self.process.capture(capture['process']['pid'],expected_actor['container_id'],profile['copies']) as current:
             require(current==capture, 'original image-build process/source snapshot differs')
             response = self.query(deepcopy(value),deepcopy(capture))
@@ -152,9 +160,9 @@ class ImageBuildObservation:
         self._conditions(value,pid=None)
         return deepcopy(self.profile['actor'])
 
-    def _observe(self, value, *, stop_outcome=None, startup_proof=None):
+    def _observe(self, value, *, stop_outcome=None, startup_proof=None, starting=False):
         before = self._inspect()
-        current_actor = (self._running(value,before,startup_proof=startup_proof) if before['State']['Running']
+        current_actor = (self._running(value,before,startup_proof=startup_proof,starting=starting) if before['State']['Running']
                          else self._stopped(value,before,stop_outcome=stop_outcome))
         after = self._inspect()
         stable = lambda row: dict(config_sha256=config_digest(row),Id=row['Id'],Image=row['Image'],RestartCount=row['RestartCount'],
@@ -170,13 +178,16 @@ class ImageBuildObservation:
         require(outcome is not None, 'original stop outcome required')
         return self._observe(value,stop_outcome=outcome)
 
-    def capture_start(self, value, reference):
+    def capture_start(self, value, reference, *, check, timeout=30, clock=time.monotonic, pause=time.sleep):
         """Capture after a known start ACK; never called to adopt an uncertain start.
 
-        Readiness queries must be bounded by their provider. Failure leaves the
-        command uncertain; neither this method nor the executor repeats start.
+        Readiness queries must be bounded by their provider. Only the explicit
+        loopback-not-listening result permits another readonly observation.
+        Failure leaves the command uncertain; start is never repeated.
         """
         start=value['actions'].get('start')
+        require(callable(check) and callable(clock) and callable(pause)
+                and type(timeout) in (int,float) and 0<timeout<=30, 'bounded original startup observation required')
         require(start is not None and start['reference']==reference and start['phase']=='release_requested',
                 'original released start reference required')
         observed=self._inspect();generation=dict(started_at=observed['State']['StartedAt'],restart_count=observed['RestartCount'])
@@ -190,8 +201,21 @@ class ImageBuildObservation:
         current_actor=deepcopy(self.profile['actor']);current_actor['process_sha256']=process_digest(capture,generation)
         proof=dict(reference=deepcopy(reference),command_sha256=fingerprint(start['command']),capture=capture,
                    generation=generation,actor=current_actor,original_start_verified=True)
-        self._observe(value,startup_proof=proof)
-        return proof
+        deadline=clock()+timeout
+        while True:
+            check()
+            require(clock()<deadline, 'original API readiness timed out; no second start')
+            try:
+                self._observe(value,startup_proof=proof,starting=True)
+            except ImageBuildApiNotReady:
+                # Only a refused readonly connection is a startup wait. HTTP,
+                # binding, ledger, source, generation or census errors refuse.
+                require(clock()<deadline, 'original API readiness timed out; no second start')
+                pause(0.05)
+                continue
+            check()
+            require(clock()<=deadline, 'original API readiness timed out; no second start')
+            return proof
 
     def __call__(self, value):
         return self._observe(value)

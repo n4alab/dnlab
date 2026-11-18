@@ -1,0 +1,14 @@
+id: 20261118-100600-wait-for-readiness-on-the-original-image
+type: internal
+title: Wait for readiness on the original image-build startup generation
+description: Bound readonly startup observations after a known start ACK, distinguish
+  loopback readiness from transport conflicts and require full activity checks before
+  completing the original startup proof.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

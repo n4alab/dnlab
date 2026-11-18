@@ -104,7 +104,8 @@ class ImageBuildExecutor:
         require(action=='start', 'original image-build action required')
         self.engine.start()  # Only a known HTTP 204 permits capture; no adoption after a lost ACK.
         value=self._current(command,reference)
-        proof=self.observation.capture_start(value,reference)
+        proof=self.observation.capture_start(value,reference,check=lambda:self._current(command,reference),
+                                             clock=self.clock,pause=self.pause)
         self._current(command,reference)
         return dict(evidence=dict(actor=deepcopy(proof['actor']),original_start_verified=True),
                     details=dict(startup=proof))

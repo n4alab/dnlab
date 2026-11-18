@@ -10,6 +10,7 @@ import pytest
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'tools'))
 from image_build_query import ImageBuildNamespaceQuery, PinnedNetworkNamespace
+from image_build_observation import ImageBuildApiNotReady
 from dnlab_runtime.vm_template import TemplateError
 from test_image_build_observation import observation
 
@@ -32,7 +33,9 @@ def query(observation):
             assert method=='GET' and state['namespace']==['enter']
             self.path=path;state['requests'].append(path)
         def getresponse(self):
-            if state['error']:raise OSError('synthetic HTTP failure')
+            if state['error']:
+                if isinstance(state['error'],BaseException):raise state['error']
+                raise OSError('synthetic HTTP failure')
             values={'/health':{'ok':True},'/jobs':native['jobs'],'/vrnetlab/binding':native['binding']}
             raw=json.dumps(values[self.path]).encode() if state['body'] is None else state['body']
             stream=io.BytesIO(raw);stream.status=state['status']
@@ -76,6 +79,12 @@ def test_original_generation_change_after_query_is_not_accepted(query):
     state['after']=lambda:native['inspect']['State'].update(StartedAt='substituted')
     with pytest.raises(TemplateError,match='generation/context'):provider(owner,native['capture'])
     assert state['closed']==3 and state['namespace']==['enter','restore']
+
+
+def test_only_loopback_connection_refusal_has_explicit_startup_wait_type(query):
+    provider,owner,native,state=query;state['error']=ConnectionRefusedError('loopback refused')
+    with pytest.raises(ImageBuildApiNotReady):provider(owner,native['capture'])
+    assert state['closed']==1 and state['namespace']==['enter','restore']
 
 
 @pytest.fixture

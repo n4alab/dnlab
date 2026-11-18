@@ -11,6 +11,7 @@ import os
 import time
 
 from cleanup_container_observer import LinuxProcess, config_digest
+from image_build_observation import ImageBuildApiNotReady
 from dnlab_runtime.image_build_hold import NO_RESTART
 from dnlab_runtime.manifest import fingerprint
 from dnlab_runtime.vm_template import require
@@ -109,6 +110,8 @@ class ImageBuildNamespaceQuery:
             require(self.clock()<=deadline, 'image-build query deadline exceeded')
             return json.loads(data,object_pairs_hook=unique_object,
                               parse_constant=lambda token:require(False,'non-finite API JSON value'))
+        except ConnectionRefusedError as error:
+            raise ImageBuildApiNotReady('original loopback API connection refused') from error
         finally:connection.close()
 
     def __call__(self, value, capture):
