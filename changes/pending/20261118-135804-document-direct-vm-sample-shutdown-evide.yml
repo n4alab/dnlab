@@ -1,0 +1,14 @@
+id: 20261118-135804-document-direct-vm-sample-shutdown-evide
+type: internal
+title: Document direct VM sample shutdown evidence and remaining qualification
+description: Record source-level n9kv/vIOS V2 shutdown behavior and distinguish launcher/QEMU
+  exit from orderly guest poweroff, retaining unqualified profiles and pending native
+  acceptance.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

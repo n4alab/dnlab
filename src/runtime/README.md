@@ -21,6 +21,11 @@ Offline VM preparation now consists of `vm_template.py`, `vm_bundle.py` and
 versioned i440fx machine, CPU/RAM, disk assets, ROM/pflash firmware when supplied,
 PCI layout and NIC/guest-port mapping. Management selects one eligible OOB or
 data NIC. Bootstrap/readiness remain manual and NOS shutdown unqualified.
+Source review of the two V2 launchers confirms their SIGTERM handlers exit the
+Python launcher; common `VM.stop()` terminates QEMU and includes a kill fallback.
+Neither path qualifies orderly guest poweroff for direct KVM. Hypervisor running,
+guest reboot, ROMMON boot and NOS readiness remain separate observations; native
+shutdown and disk-writer exit must be qualified before lifecycle acceptance.
 Multi-VM, Q35 and automated guest profiles are not supported by this first
 contract; they must not fall back to an approximate hardware profile.
 
