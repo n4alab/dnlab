@@ -13,7 +13,7 @@ import weakref
 from xml.etree import ElementTree as ET
 
 from .manifest import Conflict, fingerprint, identifier
-from .vm_template import fields, require
+from .vm_template import digest, fields, require
 from .workload_identity import WorkloadReference
 
 
@@ -71,16 +71,19 @@ class Domain:
 
 
 class Connection:
-    def __init__(self, session, original, socket_fd, raw, readonly, transport_uri):
+    def __init__(self, session, original, socket_fd, raw, readonly, transport_uri, event_loop=None, loop_sha256=None):
         self._session, self._original, self._fd = session, deepcopy(original), socket_fd
         self._raw, self._readonly, self._transport_uri = raw, readonly, transport_uri
         self._active, self._broken = True, False
         self._domains = weakref.WeakSet()
         self._event_feed = None
+        self._event_loop, self._loop_sha256 = event_loop, loop_sha256
 
     def _check(self):
         require(self._active and not self._broken and self._raw is not None, 'original libvirt connection unavailable')
         try:
+            if self._event_loop is not None:
+                require(self._event_loop.check()==self._loop_sha256, 'original libvirt event loop differs')
             if self._event_feed is not None:self._event_feed._healthy()
             self._session.verify(fingerprint(self._original))
             require(_socket_identity(self._fd) == self._original['socket'], 'original libvirt socket FD changed')
@@ -109,11 +112,13 @@ class Connection:
     def getLibVersion(self):return self._call(self._raw, 'getLibVersion')
     def getCapabilities(self):return self._call(self._raw, 'getCapabilities')
 
-    def events(self, *, check_loop, limit=4096):
+    def events(self, *, check_loop=None, limit=4096):
         from .libvirt_event_feed import LibvirtEventFeed
         self._check()
+        require(self._event_loop is not None and (check_loop is None or check_loop==self._event_loop.check),
+                'event loop must be qualified before the original SDK connection is opened')
         require(self._event_feed is None, 'original event subscription cannot be replaced')
-        self._event_feed = LibvirtEventFeed(self, check_loop, limit=limit)
+        self._event_feed = LibvirtEventFeed(self, self._event_loop.check, limit=limit)
         return self._event_feed.start()
 
     def listAllDomains(self, flags=0):
@@ -165,7 +170,7 @@ class Connection:
 
 
 @contextmanager
-def open_connection(session, *, pin_socket, readonly=True, sdk=None):
+def open_connection(session, *, pin_socket, readonly=True, sdk=None, event_loop=None):
     require(type(readonly) is bool and callable(pin_socket), 'explicit libvirt mode and socket provider required')
     require(os.environ.get('LIBVIRT_AUTOSTART') == '0', 'libvirt client autostart must be explicitly disabled')
     if sdk is None:
@@ -173,6 +178,11 @@ def open_connection(session, *, pin_socket, readonly=True, sdk=None):
         except ImportError as error:raise Conflict('official libvirt Python binding is not installed in this runtime') from error
     require(getattr(sdk, 'VIR_CONNECT_RO', None) == 1 and getattr(sdk, 'VIR_CONNECT_NO_ALIASES', None) == 2,
             'qualified libvirt open flags required')
+    loop_sha256=None
+    if event_loop is not None:
+        require(event_loop.sdk is sdk and callable(getattr(event_loop,'check',None)), 'original event loop SDK required')
+        loop_sha256=event_loop.check()
+        require(digest(loop_sha256), 'original running event-loop receipt required before SDK connection')
     original = session.proof()
     with pin_socket(deepcopy(original)) as (fd, endpoint):
         fields(endpoint, ('path', 'device', 'inode', 'mode', 'uid', 'gid', 'peer_pid', 'peer_uid', 'peer_gid'), 'pinned SDK socket')
@@ -187,7 +197,7 @@ def open_connection(session, *, pin_socket, readonly=True, sdk=None):
         uri = 'qemu+unix:///session?' + urlencode(dict(socket=f'/proc/self/fd/{fd}', mode='legacy'))
         raw = sdk.openAuth(uri, [[], lambda credentials, opaque: -1, None], flags)
         require(raw is not None, 'original libvirt SDK connection failed')
-        connection = Connection(session, original, fd, raw, readonly, uri)
+        connection = Connection(session, original, fd, raw, readonly, uri, event_loop, loop_sha256)
         try:
             connection._check()
             yield connection

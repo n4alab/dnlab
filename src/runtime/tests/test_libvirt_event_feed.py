@@ -27,13 +27,17 @@ def events(case):
     case.raw.domainEventDeregisterAny = remove
     case.raw.registerCloseCallback = register_close
     case.raw.unregisterCloseCallback = lambda: removed.append('close')
+    check_loop=lambda:state['loop']
+    loop=SimpleNamespace(sdk=case.sdk,check=check_loop)
+    connect=case.connect
+    case.connect=lambda readonly=True:connect(readonly,event_loop=loop)
     def emit(event_id, event=2, detail=0, *, raw=None, domain=None):
         callback, opaque = callbacks[event_id]
         args = (case.raw if raw is None else raw, case.domain if domain is None else domain)
         if event_id == 0:callback(*args, event, detail, opaque)
         else:callback(*args, opaque)
     return SimpleNamespace(case=case, callbacks=callbacks, removed=removed, state=state,
-                           check_loop=lambda:state['loop'], emit=emit)
+                           check_loop=check_loop, emit=emit)
 
 
 def test_retained_ordered_events_and_explicit_ack(events):
@@ -123,8 +127,8 @@ def test_registration_receipt_is_retained_before_postcheck(events):
 
 def test_invalid_loop_witness_does_not_register_callbacks(events):
     e = events;e.state['loop'] = True
-    with e.case.connect() as connection:
-        with pytest.raises(RuntimeErrorBase):connection.events(check_loop=e.check_loop)
+    with pytest.raises(RuntimeErrorBase):
+        with e.case.connect():pytest.fail('invalid loop witness accepted before connect')
     assert not e.callbacks and e.state['close'] is None
 
 

@@ -68,9 +68,10 @@ def case(monkeypatch):
         dict(dev=4, ino=10, uid=1001, gid=1002, mode=stat.S_IFSOCK|0o700).items()})
     monkeypatch.setattr(client.os, 'fstat', lambda fd: metadata)
     monkeypatch.setenv('LIBVIRT_AUTOSTART', '0')
-    def connect(readonly=True):return client.open_connection(session, pin_socket=pin, readonly=readonly, sdk=sdk)
+    def connect(readonly=True,event_loop=None):
+        return client.open_connection(session, pin_socket=pin, readonly=readonly, sdk=sdk,event_loop=event_loop)
     return SimpleNamespace(connect=connect, calls=calls, raw=raw, domain=domain, proof=proof,
-                           endpoint=endpoint, metadata=metadata)
+                           endpoint=endpoint, metadata=metadata,sdk=sdk)
 
 
 def test_pinned_readonly_connection_expires_domain_handles(case):
@@ -172,3 +173,17 @@ def test_undefine_cannot_delete_external_state_through_flags(case, flags):
         with pytest.raises(RuntimeErrorBase, match='definition-only'):
             connection.lookupByUUIDString(UUID).undefineFlags(flags)
     assert not any(call[0] == 'undefine' for call in case.calls)
+
+
+def test_events_require_loop_qualification_before_connection_open(case):
+    with case.connect() as connection:
+        with pytest.raises(RuntimeErrorBase,match='before the original SDK connection'):
+            connection.events(check_loop=lambda:'a'*64)
+    assert [call[0] for call in case.calls]==['open','close']
+
+
+def test_loop_must_belong_to_the_same_sdk_before_open(case):
+    loop=SimpleNamespace(sdk=object(),check=lambda:'a'*64)
+    with pytest.raises(RuntimeErrorBase,match='original event loop SDK'):
+        with case.connect(event_loop=loop):pytest.fail('foreign SDK loop accepted')
+    assert not case.calls

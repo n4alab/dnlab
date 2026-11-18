@@ -1,0 +1,14 @@
+id: 20261118-144738-supervise-the-original-libvirt-event-loo
+type: internal
+title: Supervise the original libvirt event loop before SDK connections
+description: Track a process-lifetime event dispatcher with persistent registration
+  intent and bounded heartbeat, pin it before SDK open, and preserve lab-scoped cleanup
+  protection for boot event sources.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

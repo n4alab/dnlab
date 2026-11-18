@@ -3429,8 +3429,8 @@ when cleanup reports errors.
 
 The SDK/event-feed/boot/event suites pass 66 synthetic tests. The feed alone is
 not a durable boot event source: the consumer below adds journal integration;
-the supervised loop and original QEMU creation capture still need integration
-and native qualification.
+the loop supervisor below and original QEMU creation capture still need native
+qualification and runtime composition.
 It does not interpret a reboot/crash notification as readiness, ordinary shutdown
 or authorization to restart a VM. No native libvirt connection or VM was opened
 by these tests; worker hosts are not needed for this step.
@@ -3453,6 +3453,27 @@ not register/activate a source, start a domain or resume CPUs. Missing receipts,
 lost collectors, changed generations and incomplete raw history remain conflicts.
 The boot/source/feed/SDK/process-record/event suites pass 98 synthetic tests,
 including lost queue acknowledgement and a lost reduction checkpoint without
-double-counting reboot. Native event-loop supervision, QEMU birth capture and
+double-counting reboot. Native event-loop qualification, QEMU birth capture and
 their integration with qualified storage/TAPs are still outstanding. No native
 connection, service or VM was changed in this implementation step.
+
+`LibvirtEventLoop` supplies the supervised-loop witness. It saves the original
+runtime epoch and registration intent before calling the SDK, registers a
+bounded heartbeat timer and tracks one process-lifetime dispatch thread. Readiness
+requires an actual heartbeat/iteration; checks bind the original native TID,
+runtime namespaces, configuration and durable receipt, and reject stale progress.
+Failures latch without registration/thread retries. The process-wide reservation
+is retained even after an uncertain registration. Explicit retirement invalidates
+admission while dispatch continues until runtime process exit: libvirt can retain
+callbacks after connection close, so per-connection thread shutdown is excluded
+([event-loop lifetime](https://libvirt.org/html/libvirt-libvirt-event.html#virEventRegisterImpl)).
+
+The SDK pins the same loop and SDK instance before opening a connection. Event
+subscriptions cannot attach a newly registered loop to an already opened
+connection, and loop failure blocks subsequent SDK operations. The cleanup
+inventory also protects a persisted boot event source independently of other VM
+records, scoped to its own lab. Loop/feed/SDK/boot/event tests pass 119 synthetic
+cases, plus 7 cleanup-inventory cases. The joint fixture verifies registration
+before SDK open using the real supervisor/connection code and fake SDK/thread
+providers. No native dispatch thread or libvirt connection was started. Native
+loop qualification and original QEMU birth capture remain required before VM boot.

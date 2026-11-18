@@ -6,6 +6,8 @@ import pytest
 
 from dnlab_runtime.libvirt_boot_events import LibvirtBootEvents
 from dnlab_runtime.manifest import RuntimeErrorBase
+from dnlab_runtime.inspection import cleanup_inventory
+from dnlab_runtime.journal import Journal
 from test_vm_boot import boot, definition, template, instance
 
 
@@ -203,3 +205,17 @@ def test_missing_persisted_event_is_not_silently_skipped(event_boot):
     with pytest.raises(RuntimeErrorBase,match='history incomplete'):e.source.verify(result['boot']['activation_ack'])
     assert e.source.read(result['boot']['source_id'])['cursor']==3
     assert e.source.tracker.read(result['boot']['source_id'])['reboot_count']==0
+
+
+def test_saved_event_source_alone_protects_its_lab_from_cleanup(event_boot,tmp_path):
+    e=event_boot;result=e.driver.apply(e.operation)
+    row=e.source.journal.db.execute('SELECT * FROM vm_libvirt_boot_sources').fetchone()
+    isolated=Journal(tmp_path/'isolated-event-source-journal')
+    try:
+        isolated.db.execute('CREATE TABLE vm_libvirt_boot_sources '
+            '(id TEXT PRIMARY KEY,domain_uuid TEXT UNIQUE NOT NULL,payload TEXT NOT NULL,fingerprint TEXT NOT NULL)')
+        isolated.db.execute('INSERT INTO vm_libvirt_boot_sources VALUES(?,?,?,?)',tuple(row))
+        assert cleanup_inventory(isolated,result['birth']['lab_id'])==dict(
+            nodes=[result['birth']['node_id']],blocked=['vm_libvirt_boot_sources'])
+        assert cleanup_inventory(isolated,'unrelated-lab')==dict(nodes=[],blocked=[])
+    finally:isolated.close()
