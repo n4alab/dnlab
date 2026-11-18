@@ -3379,10 +3379,9 @@ No proof is added to the historical failed canary, which lacks this checkpoint.
 A second native canary passed initial readiness and policy suspension, then the
 activity census refused a process that changed while being read. The stop stayed
 armed, never released; no pidfd exit checkpoint exists. Its original runtime
-has exited, so a successor cannot release that old reference. The isolated canary
-remains running with restart disabled while an explicit unreleased-arm retirement
-and separate qualified-disposal contract is decided. No generic stop fallback or
-new canary is authorized by that pending state.
+has exited, so a successor cannot release that old reference. That failure led to
+the explicit unreleased-arm retirement and separate qualified disposal described
+below; the original failed result is retained.
 
 Activity-change diagnostics now preserve PID, changed field names, original
 container/builder classification and before/after command hashes without raw
@@ -3391,3 +3390,24 @@ or candidate adoption was added. The activity/observer suites pass 39 tests,
 including a changing-argv case that verifies refusal and diagnostic privacy.
 The exact process behind the earlier native failure was not captured and remains
 unknown; the new diagnostic does not retroactively identify it.
+
+Explicit canary disposal can now retire a never-released stop arm under the
+journal lock. The immutable retirement receipt binds the original hold, command,
+epoch, fixture and profile; the original command and hold are preserved. Ordinary
+command access refuses the retired reference, including from its original
+producer. The same transaction transfers the exclusive claim to a separate
+disposal intent. Released commands, dispatch evidence, changed generations and
+missing claims are refused before mutation.
+
+The disposal uses the qualified initial canary process, keeps restart disabled
+without another policy update, and sends one pidfd TERM. Its exit checkpoint is
+saved before collecting logs, so a later observation failure can resume without
+another signal. Removal requires qualified ordinary exit and original ID/config;
+the claim is released only with verified absence. The related cleanup, command,
+exit-recovery, hold and session suites pass 54 synthetic tests.
+
+The original second canary has been disposed through this separate operation:
+old arm retired, one TERM, zero policy updates, no force, absence verified and
+installed image-build service unchanged. Both native lifecycle canaries remain
+failed evidence; full hold/stop/start qualification and VM gates remain open.
+No new canary was started by the disposal.

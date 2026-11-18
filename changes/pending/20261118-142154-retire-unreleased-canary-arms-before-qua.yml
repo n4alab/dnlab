@@ -1,0 +1,13 @@
+id: 20261118-142154-retire-unreleased-canary-arms-before-qua
+type: internal
+title: Retire unreleased canary arms before qualified disposal
+description: Preserve original command history, transfer the control claim atomically
+  to a separate disposal intent, and checkpoint pidfd exit before readonly recovery.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

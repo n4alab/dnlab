@@ -39,6 +39,8 @@ class ImageBuildCommands:
         require(recover is None or callable(recover), 'qualified readonly recovery callback required')
         self.recover_callback=recover
         with self.journal.transaction():
+            self.journal.db.execute('CREATE TABLE IF NOT EXISTS image_build_arm_retirements '
+                '(id TEXT PRIMARY KEY,hold_id TEXT UNIQUE NOT NULL,command_id TEXT UNIQUE NOT NULL,payload TEXT NOT NULL,fingerprint TEXT NOT NULL)')
             self.journal.db.execute('CREATE TABLE IF NOT EXISTS image_build_control_commands '
                 '(id TEXT PRIMARY KEY,operation_id TEXT NOT NULL,action TEXT NOT NULL,container_id TEXT NOT NULL,'
                 'payload TEXT NOT NULL,fingerprint TEXT NOT NULL,UNIQUE(operation_id,action))')
@@ -88,7 +90,10 @@ class ImageBuildCommands:
                 and type(proof['namespace_pid']) is int and proof['namespace_pid']>0,
                 'original single TERM pidfd exit required')
 
-    def _read(self, reference):
+    def _read(self, reference, *, historical=False):
+        if not historical:
+            retired=self.journal.db.execute('SELECT 1 FROM image_build_arm_retirements WHERE command_id=?',(reference['token'],)).fetchone()
+            require(retired is None, 'original command arm retired; reference cannot be reused')
         row=self.journal.db.execute('SELECT * FROM image_build_control_commands WHERE id=?',(reference['token'],)).fetchone()
         if row is None:raise Conflict('original image-build command reference missing')
         value=json.loads(row['payload']);command=value['command']

@@ -177,3 +177,19 @@ def test_substituted_reference_cannot_read_completed_receipt(control):
     with pytest.raises(TemplateError,match='journal differs'):commands.outcome(reference)
     assert commands.outcome(original)['dispatch_count']==1
     assert state['dispatches']==['disable_restart','stop']
+
+
+def test_retired_arm_cannot_be_verified_or_released_even_by_original_producer(control,monkeypatch):
+    driver,op,state,commands,_,_,_,_=control;save=driver._save
+    def pause(value):
+        save(value)
+        if value['actions'].get('stop',{}).get('phase')=='armed':raise OSError('pause before release')
+    monkeypatch.setattr(driver,'_save',pause)
+    with pytest.raises(OSError):driver.acquire(op)
+    item=driver.read(op)['actions']['stop'];original=commands._read(item['reference'])
+    commands.journal.db.execute('INSERT INTO image_build_arm_retirements VALUES(?,?,?,?,?)',
+        ('a'*32,op,item['reference']['token'],'{}',fingerprint({})))
+    with pytest.raises(TemplateError,match='arm retired'):commands.verify(item['reference'],item['command'])
+    with pytest.raises(TemplateError,match='arm retired'):commands.release(item['reference'])
+    assert commands._read(item['reference'],historical=True)==original
+    assert state['dispatches']==['disable_restart']
