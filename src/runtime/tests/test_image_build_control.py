@@ -8,6 +8,7 @@ from pathlib import Path
 import select
 import signal
 import sys
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
@@ -70,6 +71,7 @@ def test_shutdown_logs_require_exact_generation_sequence_across_frames(engine):
     method,path,body,_=state['requests'][0]
     assert method=='GET' and path.startswith('/containers/'+'a'*64+'/logs?') and 'follow' not in path
     assert body is None and state['closed']==1
+    assert parse_qs(urlsplit(path).query)['since']==['1794992400']
     assert not {'drain_verified','pidfd_exit_verified'} & set(proof)
 
 
@@ -85,6 +87,13 @@ def test_incomplete_ambiguous_or_other_generation_logs_cannot_prove_shutdown(fau
     if fault=='truncated':raw=raw[:-1]
     elif fault=='plain':raw=b''.join(lines)
     with pytest.raises(TemplateError):shutdown_log_proof(raw,'2026-11-18T09:00:00Z',1)
+
+
+def test_integer_since_earlier_same_second_logs_are_excluded_at_exact_generation_boundary():
+    previous=b'2026-11-18T09:00:00.000000001Z INFO:     Finished server process [22]\n'
+    raw=frame(previous+b''.join(log_lines()))
+    proof=shutdown_log_proof(raw,'2026-11-18T09:00:00.100000000Z',1)
+    assert proof['ordinary_shutdown_log_verified'] is True and proof['namespace_pid']==1
 
 
 @pytest.fixture

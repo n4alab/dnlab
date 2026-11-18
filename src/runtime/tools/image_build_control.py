@@ -5,6 +5,7 @@ are not gate admission and do not infer shutdown/drain from an exited process.
 """
 from contextlib import contextmanager
 from copy import deepcopy
+import calendar
 from datetime import datetime
 import hashlib
 import io
@@ -35,8 +36,9 @@ class ImageBuildEngine:
             connection.request(method,'/containers/'+self.container_id+suffix,body=body,
                                headers={'Content-Type':'application/json'})
             response=connection.getresponse();data=response.read(limit+1)
-            require(len(data)<=limit and response.status==expected,
-                    'original image-build action acknowledgement differs; no retry')
+            require(len(data)<=limit, 'original image-build action response exceeds bound; no retry')
+            require(response.status==expected,
+                    f'original image-build action acknowledgement differs: HTTP {response.status}, expected {expected}; no retry')
             return data
         finally:connection.close()
 
@@ -52,8 +54,9 @@ class ImageBuildEngine:
                 'empty original start acknowledgement required')
 
     def shutdown_logs(self, started_at, namespace_pid):
-        timestamp(started_at)
-        query=urlencode(dict(stdout='1',stderr='1',timestamps='1',since=started_at,tail='4096'))
+        normalized=timestamp(started_at)
+        seconds=calendar.timegm(datetime.fromisoformat(normalized[:19]).timetuple())
+        query=urlencode(dict(stdout='1',stderr='1',timestamps='1',since=seconds,tail='4096'))
         raw=self._request('/logs?'+query,None,200,method='GET',limit=1024*1024)
         return shutdown_log_proof(raw,started_at,namespace_pid)
 
@@ -105,10 +108,13 @@ def shutdown_log_proof(raw, started_at, namespace_pid):
     messages=[];last=None
     for line in bytes(streams[2]).decode('utf-8').splitlines():
         date,separator,content=line.partition(' ')
-        require(separator and timestamp(date)>=lower, 'log timestamp predates original Docker generation')
+        require(separator, 'timestamped original Docker logs required')
         current=timestamp(date)
         require(last is None or current>=last, 'original Docker log timestamps reordered')
         last=current
+        # The Engine's integer since filter includes the rest of the first
+        # second; exclude earlier generations using the exact original ns time.
+        if current<lower:continue
         match=re.fullmatch(r'INFO:\s+(.+)',content)
         if match and match[1] in expected:messages.append(match[1])
         require(not re.search(r'(?:Started|Finished) server process \[(?!'+str(namespace_pid)+r'\])[0-9]+\]',content),

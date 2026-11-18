@@ -1,0 +1,14 @@
+id: 20261118-102540-use-engine-unix-timestamps-for-original
+type: internal
+title: Use Engine Unix timestamps for original shutdown logs
+description: Fix native canary HTTP400 by requesting logs with Unix seconds and filtering
+  the exact nanosecond generation boundary, preserving foreign-generation and bounded-response
+  checks and reporting ACK status.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

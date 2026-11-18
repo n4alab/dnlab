@@ -3291,7 +3291,7 @@ accepted only before start or after exit, while configured binds remain exact.
 Foreign/extra mounts, writable checkout and owner substitutions are conflicts.
 Twelve new pure payload/guard cases plus ten existing fixture birth/recovery cases
 pass. No image was built, container created or service changed by this preparation;
-the runnable canary driver and its operational evidence remain outstanding.
+full operational lifecycle qualification remains outstanding.
 
 Startup readiness now waits for the already captured original API process after
 the known start ACK. Only `ImageBuildApiNotReady`, emitted by a refused loopback
@@ -3308,7 +3308,7 @@ startup proof can complete. Eight new cases cover refused-then-ready, timeout,
 process/window changes, transient startup activity, non-API connection failures,
 explicit query error typing and residual activity. The related observer/query/
 executor/session suites pass 56 tests with simulated native I/O. No service or
-container is started by these tests; the operational canary remains pending.
+container is started by these tests; operational lifecycle qualification remains pending.
 
 `tools.image_build_canary_cleanup.CanaryCleanup` supplies the disposable canary's
 retirement after its hold is restored. It binds the original fixture ID, container,
@@ -3326,6 +3326,27 @@ The claim is released atomically with the removed receipt. No installed service
 is admitted as a target by this canary-specific path.
 
 Six new journal/dispatch tests plus the payload and existing fixture suites pass
-28 tests using simulated native I/O. The full canary runner and its actual
-stop/start/cleanup evidence are still outstanding. No container or service is
+28 tests using simulated native I/O. Full stop/start/cleanup qualification is
+still outstanding. No container or service is
 affected merely by importing or testing this helper.
+
+The first isolated native lifecycle canary reached initial readiness, policy
+suspension and observed exit 0, then failed while collecting shutdown logs:
+the Engine rejected an RFC3339 `since` query with HTTP 400. A readonly comparison
+returned HTTP 200 for Unix seconds. The adapter now sends integer Unix seconds,
+as required by the [Engine API](https://docs.docker.com/reference/api/engine/version/v1.51/),
+then applies the exact nanosecond generation boundary to returned log records.
+Earlier records within the first second are excluded; later foreign generations,
+missing/repeated/reordered markers remain conflicts. ACK errors now include the
+observed and expected status without echoing response bodies. The related control,
+executor and retirement suites pass 52 tests, and the corrected parser verified
+the already captured native log stream without issuing another signal.
+
+The canary remains failed: no startup restoration or completed stop outcome is
+claimed. Its original exited container was separately disposed through the
+existing qualified fixture cleanup using immutable ID/nonce/configuration,
+with all signals disabled, no force and verified absence by ID and name. The
+historical incomplete hold and failed result were preserved. The installed
+image-build service was verified unchanged. No new canary or VM gate was started;
+durable intermediate exit evidence/recovery and full lifecycle qualification
+remain open before an installed-service hold.
