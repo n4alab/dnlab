@@ -3605,3 +3605,17 @@ report. Native shared-library compatibility remains Debian's package contract.
 The SDK/child/parent/loop/runtime suites pass 92 synthetic tests; the native
 extension loader is simulated and only temporary Python source executes. Native
 SDK import and inherited-FD process launch remain to be qualified operationally.
+
+`FDLoopLauncher` now prepares the inherited-FD process adapter. It verifies the
+interpreter ELF and worker source, seals the bootstrap memfd against changes,
+and persists the exact request before exposing it to `LoopCanaryParent`. Popen
+uses only the pinned executable, source and bootstrap descriptors, fixed isolated
+arguments and the explicit environment. It returns the original waiter without
+post-launch checks that could hide a created child. Uncertain spawn is never
+repeated, and own descriptors remain held until the original parent's durable
+exit/cleanup receipt agrees with its waiter. Preparation starts no child.
+Launcher/SDK/child/parent/loop/runtime suites pass 107 synthetic tests, using real
+temporary descriptors and sealed memfd but simulated process creation. The
+composed case runs the real parent journal/release/exit path and then releases
+launcher files. A standalone inherited-FD child entrypoint/source bootstrap and
+the first operational canary remain outstanding; no native SDK or VM was run.

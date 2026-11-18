@@ -1,0 +1,14 @@
+id: 20261118-224825-pin-loop-canary-launch-files-and-seal-it
+type: internal
+title: Pin loop canary launch files and seal its bootstrap
+description: Prepare an inherited-FD interpreter and worker launcher with immutable
+  bootstrap, persistent one-shot launch intent and descriptor release only after original-parent
+  exit qualification.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
