@@ -1,0 +1,14 @@
+id: 20261118-230124-qualify-the-standalone-libvirt-loop-cana
+type: internal
+title: Qualify the standalone libvirt loop canary entrypoint
+description: Add authenticated source-only child bootstrap and accept native extension
+  self-registration only for the original loaded object; verify the real SDK dispatcher
+  and original-process exit without hypervisor connections.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

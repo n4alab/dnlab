@@ -106,7 +106,8 @@ class LoopSDK:
                     value['assets']=proofs;self._save(value);self._guard()
                     native=self.load_extension(files['extension'])
                     require(isinstance(native,types.ModuleType) and native.__name__=='libvirtmod'
-                            and 'libvirtmod' not in sys.modules and 'libvirt' not in sys.modules,
+                            and ('libvirtmod' not in sys.modules or sys.modules['libvirtmod'] is native)
+                            and 'libvirt' not in sys.modules,
                             'original freshly loaded native SDK module required')
                     sys.modules['libvirtmod']=native
                     self._guard()

@@ -3619,3 +3619,21 @@ temporary descriptors and sealed memfd but simulated process creation. The
 composed case runs the real parent journal/release/exit path and then releases
 launcher files. A standalone inherited-FD child entrypoint/source bootstrap and
 the first operational canary remain outstanding; no native SDK or VM was run.
+
+The standalone `libvirt_loop_canary_main.py` now consumes the sealed inherited
+bootstrap, verifies its worker bytes and current boot/namespaces, and imports
+runtime modules through an explicit authenticated source-only finder. It never
+loads their pyc files or extends sys.path. Its private journal is newly created
+and pinned before use. The existing child protocol then captures the runtime,
+loads SDK and dispatches only after the original parent's release.
+
+The first native attempt exposed CPython registering the extension object while
+creating it. The loader now accepts that exact same object, retaining rejection
+of foreign registrations. The failed attempt remains failed with exit/cleanup
+verified. The corrected master canary passed with real Python 3.13/libvirt SDK,
+heartbeat/dispatch and loop retirement, followed by original waiter/pidfd exit 0
+and closed launcher files. Stderr was empty. No hypervisor connection, daemon
+start, VM or worker was used. Entry/launcher/SDK/child/parent/loop/runtime suites
+pass 125 targeted synthetic tests. This qualifies the loop-only process path;
+dedicated-session activation in the current boot and first VM lifecycle remain
+the next operational requirements.

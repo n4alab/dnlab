@@ -42,6 +42,8 @@ def sdk_files(tmp_path):
         if state['fault']=='import':raise ValueError('synthetic native import failed')
         if state['fault']=='source':source.write_bytes(SOURCE+b'# changed\n')
         module=ModuleType('libvirtmod');module.__file__='/proc/self/fd/'+str(fd)
+        if state['fault']=='self_register':sys.modules['libvirtmod']=module
+        if state['fault']=='foreign_register':sys.modules['libvirtmod']=ModuleType('foreign')
         return module
     def create():
         return LoopSDK(journal,profile,preflight=lambda:fingerprint(profile) if state['scope'] else None,
@@ -125,3 +127,17 @@ def test_failed_python_initializer_keeps_native_binding_and_original_failure(sdk
     assert json.loads(row)['error']['message']=='synthetic source refusal'
     with pytest.raises(RuntimeErrorBase):e.create().load()
     assert e.state['loads']==1
+
+
+def test_native_initializer_can_register_only_the_same_fresh_object(sdk_files):
+    e=sdk_files;e.state['fault']='self_register';loader=e.create()
+    sdk=loader.load()
+    assert sdk.libvirtmod is sys.modules['libvirtmod'] and loader.check() is sdk
+    assert e.state['loads']==1
+
+
+def test_foreign_native_registration_is_rejected_without_replacing_it(sdk_files):
+    e=sdk_files;e.state['fault']='foreign_register';loader=e.create()
+    with pytest.raises(RuntimeErrorBase,match='freshly loaded native'):loader.load()
+    assert sys.modules['libvirtmod'].__name__=='foreign'
+    assert 'libvirt' not in sys.modules and e.state['loads']==1
