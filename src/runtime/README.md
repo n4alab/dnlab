@@ -3309,3 +3309,23 @@ process/window changes, transient startup activity, non-API connection failures,
 explicit query error typing and residual activity. The related observer/query/
 executor/session suites pass 56 tests with simulated native I/O. No service or
 container is started by these tests; the operational canary remains pending.
+
+`tools.image_build_canary_cleanup.CanaryCleanup` supplies the disposable canary's
+retirement after its hold is restored. It binds the original fixture ID, container,
+effective configuration and persisted startup receipt, and reserves the same
+exclusive image-build control key in the existing journal. Complete live checks
+are repeated after checkpoints and with the original startup pidfd pinned before
+one TERM. Policy/TERM requests left uncertain cannot be dispatched again.
+
+Ordinary exit, generation, log evidence, ledger/binding and an empty activity
+census precede qualified removal. During final `NosFixture.cleanup`, a restricted
+Docker adapter permits only inspection and requalified deletion of that original
+exited container; any attempted extra signal is refused, including a restart race.
+A lost removal reply can recover through qualified absence without another delete.
+The claim is released atomically with the removed receipt. No installed service
+is admitted as a target by this canary-specific path.
+
+Six new journal/dispatch tests plus the payload and existing fixture suites pass
+28 tests using simulated native I/O. The full canary runner and its actual
+stop/start/cleanup evidence are still outstanding. No container or service is
+affected merely by importing or testing this helper.

@@ -1,0 +1,14 @@
+id: 20261118-101222-track-ordinary-retirement-of-the-origina
+type: internal
+title: Track ordinary retirement of the original image-build canary
+description: Bind cleanup to the persisted startup generation with an exclusive claim,
+  one policy update and TERM, qualified deletion and absence recovery without repeated
+  signals.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
