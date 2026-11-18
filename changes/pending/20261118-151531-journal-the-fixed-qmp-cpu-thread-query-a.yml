@@ -1,0 +1,14 @@
+id: 20261118-151531-journal-the-fixed-qmp-cpu-thread-query-a
+type: internal
+title: Journal the fixed QMP CPU-thread query and its metadata effect
+description: Restrict monitor access to query-cpus-fast on the acknowledged paused
+  creation, retain uncertain queries without resend, and expose typed vCPU TIDs without
+  treating them as a process birth proof.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

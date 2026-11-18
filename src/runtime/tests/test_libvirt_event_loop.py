@@ -1,6 +1,5 @@
 """Supervisor with fake SDK/thread; no native loop, daemon or guest runs."""
 from copy import deepcopy
-import os
 from types import SimpleNamespace
 
 import pytest
@@ -44,7 +43,7 @@ def event_loop(runtime_process):
                                 process_id=lambda:runtime_state['pid'],native_id=lambda:state['tid'],
                                 registry=registry,startup_timeout=0.001)
     return SimpleNamespace(runtime=runtime,epoch=epoch,runtime_state=runtime_state,calls=calls,state=state,
-                           sdk=sdk,make=make,loop=make(),native_fstat=os.fstat)
+                           sdk=sdk,make=make,loop=make())
 
 
 def test_original_loop_receipt_is_stable_while_heartbeat_advances(event_loop):
@@ -109,16 +108,12 @@ def test_retirement_seals_witness_but_does_not_stop_sdk_dispatch(event_loop):
     assert e.state['starts']==1 and e.calls.count('register')==1
 
 
-def test_supervised_loop_is_qualified_before_sdk_open_and_guards_connection(event_loop,case,monkeypatch):
+def test_supervised_loop_is_qualified_before_sdk_open_and_guards_connection(event_loop,case):
     e=event_loop
     for name in ('virEventRegisterDefaultImpl','virEventAddTimeout','virEventRunDefaultImpl'):
         setattr(case.sdk,name,getattr(e.sdk,name))
     e.loop.sdk=case.sdk
-    # The SDK socket fixture patches process-global os.fstat for its inert FD.
-    # Restore real metadata while acquiring this separate temporary journal lock.
-    with monkeypatch.context() as scoped:
-        scoped.setattr(os,'fstat',e.native_fstat)
-        e.loop.start()
+    e.loop.start()
     open_auth=case.sdk.openAuth
     def observed_open(*args):
         assert e.loop.check() and e.calls[0]=='register' and e.loop.iterations>0

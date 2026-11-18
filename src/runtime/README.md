@@ -3489,7 +3489,7 @@ does not prove cleanup while the process-lifetime thread still runs. The externa
 parent must qualify the original process exit; `cleanup_verified` and
 `gate_allowed` remain false. Canary/supervisor suites pass 23 synthetic tests.
 No native canary was executed by this preparation. This work is independent of
-the pending decision on QMP-based QEMU identity capture.
+QMP-based QEMU identity capture, whose adopted contract is described below.
 
 `tools/libvirt_loop_canary_transport.py` adds the parent/child release protocol.
 The parent binds the original process before releasing SDK dispatch, checks the
@@ -3502,3 +3502,24 @@ into a passed canary. The child refuses EOF/foreign release before entering the
 SDK runner. Transport/canary/supervisor suites pass 35 synthetic tests. Qualified
 native source/interpreter launch and bounded frame adapters are explicit external
 providers; no native process was launched by this preparation.
+
+The adopted QMP contract permits only `query-cpus-fast` through the qualified
+libvirt connection. `PausedCPUQuery` saves intent before dispatch and explicitly
+records that the `custom-monitor` metadata effect may occur. It requires a
+writable monitored connection, the original runtime epoch, a mandatory original
+creation preflight, and matching paused libvirt incarnation ID, birth metadata,
+live/persistent XML and CPU count. A completed receipt can be reused after the
+same checks; an uncertain query is never resent. Its journal entry independently
+protects that lab from cleanup. There is no HMP or free-form command API.
+
+Replies use bounded, duplicate-free JSON, typed unique CPU indexes/TIDs and the
+qualified x86 target. A TID is not the QEMU leader PID; this query does not create
+a process record or authorize adoption. Correlation with the original creation
+event, kernel task/Tgid, namespaces and pinned process still needs implementation
+and native qualification. libvirt's metadata effect is documented in the
+[monitor dispatcher](https://github.com/libvirt/libvirt/blob/v11.3.0/src/qemu/qemu_driver.c#L12596)
+and [status save](https://github.com/libvirt/libvirt/blob/v11.3.0/src/qemu/qemu_domain.c#L5110);
+the [QEMU schema](https://github.com/qemu/qemu/blob/v10.0.0/qapi/machine.json#L68)
+defines the returned host-thread field. Query/SDK/loop/feed/boot/transport and
+cleanup suites pass 162 synthetic tests. No QMP command, native loop canary or VM
+was executed; native launch composition and kernel birth capture remain open.

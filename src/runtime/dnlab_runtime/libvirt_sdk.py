@@ -33,6 +33,7 @@ class Domain:
         return self._connection._call(self._raw, method, *args, mutate=mutate, uuid=self._uuid)
 
     def UUIDString(self):return self._call('UUIDString')
+    def ID(self):return self._call('ID')  # libvirt incarnation ID, never a host PID
     def name(self):return self._call('name')
     def isActive(self):return self._call('isActive')
     def isPersistent(self):return self._call('isPersistent')
@@ -71,13 +72,14 @@ class Domain:
 
 
 class Connection:
-    def __init__(self, session, original, socket_fd, raw, readonly, transport_uri, event_loop=None, loop_sha256=None):
+    def __init__(self, session, original, socket_fd, raw, readonly, transport_uri, event_loop=None, loop_sha256=None, sdk=None):
         self._session, self._original, self._fd = session, deepcopy(original), socket_fd
         self._raw, self._readonly, self._transport_uri = raw, readonly, transport_uri
         self._active, self._broken = True, False
         self._domains = weakref.WeakSet()
         self._event_feed = None
         self._event_loop, self._loop_sha256 = event_loop, loop_sha256
+        self._sdk = sdk
 
     def _check(self):
         require(self._active and not self._broken and self._raw is not None, 'original libvirt connection unavailable')
@@ -197,7 +199,7 @@ def open_connection(session, *, pin_socket, readonly=True, sdk=None, event_loop=
         uri = 'qemu+unix:///session?' + urlencode(dict(socket=f'/proc/self/fd/{fd}', mode='legacy'))
         raw = sdk.openAuth(uri, [[], lambda credentials, opaque: -1, None], flags)
         require(raw is not None, 'original libvirt SDK connection failed')
-        connection = Connection(session, original, fd, raw, readonly, uri, event_loop, loop_sha256)
+        connection = Connection(session, original, fd, raw, readonly, uri, event_loop, loop_sha256, sdk)
         try:
             connection._check()
             yield connection

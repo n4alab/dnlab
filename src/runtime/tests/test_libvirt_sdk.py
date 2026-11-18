@@ -66,7 +66,11 @@ def case(monkeypatch):
         yield 17, endpoint
     metadata = SimpleNamespace(**{'st_'+key:value for key,value in
         dict(dev=4, ino=10, uid=1001, gid=1002, mode=stat.S_IFSOCK|0o700).items()})
-    monkeypatch.setattr(client.os, 'fstat', lambda fd: metadata)
+    def socket_identity(fd):
+        assert fd==17
+        return dict(device=metadata.st_dev,inode=metadata.st_ino,uid=metadata.st_uid,
+                    gid=metadata.st_gid,mode=metadata.st_mode)
+    monkeypatch.setattr(client,'_socket_identity',socket_identity)
     monkeypatch.setenv('LIBVIRT_AUTOSTART', '0')
     def connect(readonly=True,event_loop=None):
         return client.open_connection(session, pin_socket=pin, readonly=readonly, sdk=sdk,event_loop=event_loop)
