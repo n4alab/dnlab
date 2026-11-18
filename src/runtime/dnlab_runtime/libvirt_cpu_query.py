@@ -99,6 +99,29 @@ class PausedCPUQuery:
             self.journal.db.execute('UPDATE vm_qemu_cpu_queries SET payload=?,fingerprint=? WHERE id=?',
                 (canonical(value),fingerprint(value),value['id']))
 
+    def read_completed(self,request):
+        """Original receipt only; never issue a monitor command if it is absent."""
+        with self.journal.execution_lock:
+            self._snapshot(request)
+            row=self.journal.db.execute('SELECT * FROM vm_qemu_cpu_queries WHERE creator=?',
+                                        (request['birth']['creator_operation_id'],)).fetchone()
+            require(row is not None, 'original completed CPU query receipt missing')
+            value=json.loads(row['payload'])
+            require(fingerprint(value)==row['fingerprint'] and value['id']==row['id']
+                    and value['request']==request and value['birth']==request['birth'] and value['epoch_sha256']==self.epoch
+                    and value['phase']=='completed' and digest(value['reply_sha256'])
+                    and value['expected_metadata_effect']=='custom-monitor' and value['effect_may_have_occurred'] is True
+                    and value['error'] is None, 'original completed CPU query receipt differs')
+            cpus=value['cpus'];expected=request['expected_cpus']
+            require(type(cpus) is list and len(cpus)==expected, 'original CPU query count differs')
+            for index,cpu in enumerate(cpus):
+                fields(cpu,('index','thread_id'),'original CPU thread receipt')
+                require(type(cpu['index']) is int and cpu['index']==index
+                        and type(cpu['thread_id']) is int and 0<cpu['thread_id']<2**31,
+                        'original CPU thread receipt differs')
+            require(len({cpu['thread_id'] for cpu in cpus})==expected, 'original CPU thread receipt repeats')
+            return deepcopy(value)
+
     def query(self,request):
         with self.journal.execution_lock:
             self._snapshot(request)

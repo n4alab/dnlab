@@ -48,21 +48,8 @@ def validate_process_record(record):
     return deepcopy(record)
 
 
-class PinnedQEMUProcess:
-    def __init__(self, record, *, proc_root='/proc', pidfd_open=None, poll_factory=None, pid_namespace=None):
-        self.record, self.proc_root = validate_process_record(record), Path(proc_root)
-        self.pidfd_open = pidfd_open or os.pidfd_open
-        self.poll_factory = poll_factory or select.poll
-        self.pid_namespace = pid_namespace or self._local_pid_namespace
-
-    @staticmethod
-    def _local_pid_namespace():
-        info = os.stat('/proc/self/ns/pid')
-        return {'device': info.st_dev, 'inode': info.st_ino}
-
-    def _pid_namespace(self):
-        if self.pid_namespace() != self.record['namespaces']['pid']:
-            raise Conflict('pidfd caller and original QEMU PID namespace differ')
+class QEMUProcFiles:
+    """Bounded proc/executable reads shared by creation and replay verification."""
 
     def _open(self, name, parent, stack, *, directory=False, follow=False):
         flags = os.O_RDONLY | os.O_CLOEXEC | os.O_NONBLOCK
@@ -103,6 +90,23 @@ class PinnedQEMUProcess:
             if os.read(fd, 1) or any(getattr(first, k) != getattr(last, k) for k in keys):
                 raise Conflict('QEMU executable changed during read')
             return hashed.hexdigest()
+
+
+class PinnedQEMUProcess(QEMUProcFiles):
+    def __init__(self, record, *, proc_root='/proc', pidfd_open=None, poll_factory=None, pid_namespace=None):
+        self.record, self.proc_root = validate_process_record(record), Path(proc_root)
+        self.pidfd_open = pidfd_open or os.pidfd_open
+        self.poll_factory = poll_factory or select.poll
+        self.pid_namespace = pid_namespace or self._local_pid_namespace
+
+    @staticmethod
+    def _local_pid_namespace():
+        info = os.stat('/proc/self/ns/pid')
+        return {'device': info.st_dev, 'inode': info.st_ino}
+
+    def _pid_namespace(self):
+        if self.pid_namespace() != self.record['namespaces']['pid']:
+            raise Conflict('pidfd caller and original QEMU PID namespace differ')
 
     def _observe(self, root, proc):
         expected = self.record; process = expected['process']; pid = process['pid']

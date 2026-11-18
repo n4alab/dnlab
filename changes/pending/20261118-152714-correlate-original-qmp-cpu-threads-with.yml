@@ -1,0 +1,14 @@
+id: 20261118-152714-correlate-original-qmp-cpu-threads-with
+type: internal
+title: Correlate original QMP CPU threads with a pinned QEMU leader
+description: Verify procfs namespace views, task membership, credentials and executable
+  identity against the original completed query without monitor resend, PID-file discovery
+  or process adoption.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

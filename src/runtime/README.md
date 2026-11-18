@@ -3514,12 +3514,33 @@ protects that lab from cleanup. There is no HMP or free-form command API.
 
 Replies use bounded, duplicate-free JSON, typed unique CPU indexes/TIDs and the
 qualified x86 target. A TID is not the QEMU leader PID; this query does not create
-a process record or authorize adoption. Correlation with the original creation
-event, kernel task/Tgid, namespaces and pinned process still needs implementation
-and native qualification. libvirt's metadata effect is documented in the
+a process record or authorize adoption. Kernel correlation is implemented below;
+binding it to the original creation event and native qualification remain open.
+libvirt's metadata effect is documented in the
 [monitor dispatcher](https://github.com/libvirt/libvirt/blob/v11.3.0/src/qemu/qemu_driver.c#L12596)
 and [status save](https://github.com/libvirt/libvirt/blob/v11.3.0/src/qemu/qemu_domain.c#L5110);
 the [QEMU schema](https://github.com/qemu/qemu/blob/v10.0.0/qapi/machine.json#L68)
 defines the returned host-thread field. Query/SDK/loop/feed/boot/transport and
 cleanup suites pass 162 synthetic tests. No QMP command, native loop canary or VM
 was executed; native launch composition and kernel birth capture remain open.
+
+`QEMUCreationProcess` now correlates the TIDs from an already completed original
+CPU query with kernel task membership. `PausedCPUQuery.read_completed` never
+dispatches QMP when a receipt is absent. The correlator pins the qualified procfs
+root, checks the caller's `NSpid` view and shared PID/net/user namespaces, requires
+every queried task under one leader, and holds the leader pidfd across repeated
+observations. It verifies non-root credentials, boot/start-time lower bound,
+UUID/command, executable hash and the original query receipt. Task and leader
+identities are checked again after the final domain/receipt observation.
+
+The returned complete process record and task evidence are input to the original
+creation operation, not authority to reacquire/adopt a VM on retry. The creator
+still must persist them before releasing CPUs and use `PinnedQEMUProcess` for
+later observations. No process-name scan, pidfile, signal, domain action or new
+monitor query is used by correlation. Proc helpers are shared with the existing
+replay verifier without changing its checks. The correlation/process/query/
+observer/boot/event suites pass 124 synthetic tests. Native procfs, LXC permission
+and namespace qualification, durable creation integration and first VM boot remain
+open. The kernel's [`NSpid` generation](https://github.com/torvalds/linux/blob/v6.12/fs/proc/array.c#L197)
+and [proc status fields](https://docs.kernel.org/filesystems/proc.html) define the
+namespace/Tgid semantics used here. No host process or VM was probed by these tests.

@@ -52,6 +52,7 @@ def test_only_fixed_query_is_dispatched_after_durable_effect_intent(query):
     assert result['phase']=='completed' and result['cpus']==[dict(index=0,thread_id=901)]
     assert result['expected_metadata_effect']=='custom-monitor' and result['effect_may_have_occurred']
     assert e.manager.query(e.request)==result and e.state['calls']==1
+    assert e.manager.read_completed(e.request)==result and e.state['calls']==1
     assert 'process_record' not in result and 'pid' not in result
     assert cleanup_inventory(e.journal,e.birth['lab_id'])==dict(nodes=[e.birth['node_id']],blocked=['vm_qemu_cpu_queries'])
     assert cleanup_inventory(e.journal,'unrelated-lab')==dict(nodes=[],blocked=[])
@@ -63,6 +64,12 @@ def test_lost_response_stays_pending_without_second_query(query):
     e.state['error']=None
     with pytest.raises(RuntimeErrorBase,match='not repeated'):e.manager.query(e.request)
     assert e.state['calls']==1
+
+
+def test_read_completed_never_issues_a_query_for_missing_receipt(query):
+    e=query
+    with pytest.raises(RuntimeErrorBase,match='receipt missing'):e.manager.read_completed(e.request)
+    assert e.state['calls']==0
 
 
 @pytest.mark.parametrize('fault',['scope','domain_id','running','readonly','epoch','cpu_count'])
