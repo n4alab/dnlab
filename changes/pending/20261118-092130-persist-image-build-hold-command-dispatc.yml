@@ -1,0 +1,13 @@
+id: 20261118-092130-persist-image-build-hold-command-dispatc
+type: internal
+title: Persist image-build hold command dispatch
+description: Track original hold commands against the qualified runtime process, recover
+  metadata-only arming and retain uncertain execution without resending.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

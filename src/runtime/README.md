@@ -3143,3 +3143,26 @@ which refuses extra container children. This covers a declared entrypoint/root
 scope, not arbitrary opaque automation, remote builds, in-flight HTTP requests or
 future activity; the qualified operator window and shutdown/drain remain required.
 No service is stopped, process signalled or VM created by these tests.
+
+`image_build_commands.ImageBuildCommands` provides the persistent command
+producer for the hold controller. It reuses the qualified current
+`RuntimeProcess` epoch instead of spawning another host worker, and stores
+service references in a separate table from VM TAP references. Commands must
+match the original durable hold action, exclusive resource claim, host/boot/
+namespace and qualified window preflight. Release saves uncertainty before
+calling the mandatory executor once and rechecks the original epoch and
+preflight after that checkpoint.
+
+Lost arm replies reuse the original reference. A parent checkpoint without any
+producer row may recover its first metadata-only arm; an existing command is
+never replaced. A successor runtime cannot release the old epoch's command.
+It can read durable completed outcomes under the same qualified source/context
+profile. Missing completion remains pending without another dispatch, including
+when execution returns but the producer identity changes before saving its result.
+
+The component requires an explicit executor: it supplies no Docker mutation,
+signal, service stop/start or implicit helper. Eleven synthetic integration cases
+exercise the real hold controller, journal and process witness with simulated
+process reads and service I/O. Native policy/shutdown/start executors and their
+qualification remain outstanding; these tests neither stop image-build nor open
+a VM gate.

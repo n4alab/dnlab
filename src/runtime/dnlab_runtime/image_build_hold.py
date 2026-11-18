@@ -202,6 +202,8 @@ class ImageBuildHold:
         elif item['phase']=='arming_requested':
             require(recover, 'original hold arm uncertain; recovery required')
             reference = self.commands.original_reference(deepcopy(item['command']))
+            if reference is None and callable(getattr(self.commands,'recover_arm',None)):
+                reference = self.commands.recover_arm(deepcopy(item['command']))
             require(reference is not None, 'original hold worker unavailable; no second arm')
             self._reference(value,item,reference);item.update(reference=reference,phase='armed');self._save(value)
         if item['phase']=='armed':
