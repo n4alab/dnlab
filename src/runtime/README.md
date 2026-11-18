@@ -3490,3 +3490,15 @@ parent must qualify the original process exit; `cleanup_verified` and
 `gate_allowed` remain false. Canary/supervisor suites pass 23 synthetic tests.
 No native canary was executed by this preparation. This work is independent of
 the pending decision on QMP-based QEMU identity capture.
+
+`tools/libvirt_loop_canary_transport.py` adds the parent/child release protocol.
+The parent binds the original process before releasing SDK dispatch, checks the
+reported runtime epoch against that process, sends EOF and requires the original
+waiter/pidfd exit proof. Remaining stdout/stderr are bounded and preserved; extra
+stdout fails qualification. A timeout retains the original waiter, streams and
+observer for observation-only exit recovery, without another launch or release.
+Recovery can verify cleanup of a failed attempt; it does not turn that failure
+into a passed canary. The child refuses EOF/foreign release before entering the
+SDK runner. Transport/canary/supervisor suites pass 35 synthetic tests. Qualified
+native source/interpreter launch and bounded frame adapters are explicit external
+providers; no native process was launched by this preparation.

@@ -1,0 +1,14 @@
+id: 20261118-150736-track-the-original-loop-canary-process-t
+type: internal
+title: Track the original loop-canary process through exit
+description: Bind the parent release to the original process and reported epoch, preserve
+  bounded diagnostics, and retain the original waiter for observation-only cleanup
+  recovery without relaunch.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
