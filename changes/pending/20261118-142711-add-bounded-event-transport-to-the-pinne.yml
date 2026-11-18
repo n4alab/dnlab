@@ -1,0 +1,14 @@
+id: 20261118-142711-add-bounded-event-transport-to-the-pinne
+type: internal
+title: Add bounded event transport to the pinned libvirt SDK
+description: Capture lifecycle and reboot notifications without retaining domain handles,
+  require the original supervised loop witness, and refuse further operations after
+  event loss.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

@@ -76,10 +76,12 @@ class Connection:
         self._raw, self._readonly, self._transport_uri = raw, readonly, transport_uri
         self._active, self._broken = True, False
         self._domains = weakref.WeakSet()
+        self._event_feed = None
 
     def _check(self):
         require(self._active and not self._broken and self._raw is not None, 'original libvirt connection unavailable')
         try:
+            if self._event_feed is not None:self._event_feed._healthy()
             self._session.verify(fingerprint(self._original))
             require(_socket_identity(self._fd) == self._original['socket'], 'original libvirt socket FD changed')
             require(self._raw.isAlive() == 1 and self._raw.getURI() == self._transport_uri,
@@ -106,6 +108,13 @@ class Connection:
     def getType(self):return self._call(self._raw, 'getType')
     def getLibVersion(self):return self._call(self._raw, 'getLibVersion')
     def getCapabilities(self):return self._call(self._raw, 'getCapabilities')
+
+    def events(self, *, check_loop, limit=4096):
+        from .libvirt_event_feed import LibvirtEventFeed
+        self._check()
+        require(self._event_feed is None, 'original event subscription cannot be replaced')
+        self._event_feed = LibvirtEventFeed(self, check_loop, limit=limit)
+        return self._event_feed.start()
 
     def listAllDomains(self, flags=0):
         require(type(flags) is int and flags == 0, 'complete dedicated-domain inventory required')
@@ -142,8 +151,17 @@ class Connection:
         self._active = False
         for domain in list(self._domains):domain._raw = None
         self._domains.clear()
+        errors = []
+        if self._event_feed is not None:
+            try:self._event_feed.close()
+            except Exception as error:errors.append(error)
         raw, self._raw = self._raw, None
-        if raw is not None:raw.close()
+        if raw is not None:
+            try:raw.close()
+            except Exception as error:errors.append(error)
+        if errors:
+            for error in errors[1:]:errors[0].add_note('libvirt close also failed: ' + str(error))
+            raise errors[0]
 
 
 @contextmanager

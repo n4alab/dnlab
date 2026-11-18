@@ -3411,3 +3411,25 @@ old arm retired, one TERM, zero policy updates, no force, absence verified and
 installed image-build service unchanged. Both native lifecycle canaries remain
 failed evidence; full hold/stop/start qualification and VM gates remain open.
 No new canary was started by the disposal.
+
+The pinned libvirt SDK connection now exposes a bounded lifecycle/reboot event
+feed. Registration uses the official Python callback signatures, one original
+connection, a connection-close callback and an explicit witness for the caller's
+supervised event loop. The feed does not start a thread or register/run an event
+loop itself; libvirt requires the loop to be registered before event subscription
+([SDK event contract](https://libvirt.org/html/libvirt-libvirt-domain.html#virConnectDomainEventRegisterAny)).
+Callbacks retain only UUID/scalar data, never borrowed domain handles. Events
+have local monotonic sequence numbers and remain queued until the consumer
+explicitly acknowledges durable consumption. Overflow, callback errors, loop
+replacement and disconnect latch failure and prevent further SDK operations.
+There is no reconnect, subscription replacement or event dropping on overflow.
+Known registration IDs are retained before postchecks and deregistered on close;
+close still attempts every deregistration and the underlying connection close
+when cleanup reports errors.
+
+The SDK/event-feed/boot/event suites pass 66 synthetic tests. The feed alone is
+not a durable boot event source: the supervised loop, journal consumer and
+original QEMU creation capture still need integration and native qualification.
+It does not interpret a reboot/crash notification as readiness, ordinary shutdown
+or authorization to restart a VM. No native libvirt connection or VM was opened
+by these tests; worker hosts are not needed for this step.
