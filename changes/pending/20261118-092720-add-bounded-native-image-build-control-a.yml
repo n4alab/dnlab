@@ -1,0 +1,14 @@
+id: 20261118-092720-add-bounded-native-image-build-control-a
+type: internal
+title: Add bounded native image-build control adapters
+description: Preserve Docker action acknowledgements, pin the original process for
+  a single pidfd TERM and validate generation-specific shutdown log evidence without
+  retries or forced stop.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

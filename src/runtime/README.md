@@ -3166,3 +3166,26 @@ exercise the real hold controller, journal and process witness with simulated
 process reads and service I/O. Native policy/shutdown/start executors and their
 qualification remain outstanding; these tests neither stop image-build nor open
 a VM gate.
+
+`tools.image_build_control` implements bounded native action primitives for the
+hold executor. `ImageBuildEngine` addresses only the original Docker ID, requires
+HTTP 200 without warnings for a policy update, and an empty HTTP 204 for start;
+HTTP 304 is refused. Responses and timeouts are bounded and no request is retried.
+Its log reader requests a finite, timestamped non-TTY stream from the original
+generation, validates Docker framing, and requires the original Uvicorn process's
+startup/shutdown sequence on stderr. Missing, repeated, reordered or foreign
+generation messages cannot establish this log proof.
+
+`OriginalImageBuildTerm` pins the original PID before the full caller preflight,
+checks its complete process/source capture and namespace PID, and checks identity
+again immediately before one pidfd SIGTERM. Only a valid original pidfd exit
+event is accepted; timeout, error and ambiguous events stay uncertain. The witness
+cannot be reused, even after failure; closing it only closes the descriptor.
+No Docker stop/kill, SIGKILL or fallback is implemented. Process exit and log
+evidence do not by themselves prove ordinary drain, unchanged jobs or cleanup.
+
+Twenty-five synthetic adapter cases pass; 129 tests pass with the related command,
+hold, process, observation, ledger and activity suites. HTTP, pidfd observation and
+signal sending are simulated. Wiring these primitives to the persistent command
+producer, verifying complete postconditions and capturing startup readiness remain
+necessary before an operational hold. No service or VM was affected by these tests.
