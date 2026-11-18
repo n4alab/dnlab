@@ -51,6 +51,8 @@ class LibvirtEventFeed:
             require(raw is self.connection._raw and opaque is self, 'foreign event connection or subscription')
             domain_uuid = domain.UUIDString()
             WorkloadReference('libvirt', 'vm', domain_uuid)
+            domain_id=domain.ID()
+            require(type(domain_id) is int and -1<=domain_id<=2**32-1, 'invalid event domain incarnation ID')
             require(kind == 'reboot' or (type(event) is int and event >= 0
                     and type(detail) is int and detail >= 0), 'malformed lifecycle event')
             with self.lock:
@@ -58,7 +60,7 @@ class LibvirtEventFeed:
                 require(len(self.queue) < self.limit, 'event queue overflow; history incomplete')
                 self.sequence += 1
                 self.queue.append(dict(sequence=self.sequence, uuid=domain_uuid, kind=kind,
-                                       event=event, detail=detail))
+                                       event=event, detail=detail, domain_id=domain_id))
         except Exception as error:
             self._fail(type(error).__name__ + ': ' + str(error))
 

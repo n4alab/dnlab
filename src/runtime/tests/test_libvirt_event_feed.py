@@ -46,8 +46,8 @@ def test_retained_ordered_events_and_explicit_ack(events):
         feed = connection.events(check_loop=e.check_loop, limit=2)
         e.emit(0);e.emit(1)
         result = feed.read(0)
-        assert result['events'] == [dict(sequence=1,uuid=UUID,kind='lifecycle',event=2,detail=0),
-                                    dict(sequence=2,uuid=UUID,kind='reboot',event=None,detail=None)]
+        assert result['events'] == [dict(sequence=1,uuid=UUID,kind='lifecycle',event=2,detail=0,domain_id=22),
+                                    dict(sequence=2,uuid=UUID,kind='reboot',event=None,detail=None,domain_id=22)]
         result['events'][0]['uuid'] = 'foreign'
         assert feed.read(0)['events'][0]['uuid'] == UUID
         assert feed.read(1)['events'][0]['sequence'] == 2
@@ -71,7 +71,7 @@ def test_overflow_latches_loss_and_prevents_domain_mutation(events):
         assert not any(call[0] == 'start' for call in e.case.calls)
 
 
-@pytest.mark.parametrize('fault', ['foreign_connection','foreign_uuid','malformed_detail','boolean_event'])
+@pytest.mark.parametrize('fault', ['foreign_connection','foreign_uuid','malformed_detail','boolean_event','boolean_id'])
 def test_callback_errors_latch_instead_of_being_swallowed(events,fault):
     e = events
     with e.case.connect() as connection:
@@ -79,6 +79,7 @@ def test_callback_errors_latch_instead_of_being_swallowed(events,fault):
         if fault == 'foreign_connection':e.emit(0,raw=object())
         elif fault == 'foreign_uuid':e.emit(0,domain=SimpleNamespace(UUIDString=lambda:'invalid'))
         elif fault == 'malformed_detail':e.emit(0,detail='0')
+        elif fault == 'boolean_id':e.emit(0,domain=SimpleNamespace(UUIDString=lambda:UUID,ID=lambda:True))
         else:e.emit(0,event=True)
         assert feed.failure
         with pytest.raises(RuntimeErrorBase):feed.read(0)

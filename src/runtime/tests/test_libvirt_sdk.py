@@ -28,6 +28,7 @@ def case(monkeypatch):
     class Domain:
         uuid = UUID
         def UUIDString(self):return self.uuid
+        def ID(self):return 22
         def name(self):return 'sample'
         def createWithFlags(self, flags):calls.append(('start', flags))
         def resume(self):calls.append(('resume',))

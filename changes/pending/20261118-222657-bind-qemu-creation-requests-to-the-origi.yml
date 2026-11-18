@@ -1,0 +1,14 @@
+id: 20261118-222657-bind-qemu-creation-requests-to-the-origi
+type: internal
+title: Bind QEMU creation requests to the original libvirt start event
+description: Persist callback incarnation identity and an immutable creation anchor,
+  require that anchor before QMP, and reject missing or replaced event proofs without
+  live-lookup adoption.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

@@ -43,6 +43,8 @@ class LibvirtBootEvents:
             value=dict(id=feed.id,collector_id=self.id,loop_sha256=feed.loop_sha256,epoch_sha256=self.epoch,cursor=0)
             self.journal.db.execute('INSERT INTO vm_libvirt_feeds VALUES(?,?,?)',
                                     (feed.id,canonical(value),fingerprint(value)))
+        from .libvirt_creation_events import LibvirtCreationEvents
+        self.creations=LibvirtCreationEvents(self)
 
     def _feed(self):
         require(fingerprint(self.runtime.check()) == self.epoch, 'original boot collector runtime epoch differs')
@@ -64,7 +66,11 @@ class LibvirtBootEvents:
                     and type(batch['events']) is list and len(batch['events'])<=4096, 'original feed batch differs')
             events=deepcopy(batch['events']);cursor=value['cursor']
             for event in events:
-                fields(event,('sequence','uuid','kind','event','detail'),'raw libvirt event')
+                base={'sequence','uuid','kind','event','detail'}
+                require(type(event) is dict and set(event) in (base,base|{'domain_id'}), 'raw libvirt event fields differ')
+                if 'domain_id' in event:
+                    require(type(event['domain_id']) is int and -1<=event['domain_id']<=2**32-1,
+                            'raw libvirt domain incarnation differs')
                 WorkloadReference('libvirt','vm',event['uuid'])
                 require(type(event['sequence']) is int and event['sequence']==cursor+1
                         and ((event['kind']=='reboot' and event['event'] is None and event['detail'] is None)
@@ -145,6 +151,9 @@ class LibvirtBootEvents:
 
     def _reduce(self, source, event):
         value=self._definition(source);stage=value['boot']['phase']
+        if not self.creations.matches(source,event):
+            source.update(phase='recovery_required',reason='original event domain incarnation changed or is missing')
+            return
         early=stage in ('start_requested','paused','activation_requested','monitored_paused')
         code=(event['event'],event['detail'])
         if event['kind']=='lifecycle' and code in ((2,0),(3,0),(4,0)):
@@ -265,3 +274,9 @@ class LibvirtBootEvents:
             require(domain.state(0)[0]==3, 'original VM must remain paused during event recovery')
             ack=self._active_ack(source);self.verify(ack)
             return ack
+
+    def creation_request(self,value,domain):
+        return self.creations.request(value,domain)
+
+    def query_preflight(self,request):
+        return self.creations.preflight(request)

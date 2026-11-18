@@ -3514,8 +3514,8 @@ protects that lab from cleanup. There is no HMP or free-form command API.
 
 Replies use bounded, duplicate-free JSON, typed unique CPU indexes/TIDs and the
 qualified x86 target. A TID is not the QEMU leader PID; this query does not create
-a process record or authorize adoption. Kernel correlation is implemented below;
-binding it to the original creation event and native qualification remain open.
+a process record or authorize adoption. Kernel correlation and the original
+creation-event binding are implemented below; native qualification remains open.
 libvirt's metadata effect is documented in the
 [monitor dispatcher](https://github.com/libvirt/libvirt/blob/v11.3.0/src/qemu/qemu_driver.c#L12596)
 and [status save](https://github.com/libvirt/libvirt/blob/v11.3.0/src/qemu/qemu_domain.c#L5110);
@@ -3560,6 +3560,24 @@ Missing/replaced proof or a new runtime epoch remains a conflict. The birth entr
 protects its lab from cleanup even when no other VM record is present. Creation,
 correlation, process/query, boot/event and cleanup suites pass 149 synthetic tests,
 including original proc-file correlation through the boot path and lost completion
-recovery with one start/query/capture. The concrete original libvirt-event binding
-for the request/policy providers, native qualification and full VM lifecycle
+recovery with one start/query/capture. The original libvirt-event request provider
+is implemented below; qualified native policy inputs and the full VM lifecycle
 remain outstanding; no native VM, QMP query or worker was used in these tests.
+
+The SDK feed now copies the opaque libvirt incarnation ID from each received
+callback. `LibvirtCreationEvents` binds the first normal-start notification to
+the original source/feed/runtime epoch, definition, paused XML and CPU count in
+an immutable journal anchor. It supplies `LibvirtBootEvents.creation_request`
+and `query_preflight` to the QMP/capture adapters. Preflight can observe an
+existing anchor, never create one from a live lookup. Old events without an ID
+remain readable history but cannot authorize this creation path; no backfill or
+replacement is performed. Mixed, missing or changed incarnation IDs are refused.
+The ID identifies a [libvirt domain incarnation](https://libvirt.org/html/libvirt-libvirt-domain.html#virDomainGetID),
+not a host process.
+
+The anchor independently protects its own lab from cleanup. Source/QMP/kernel/
+persistent-creation/boot suites pass 202 synthetic tests, including the full
+composition, lost completed-birth reply, lost QMP reply without resend, legacy
+event refusal and substituted live incarnation. Qualified native process policy,
+interpreter/SDK bootstrap, storage/TAP composition and operational qualification
+remain outstanding. No VM, QMP command, native dispatch thread or worker was used.

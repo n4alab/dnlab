@@ -15,7 +15,7 @@ from test_vm_boot import boot, definition, template, instance
 def event_boot(boot,monkeypatch):
     driver,operation,state,process,original=boot
     journal=driver.journal;domain=state['domains'][original['birth']['uuid']]
-    control=dict(epoch=dict(id='e'*32),clock=0.0,fail_ack=False,omit_started=False)
+    control=dict(epoch=dict(id='e'*32),clock=0.0,fail_ack=False,omit_started=False,domain_id=22)
     class Feed:
         connection=driver.definitions.connection
         id='d'*32
@@ -38,9 +38,10 @@ def event_boot(boot,monkeypatch):
                 assert row is not None, 'queue ack before durable commit'
             self.acknowledged=sequence
             self.queue=[event for event in self.queue if event['sequence']>sequence]
-        def emit(self,event=None,detail=None,*,kind='lifecycle',uuid=None):
+        def emit(self,event=None,detail=None,*,kind='lifecycle',uuid=None,domain_id=None):
             self.sequence+=1
-            self.queue.append(dict(sequence=self.sequence,uuid=uuid or original['birth']['uuid'],kind=kind,event=event,detail=detail))
+            self.queue.append(dict(sequence=self.sequence,uuid=uuid or original['birth']['uuid'],kind=kind,event=event,detail=detail,
+                                   domain_id=control['domain_id'] if domain_id is None else domain_id))
     feed=Feed()
     def pause(seconds):control['clock']+=seconds
     source=LibvirtBootEvents(driver.definitions,feed,runtime=SimpleNamespace(check=lambda:deepcopy(control['epoch'])),
@@ -62,6 +63,7 @@ def event_boot(boot,monkeypatch):
         result=resume(self);feed.emit(4,0);return result
     monkeypatch.setattr(domain_type,'createWithFlags',started)
     monkeypatch.setattr(domain_type,'resume',resumed)
+    monkeypatch.setattr(domain_type,'ID',lambda self:control['domain_id'],raising=False)
     return SimpleNamespace(driver=driver,source=source,operation=operation,state=state,process=process,
                            original=original,feed=feed,control=control)
 
