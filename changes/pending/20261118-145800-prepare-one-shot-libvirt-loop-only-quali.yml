@@ -1,0 +1,14 @@
+id: 20261118-145800-prepare-one-shot-libvirt-loop-only-quali
+type: internal
+title: Prepare one-shot libvirt loop-only qualification
+description: Scope the loop canary to its original runtime, retain pending results
+  on conflict, and require separate original-process exit evidence before cleanup
+  can be claimed.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

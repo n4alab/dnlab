@@ -3477,3 +3477,16 @@ cases, plus 7 cleanup-inventory cases. The joint fixture verifies registration
 before SDK open using the real supervisor/connection code and fake SDK/thread
 providers. No native dispatch thread or libvirt connection was started. Native
 loop qualification and original QEMU birth capture remain required before VM boot.
+
+`tools/libvirt_event_loop_canary.py` prepares a one-shot loop-only qualification
+inside an explicitly scoped canary process. It takes the original runtime/SDK
+and scope preflight, records intent before starting the loop, requires further
+dispatch progress and retires the original witness. It never opens a hypervisor
+connection, starts a subprocess or performs a domain action. A changed scope or
+uncertain SDK operation leaves the original journal pending without retry.
+Its success result is deliberately `awaiting_process_exit`: dispatch qualification
+does not prove cleanup while the process-lifetime thread still runs. The external
+parent must qualify the original process exit; `cleanup_verified` and
+`gate_allowed` remain false. Canary/supervisor suites pass 23 synthetic tests.
+No native canary was executed by this preparation. This work is independent of
+the pending decision on QMP-based QEMU identity capture.
