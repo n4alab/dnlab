@@ -1,0 +1,14 @@
+id: 20261118-095941-prepare-isolated-image-build-lifecycle-c
+type: internal
+title: Prepare isolated image-build lifecycle canary guards
+description: Define immutable-image canary payload and phase-specific identity, mount
+  and privilege checks using the existing durable fixture birth protocol, without
+  running containers.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

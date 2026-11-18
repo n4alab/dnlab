@@ -3274,3 +3274,21 @@ ID comes from the saved service rollout proof. Only a new private report/journal
 and the executing runtime's own epoch were created; no service was affected.
 The isolated lifecycle canary and an agreed operational window remain necessary
 before using this assembly to hold the installed service for a VM gate.
+
+`tools.image_build_canary` prepares the dedicated lifecycle canary payload and
+its phase-specific isolation checks. It performs no Docker operation. Creation
+must use the existing `NosFixture` durable intent/nonce/ID protocol. The payload
+uses the immutable local image ID, clears inherited effective Compose roles,
+keeps network `none`, no published ports or Docker socket, read-only rootfs,
+all capabilities dropped and private persistent workspace/log binds. The original
+checkout bind is read-only. Every image-declared volume is covered explicitly;
+unexpected volumes and overlapping writable/checkouts paths are refused.
+
+Qualification requires the original fixture creator/birth labels, exact container
+ID/configuration, the explicit lifecycle/policy and intended host restrictions.
+Realized bind mounts are mandatory when running; empty unrealized mounts are
+accepted only before start or after exit, while configured binds remain exact.
+Foreign/extra mounts, writable checkout and owner substitutions are conflicts.
+Twelve new pure payload/guard cases plus ten existing fixture birth/recovery cases
+pass. No image was built, container created or service changed by this preparation;
+the runnable canary driver and its operational evidence remain outstanding.
