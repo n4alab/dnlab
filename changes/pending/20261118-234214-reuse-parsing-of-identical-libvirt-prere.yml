@@ -1,0 +1,14 @@
+id: 20261118-234214-reuse-parsing-of-identical-libvirt-prere
+type: internal
+title: Reuse parsing of identical libvirt prerequisite package data
+description: Cache only the pure parse of identical dpkg bytes and selected package
+  names, isolate mutable results, and preserve every host read, hash and double observation
+  during libvirt preparation.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

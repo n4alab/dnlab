@@ -10,6 +10,7 @@ import pytest
 from dnlab_runtime.libvirt_service_profile import render_profile
 from dnlab_runtime.manifest import Conflict
 from tools.libvirt_install_preflight import collect
+from tools.libvirt_install_preflight import packages, _parsed_packages
 from test_libvirt_service_profile import request_profile
 
 
@@ -78,3 +79,37 @@ def test_symlink_binary_is_not_followed_or_qualified(fixture):
     assert any('daemon executable differs' in s for s in result['blocking_findings'])
     assert result['observed']['paths']['/usr/sbin/libvirtd']['followed'] is False
     assert target.read_text()=='preserve'
+
+
+def package_row(name,version):
+    return f'Package: {name}\nVersion: {version}\nArchitecture: amd64\nStatus: install ok installed\n\n'.encode()
+
+
+def test_identical_package_bytes_reuse_only_parse_and_return_independent_facts():
+    _parsed_packages.cache_clear()
+    raw=package_row('selected','1');expected={'selected':'1'}
+    first=packages(raw,expected);first['selected']['Version']='caller changed return'
+    second=packages(raw,expected)
+    assert second['selected']['Version']=='1'
+    assert _parsed_packages.cache_info().hits==1
+    assert packages(package_row('selected','2'),expected)['selected']['Version']=='2'
+    assert _parsed_packages.cache_info().currsize==1
+
+
+def test_package_selection_and_malformed_replacement_cannot_reuse_prior_facts():
+    raw=package_row('first','1')+package_row('second','2')
+    assert set(packages(raw,{'first':'1'}))=={'first'}
+    assert set(packages(raw,{'second':'2'}))=={'second'}
+    with pytest.raises(Conflict,match='ambiguous expected'):
+        packages(raw+package_row('second','3'),{'second':'2'})
+
+
+def test_cached_parse_preserves_full_observation_reads(fixture,monkeypatch):
+    import tools.libvirt_install_preflight as module
+    root,request,expected,_=fixture;original=module.regular;reads=[]
+    def regular(fd,path,limit):
+        if path=='var/lib/dpkg/status':reads.append(path)
+        return original(fd,path,limit)
+    monkeypatch.setattr(module,'regular',regular)
+    first=collect(root,request,expected);second=collect(root,request,expected)
+    assert first==second and len(reads)==4

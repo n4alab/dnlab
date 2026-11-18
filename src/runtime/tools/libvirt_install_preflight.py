@@ -4,6 +4,8 @@ This does not qualify live systemd/process state, NSS identities, device access
 or the provisioning window. Host collection requires an explicit CLI switch.
 """
 import argparse
+from copy import deepcopy
+from functools import lru_cache
 import hashlib
 import json
 import os
@@ -32,7 +34,8 @@ def accounts(raw,kind):
     return result
 
 
-def packages(raw,expected):
+@lru_cache(maxsize=1)
+def _parsed_packages(raw,expected):
     result={}
     for paragraph in raw.decode('utf-8').split('\n\n'):
         values={}
@@ -48,6 +51,14 @@ def packages(raw,expected):
             raise Conflict('ambiguous expected package identity')
         result[name]=values
     return result
+
+
+def packages(raw,expected):
+    # Cache only the pure parse of identical bytes and selected names. Host file
+    # reads, content hashes and double observations still execute on every call.
+    if type(raw) is not bytes:
+        return _parsed_packages.__wrapped__(raw,expected)
+    return deepcopy(_parsed_packages(raw,frozenset(expected)))
 
 
 def collect(root,request,expected_packages):
