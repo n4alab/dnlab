@@ -1,0 +1,14 @@
+id: 20261118-095207-assemble-original-image-build-hold-provi
+type: internal
+title: Assemble original image-build hold providers into one session
+description: Wire qualified runtime, observers and native actions with explicit window
+  and cleanup providers, keeping readonly observation separate from prepare and service
+  mutations.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

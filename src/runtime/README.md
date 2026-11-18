@@ -3254,3 +3254,23 @@ native readonly capture and provider recheck verified the original lock,
 without Git commands or service mutations. The full native hold assembly and
 isolated lifecycle canary remain outstanding; no hold or VM gate is granted by
 the binding receipt alone.
+
+`tools.image_build_session.ImageBuildSession` assembles the original runtime
+epoch, observer, persistent commands and native executor. Qualified binding,
+ledger, activity, context, operator-window and cleanup providers are explicit;
+window/cleanup have no permissive defaults. Runtime and service contexts must
+match before assembly writes its command tables. The default query provider is
+the pinned namespace reader, and original exit/startup receipts resolve through
+the same command journal rather than caller-created replacement references.
+
+Construction does not create a hold. `observe` performs only the readonly
+observation; `prepare`, `acquire`, `held` and `restore` remain distinct calls.
+Six synthetic assembly cases cover readonly observation, full simulated lifecycle,
+inactive windows, foreign contexts and missing authorization providers. A native
+observe-only assembly with the actual providers and an explicit inactive window
+verified the original running service, unchanged ledger and aligned binding with
+zero hold intents, commands or resource reservations. The original Docker network
+ID comes from the saved service rollout proof. Only a new private report/journal
+and the executing runtime's own epoch were created; no service was affected.
+The isolated lifecycle canary and an agreed operational window remain necessary
+before using this assembly to hold the installed service for a VM gate.
