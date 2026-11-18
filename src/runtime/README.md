@@ -3581,3 +3581,14 @@ composition, lost completed-birth reply, lost QMP reply without resend, legacy
 event refusal and substituted live incarnation. Qualified native process policy,
 interpreter/SDK bootstrap, storage/TAP composition and operational qualification
 remain outstanding. No VM, QMP command, native dispatch thread or worker was used.
+
+The loop-only canary child now composes the original `RuntimeProcess` with the
+SDK loader and dispatcher after the parent's release frame. Source/profile
+checks bracket runtime capture, SDK loading and the final report. EOF closes
+the child's runtime witness; only the original parent can qualify process exit.
+The bounded pipe codec preserves coalesced frame tails, rejects duplicate JSON
+keys, nonfinite values and partial EOF, and bounds reads/writes and their waits.
+The child, parent, loop and runtime suites pass 74 synthetic tests, including a
+real runtime epoch persisted using synthetic proc/pidfd providers. The native
+inherited-FD launcher, qualified SDK import provider and operational canary are
+still outstanding; this preparation does not open a hypervisor connection.

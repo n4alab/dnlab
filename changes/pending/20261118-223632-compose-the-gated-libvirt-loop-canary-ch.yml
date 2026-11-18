@@ -1,0 +1,14 @@
+id: 20261118-223632-compose-the-gated-libvirt-loop-canary-ch
+type: internal
+title: Compose the gated libvirt loop canary child
+description: Capture the original runtime epoch and load the qualified SDK only after
+  parent release; add bounded pipe framing with retained frame tails and explicit
+  EOF.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
