@@ -1,0 +1,14 @@
+id: 20261118-094632-verify-original-image-build-lock-and-che
+type: internal
+title: Verify original image-build lock and checkout without Git execution
+description: Add scoped readonly lock/archive and checkout binding receipts for the
+  hold preflight, preserving original evidence and accepting the agreed HTTPS or SSH
+  remote forms.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

@@ -3232,3 +3232,25 @@ qualification completed the three GETs on the original image-build process with
 ten unchanged terminal jobs and matching API binding, without extra helper
 processes, signals or service changes. This qualifies the query provider only;
 filesystem lock/checkout binding and the complete operational hold remain separate.
+
+`tools.image_build_binding` supplies that filesystem binding without executing
+Git. A captured receipt pins the protected checkout/Git directories, HEAD,
+selected branch ref and local `dnlab` remote. Detached HEAD at the original
+commit or the original `dnlab` loose/packed branch ref are supported. HTTPS and
+SSH forms of the agreed n4alab/vrnetlab remote are accepted. Other Git settings
+remain opaque, including VSCode entries; they are not validated as configuration
+policy and no include/hook/helper path is followed. File proofs detect changes
+during and after the original capture rather than adopting a new baseline.
+
+The original release lock is read through the fixed container's readonly Docker
+archive endpoint, including while stopped. A bounded single regular root-owned
+0644 member must match the original source hash; no archive is extracted.
+Repository, branch and immutable commit must match the aligned original binding.
+Context, paths and lock bytes are checked across repeated observations.
+
+Seventeen temporary-file/archive cases pass; 170 related tests pass. A separate
+native readonly capture and provider recheck verified the original lock,
+`b37f5fa8ff2097ce3a433e6c2486a9132d96970e` checkout and matching HTTPS remote,
+without Git commands or service mutations. The full native hold assembly and
+isolated lifecycle canary remain outstanding; no hold or VM gate is granted by
+the binding receipt alone.

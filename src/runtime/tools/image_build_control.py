@@ -7,11 +7,13 @@ from contextlib import contextmanager
 from copy import deepcopy
 from datetime import datetime
 import hashlib
+import io
 import json
 import os
 import re
 import select
 import signal
+import tarfile
 from urllib.parse import urlencode
 
 from cleanup_container_observer import LinuxProcess
@@ -54,6 +56,22 @@ class ImageBuildEngine:
         query=urlencode(dict(stdout='1',stderr='1',timestamps='1',since=started_at,tail='4096'))
         raw=self._request('/logs?'+query,None,200,method='GET',limit=1024*1024)
         return shutdown_log_proof(raw,started_at,namespace_pid)
+
+    def lock_asset(self, expected_sha256):
+        require(digest(expected_sha256), 'original runtime lock hash required')
+        path='/opt/dnlab-image-build/vrnetlab.lock.json'
+        raw=self._request('/archive?'+urlencode(dict(path=path)),None,200,method='GET',limit=65536)
+        with tarfile.open(fileobj=io.BytesIO(raw),mode='r:') as archive:
+            members=archive.getmembers()
+            require(len(members)==1, 'single original runtime lock archive member required')
+            member=members[0]
+            require(member.name=='vrnetlab.lock.json' and member.isfile()
+                    and member.uid==0 and member.gid==0 and member.mode==0o644 and 0<member.size<=16384,
+                    'original regular root-owned runtime lock required')
+            with archive.extractfile(member) as stream:data=stream.read(16385)
+        require(len(data)==member.size and hashlib.sha256(data).hexdigest()==expected_sha256,
+                'original runtime lock bytes differ')
+        return data
 
 
 def timestamp(value):
