@@ -3592,3 +3592,16 @@ The child, parent, loop and runtime suites pass 74 synthetic tests, including a
 real runtime epoch persisted using synthetic proc/pidfd providers. The native
 inherited-FD launcher, qualified SDK import provider and operational canary are
 still outstanding; this preparation does not open a hypervisor connection.
+
+`LoopSDK` supplies the child SDK import provider. It pins and authenticates the
+explicit Python source and ELF extension, loads the extension through its file
+descriptor and compiles the verified source bytes without site hooks, sys.path
+changes or bytecode caches. An isolated `-B -I -S` interpreter and fresh module
+bindings are required. An import intent is saved before either initializer;
+uncertain imports remain pending and never remove modules to enable retry.
+Completed imports recheck original files, module bindings and the durable receipt.
+The child checks that same SDK before dispatch, during preflight and before its
+report. Native shared-library compatibility remains Debian's package contract.
+The SDK/child/parent/loop/runtime suites pass 92 synthetic tests; the native
+extension loader is simulated and only temporary Python source executes. Native
+SDK import and inherited-FD process launch remain to be qualified operationally.

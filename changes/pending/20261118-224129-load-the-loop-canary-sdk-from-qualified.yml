@@ -1,0 +1,14 @@
+id: 20261118-224129-load-the-loop-canary-sdk-from-qualified
+type: internal
+title: Load the loop canary SDK from qualified files
+description: Import fixed libvirt source and native extension through pinned files
+  in the isolated child, persist one-shot provenance and recheck original module bindings
+  without changing sys.path or connecting to a hypervisor.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

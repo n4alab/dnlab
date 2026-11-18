@@ -37,7 +37,7 @@ def child():
         assert preflight()==dict(purpose='isolated-libvirt-loop-canary',
             runtime_epoch_sha256=fingerprint(epoch),hypervisor_connections_allowed=False,domain_actions_allowed=False)
         return dict(phase='awaiting_process_exit')
-    kwargs=dict(verify_sources=lambda:state['sources'],load_sdk=load,read_frame=receive,
+    kwargs=dict(verify_sources=lambda:state['sources'],load_sdk=load,check_sdk=lambda:sdk,read_frame=receive,
         write_frame=state['frames'].append,runtime_factory=Runtime,runner=runner)
     return SimpleNamespace(request=request,profile=profile,epoch=epoch,state=state,journal=journal,kwargs=kwargs)
 
@@ -99,6 +99,13 @@ def test_extra_parent_frame_is_refused_after_report(child):
     assert len(calls)==2 and e.state['closed'] and len(e.state['frames'])==2
 
 
+def test_sdk_substitution_after_loading_prevents_loop_dispatch(child):
+    e=child;e.kwargs['check_sdk']=object
+    with pytest.raises(RuntimeErrorBase,match='loaded SDK binding differs'):
+        run_child(e.request,e.profile,e.journal,**e.kwargs)
+    assert e.state['closed'] and 'loop' not in e.state['events'] and len(e.state['frames'])==1
+
+
 def codec(blocks):
     chunks=list(blocks);written=[]
     def read(fd,count):
@@ -147,7 +154,7 @@ def test_child_persists_real_runtime_epoch_and_closes_only_its_witness(tmp_path)
     snapshot=dict(record=dict(boot_id='12345678-1234-4234-8234-123456789abc',pid=123,
         start_ticks=456,uid=0,gid=0,executable_sha256='a'*64,namespace_sha256=fingerprint(spaces)),
         namespaces=spaces,proc_identity=[4,800],cmdline_sha256='b'*64)
-    request=dict(nonce='d'*32,command={});written=[];captured=[]
+    request=dict(nonce='d'*32,command={});written=[];captured=[];sdk=object()
     class Poll:
         def register(self,fd,events):pass
         def poll(self,timeout):return []
@@ -166,7 +173,7 @@ def test_child_persists_real_runtime_epoch_and_closes_only_its_witness(tmp_path)
                     qualified=True,cleanup_verified=False,requires_original_process_exit=True,gate_allowed=False)
     try:
         assert run_child(request,profile,journal,verify_sources=lambda:profile['sources_sha256'],
-            load_sdk=object,read_frame=lambda:next(frames),write_frame=written.append,
+            load_sdk=lambda:sdk,check_sdk=lambda:sdk,read_frame=lambda:next(frames),write_frame=written.append,
             runtime_factory=factory,runner=runner)==0
         saved=journal.db.execute('SELECT payload FROM vm_runtime_epochs').fetchone()[0]
         assert json.loads(saved)==written[1]['epoch'] and captured[0].fd is None

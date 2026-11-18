@@ -78,7 +78,7 @@ class ChildFrames:
             packet=packet[count:]
 
 
-def run_child(request, profile, journal, *, verify_sources, load_sdk, read_frame,
+def run_child(request, profile, journal, *, verify_sources, load_sdk, check_sdk, read_frame,
               write_frame, runtime_factory=RuntimeProcess, runner=run_loop):
     """Compose an original RuntimeProcess and loop after the release boundary.
 
@@ -87,7 +87,7 @@ def run_child(request, profile, journal, *, verify_sources, load_sdk, read_frame
     """
     fields(request,('nonce','command'),'loop child request')
     expected=deepcopy(profile);request_sha256=fingerprint(request)
-    require(all(callable(fn) for fn in (verify_sources,load_sdk,read_frame,write_frame,runtime_factory,runner)),
+    require(all(callable(fn) for fn in (verify_sources,load_sdk,check_sdk,read_frame,write_frame,runtime_factory,runner)),
             'qualified original child providers required')
     def sources():
         value=verify_sources()
@@ -103,15 +103,18 @@ def run_child(request, profile, journal, *, verify_sources, load_sdk, read_frame
         epoch=runtime.start()
         require(epoch['profile']==expected, 'original child runtime profile differs')
         sources();sdk=load_sdk();sources()
+        require(check_sdk() is sdk, 'original loaded SDK binding differs')
         require(runtime.check()==epoch, 'original child runtime changed during SDK load')
         scope=dict(purpose='isolated-libvirt-loop-canary',runtime_epoch_sha256=fingerprint(epoch),
                    hypervisor_connections_allowed=False,domain_actions_allowed=False)
         def preflight():
             sources()
+            require(check_sdk() is sdk, 'original loaded SDK binding differs')
             require(runtime.check()==epoch, 'original child runtime changed during canary')
             return deepcopy(scope)
         result=runner(runtime,sdk,preflight=preflight)
         sources()
+        require(check_sdk() is sdk, 'original loaded SDK binding differs before report')
         require(runtime.check()==epoch, 'original child runtime changed before report')
         write_frame(dict(result=result,epoch=epoch,request_sha256=request_sha256))
         require(read_frame() is None, 'original parent EOF required after child report')
