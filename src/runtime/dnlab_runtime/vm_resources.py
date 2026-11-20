@@ -42,3 +42,31 @@ class VMResourcePreflight:
             self.definitions._session(value)
             return dict(request_fingerprint=value['request_fingerprint'], session_sha256=value['session_sha256'],
                         assets_verified=True, overlays_verified=True, endpoints_verified=True)
+
+
+class VMResourceRegistry:
+    """Dispatch resource checks by the persisted creator, never by last use."""
+    def __init__(self, definitions):
+        self.definitions, self.journal = definitions, definitions.journal
+        self._original = {}
+
+    def register(self, capability):
+        require(isinstance(capability,VMResourcePreflight) and capability.definitions is self.definitions,
+                'original VM resource capability required')
+        with self.journal.execution_lock:
+            operation = capability.operation
+            existing = self._original.get(operation)
+            if existing is not None:
+                require(existing.storage.directories is capability.storage.directories
+                        and existing.taps is capability.taps
+                        and existing.storage.read(operation) == capability.storage.read(operation),
+                        'original VM resource registration cannot change')
+                return existing
+            self._original[operation] = capability
+            return capability
+
+    def __call__(self, value):
+        with self.journal.execution_lock:
+            operation = value['birth']['creator_operation_id']
+            require(operation in self._original, 'original VM resource capability not registered')
+            return self._original[operation](value)

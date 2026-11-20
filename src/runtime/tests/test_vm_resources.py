@@ -1,10 +1,12 @@
 """Whole resource admission with real controllers and synthetic host adapters."""
 from copy import deepcopy
+from threading import RLock
+from types import SimpleNamespace
 
 import pytest
 
 from dnlab_runtime.manifest import RuntimeErrorBase
-from dnlab_runtime.vm_resources import VMResourcePreflight
+from dnlab_runtime.vm_resources import VMResourcePreflight, VMResourceRegistry
 from test_vm_directory_storage import storage, directories, definition, template, instance
 from test_vm_taps import taps as taps_fixture
 from test_vm_boot import boot as boot_fixture
@@ -51,3 +53,27 @@ def test_complete_resource_preflight_rejects_conflict_before_define(resources,fa
     else:state['assets']=False
     with pytest.raises(RuntimeErrorBase):definitions.apply(operation)
     assert not domains['domains'] and definitions.read(operation)['phase']=='prepared'
+
+
+def test_resource_registry_dispatches_original_creator_instead_of_last_registration(monkeypatch):
+    definitions=SimpleNamespace(journal=SimpleNamespace(execution_lock=RLock()))
+    registry=VMResourceRegistry(definitions);calls=[]
+    def capability(operation):
+        item=object.__new__(VMResourcePreflight)
+        item.definitions=definitions;item.operation=operation
+        item.storage=SimpleNamespace(directories=object(),read=lambda op:dict(id=op))
+        item.taps=object()
+        return item
+    def verify(self,value):
+        assert value['birth']['creator_operation_id']==self.operation
+        calls.append(self.operation);return self.operation
+    monkeypatch.setattr(VMResourcePreflight,'__call__',verify)
+    first,second=capability('first'),capability('second')
+    registry.register(first);registry.register(second)
+    assert registry(dict(birth=dict(creator_operation_id='first')))=='first'
+    assert registry(dict(birth=dict(creator_operation_id='second')))=='second'
+    assert calls==['first','second']
+    with pytest.raises(RuntimeErrorBase,match='not registered'):
+        registry(dict(birth=dict(creator_operation_id='foreign')))
+    with pytest.raises(RuntimeErrorBase,match='cannot change'):registry.register(capability('first'))
+    assert registry.register(first) is first

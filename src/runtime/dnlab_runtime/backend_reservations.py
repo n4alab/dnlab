@@ -45,7 +45,8 @@ def vm_reservations(journal, lab, node, *, domain_uuid=None):
         tables = {row[0] for row in journal.db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         result = []
         for table in ('vm_definition_intents', 'vm_event_streams', 'vm_storage_intents', 'vm_definition_retirements',
-                      'vm_tap_intents','vm_tap_actors','vm_tap_creators','vm_tap_tasks','vm_runtime_references','vm_directory_intents'):
+                      'vm_tap_intents','vm_tap_actors','vm_tap_creators','vm_tap_tasks','vm_runtime_references',
+                      'vm_directory_intents','vm_initial_starts'):
             if table not in tables:continue
             for row in journal.db.execute(f'SELECT * FROM {table} ORDER BY id'):
                 try:
@@ -59,6 +60,9 @@ def vm_reservations(journal, lab, node, *, domain_uuid=None):
                     if table == 'vm_event_streams' and row['domain_uuid'] != birth['uuid']:raise ValueError('owner')
                     if table == 'vm_storage_intents' and (row['domain_uuid'] != birth['uuid']
                             or row['id'] != birth['creator_operation_id']):raise ValueError('owner')
+                    if table == 'vm_initial_starts' and (row['id'] != birth['creator_operation_id']
+                            or value['id'] != row['id'] or value['phase'] not in ('pending','running')):
+                        raise ValueError('owner')
                     if table == 'vm_directory_intents' and (row['domain_uuid'] != birth['uuid']
                             or row['id'] != birth['creator_operation_id'] or value['id'] != row['id']
                             or value['spec']['path'] != row['path']):raise ValueError('owner')

@@ -1,0 +1,14 @@
+id: 20261120-234223-coordinate-original-initial-vm-start-acr
+type: internal
+title: Coordinate original initial VM start across resource controllers
+description: Persist the initial VM request before allocation, compose directory/storage/TAP
+  admission and one-shot definition/boot, keep uncertain operations pending, and dispatch
+  resource checks by the original creator across workloads.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

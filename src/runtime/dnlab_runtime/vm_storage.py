@@ -18,6 +18,30 @@ from .qemu_process import validate_process_record
 from .vm_template import digest, fields, require, template_digest, validate_template
 
 
+def disk_plan(definition, template, bundle_root, session_profile):
+    template = validate_template(template)
+    require(template_digest(template) == definition['birth']['template_sha256'], 'original VM disk template differs')
+    absolute(bundle_root)
+    xml = ET.fromstring(definition['xml'])
+    require(not xml.findall('os/nvram'), 'writable NVRAM needs a separate qualified storage adapter')
+    disks = xml.findall('devices/disk')
+    require(len(disks) == len(template['hardware']['disks']), 'complete original VM disk inventory required')
+    session = session_profile
+    result = []
+    for declared, disk in zip(template['hardware']['disks'], disks):
+        target = disk.find('target'); source = disk.find('source'); driver = disk.find('driver')
+        require(target is not None and target.attrib == dict(dev=declared['target'], bus=declared['bus'])
+                and source is not None and driver is not None and driver.get('type') == 'qcow2',
+                'original VM disk target/format differs')
+        base = template['assets'][declared['asset']]
+        path = absolute(source.get('file'))
+        require(not PurePosixPath(path).is_relative_to(bundle_root), 'overlay must be outside immutable VM bundle')
+        result.append(dict(id=declared['id'], path=path, base_path=str(PurePosixPath(bundle_root) / base['path']),
+                           base_sha256=base['sha256'], base_format=base['format'],
+                           uid=session['uid'], gid=session['gid'], mode=0o600))
+    return result
+
+
 class VMStorage:
     def __init__(self, definitions, *, assets, files, writers):
         require(callable(assets) and callable(writers)
@@ -30,27 +54,7 @@ class VMStorage:
                 '(id TEXT PRIMARY KEY,domain_uuid TEXT UNIQUE NOT NULL,payload TEXT NOT NULL,fingerprint TEXT NOT NULL)')
 
     def _plan(self, definition, template, bundle_root):
-        template = validate_template(template)
-        require(template_digest(template) == definition['birth']['template_sha256'], 'original VM disk template differs')
-        absolute(bundle_root)
-        xml = ET.fromstring(definition['xml'])
-        require(not xml.findall('os/nvram'), 'writable NVRAM needs a separate qualified storage adapter')
-        disks = xml.findall('devices/disk')
-        require(len(disks) == len(template['hardware']['disks']), 'complete original VM disk inventory required')
-        session = self.definitions.session.profile
-        result = []
-        for declared, disk in zip(template['hardware']['disks'], disks):
-            target = disk.find('target'); source = disk.find('source'); driver = disk.find('driver')
-            require(target is not None and target.attrib == dict(dev=declared['target'], bus=declared['bus'])
-                    and source is not None and driver is not None and driver.get('type') == 'qcow2',
-                    'original VM disk target/format differs')
-            base = template['assets'][declared['asset']]
-            path = absolute(source.get('file'))
-            require(not PurePosixPath(path).is_relative_to(bundle_root), 'overlay must be outside immutable VM bundle')
-            result.append(dict(id=declared['id'], path=path, base_path=str(PurePosixPath(bundle_root) / base['path']),
-                               base_sha256=base['sha256'], base_format=base['format'],
-                               uid=session['uid'], gid=session['gid'], mode=0o600))
-        return result
+        return disk_plan(definition,template,bundle_root,self.definitions.session.profile)
 
     def read(self, operation):
         with self.journal.lock:
