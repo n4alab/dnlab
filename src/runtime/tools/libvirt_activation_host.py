@@ -10,7 +10,7 @@ import re
 import subprocess
 import sys
 
-RUNTIME = Path('/opt/dnlab/src/runtime')
+RUNTIME = Path(__file__).resolve().parents[1]
 OUTPUT_PARENT = Path('/var/lib/dnlab-runtime-spikes')
 INPUTS = (
     'installed.json', 'journal-reference.json', 'journal-binding.json', 'postboot.json',

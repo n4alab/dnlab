@@ -1,0 +1,13 @@
+id: 20261120-225943-bind-libvirt-activation-recipes-to-their
+type: internal
+title: Bind libvirt activation recipes to their own runtime tree
+description: Allow the reviewed activation entry to freeze and verify its own runtime
+  copy so unrelated checkout development does not invalidate an in-flight activation.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

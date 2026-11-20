@@ -9,7 +9,9 @@ from dnlab_runtime.libvirt_observer import LibvirtDomainObserver
 from dnlab_runtime.manifest import RuntimeErrorBase
 from dnlab_runtime.qemu_creation_process import QEMUCreationProcess
 from dnlab_runtime.qemu_process import PinnedQEMUProcess
+from dnlab_runtime.vm_writer_census import SessionWriterCensus, UNITS
 from dnlab_runtime.vm_qemu_creation import VMQEMUCreation
+from test_vm_storage import make_storage
 from test_libvirt_boot_events import event_boot, boot, definition, template, instance
 from test_qemu_creation_process import creation, process, observer
 
@@ -87,3 +89,62 @@ def test_lost_qmp_reply_cannot_reissue_query_or_acquire_process_on_recovery(pipe
     with pytest.raises(OSError):p.driver.apply(e.operation)
     with pytest.raises(RuntimeErrorBase):p.driver.recover_creation(e.operation)
     assert p.control==dict(queries=1,correlations=0) and e.state['starts']==1 and e.state['resumes']==0
+
+
+@pytest.fixture
+def pending_birth_with_storage(pipeline,template,monkeypatch):
+    p=pipeline;e=p.events;definitions=p.driver.definitions
+    storage,_,files,_,_=make_storage(definitions,e.original['birth'],template)
+    storage.apply(e.operation)
+    save=p.capture._save;lost=[]
+    def completed(record):
+        save(record)
+        if record['phase']=='completed' and not lost:
+            lost.append(True);raise OSError('lost birth completion before boot publication')
+    monkeypatch.setattr(p.capture,'_save',completed)
+    with pytest.raises(OSError,match='before boot publication'):p.driver.apply(e.operation)
+    current=definitions.read(e.operation)
+    record=deepcopy(p.capture._read(current)['receipt']['process_record'])
+    session=definitions.session.profile
+    services={unit:dict(pid=i,start_ticks=i+100,boot_id=definitions.session.proof()['daemon']['boot_id'],
+        namespaces=deepcopy(record['namespaces']),pidfd_alive=True,uids=[session['uid']]*4,
+        gids=[session['gid']]*4,groups=[],executable_sha256='e'*64,argv=['synthetic'],environment={})
+        for i,unit in enumerate(UNITS,10)}
+    rows=[{key:value[key] for key in ('pid','uids','gids','groups')} for value in services.values()]
+    rows.append(dict(pid=record['process']['pid'],uids=[record['uid']]*4,gids=[record['gid']]*4,groups=[]))
+    storage.writers=SessionWriterCensus(definitions,inventory=lambda:deepcopy(rows),services=services,
+        observe_services=lambda:deepcopy(services),observer=p.driver.observer)
+    original=definitions.preflight
+    def resources(value):
+        storage.observe(e.operation)
+        return original(value)
+    definitions.preflight=resources
+    from types import SimpleNamespace
+    return SimpleNamespace(pipeline=p,storage=storage,files=files,record=record)
+
+
+def test_completed_birth_recovery_runs_full_storage_and_writer_preflight(pending_birth_with_storage):
+    e=pending_birth_with_storage;p=e.pipeline;operation=p.events.operation
+    recovered=p.driver.recover_creation(operation)
+    assert recovered['boot']['phase']=='paused' and recovered['boot']['process_record']==e.record
+    assert e.storage.writers(e.storage.read(operation))==[e.record]
+    assert e.files['creates']==1 and p.control==dict(queries=1,correlations=1)
+    assert p.events.state['starts']==1 and p.events.state['resumes']==0
+    assert p.driver.apply(operation)['boot']['phase']=='running'
+    assert e.storage.observe(operation)['phase']=='ready'
+    assert p.control==dict(queries=1,correlations=1)
+    assert p.events.state['starts']==1 and p.events.state['resumes']==1
+
+
+def test_conflicting_overlay_rolls_back_boot_publication_and_preserves_birth(pending_birth_with_storage):
+    e=pending_birth_with_storage;p=e.pipeline;operation=p.events.operation
+    value=p.driver.definitions.read(operation);original=p.capture._read(value)
+    path=e.storage.read(operation)['items'][0]['spec']['path']
+    e.files['files'][path]['identity']['inode']+=1
+    with pytest.raises(RuntimeErrorBase,match='missing or replaced'):p.driver.recover_creation(operation)
+    current=p.driver.definitions.read(operation)
+    assert current['boot']['phase']=='start_requested'
+    assert current['boot']['process_record'] is None and current['boot']['reference'] is None
+    assert p.capture._read(current)==original
+    assert e.files['creates']==1 and p.control==dict(queries=1,correlations=1)
+    assert p.events.state['starts']==1 and p.events.state['resumes']==0

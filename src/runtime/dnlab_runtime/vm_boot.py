@@ -88,7 +88,7 @@ class VMBootDriver:
                 self.definitions._save(operation_id, value)
             return self.definitions.read(operation_id)
 
-    def _advance(self, operation_id, before, after, **updates):
+    def _advance(self, operation_id, before, after, *, validate=None, **updates):
         with self.journal.transaction():
             value = self.definitions.read(operation_id); boot = self._boot(value)
             self.definitions._fence(value)
@@ -100,6 +100,10 @@ class VMBootDriver:
             boot.update(phase=after, error_type='', recovery_required=False)
             self._boot(value)
             self.definitions._save(operation_id, value)
+            # A readonly resource observer may need this consistent candidate
+            # view (including the already durable QEMU birth). Failure rolls
+            # back publication; no guest action is issued from this callback.
+            if validate is not None:validate(deepcopy(value))
         return value
 
     def _source_ack(self, value):
@@ -175,7 +179,7 @@ class VMBootDriver:
             value=self.definitions.read(operation_id)
             require(self._boot(value)['phase']=='start_requested', 'original uncertain creation checkpoint required')
             try:
-                self._check(value);self._source_ack(value)
+                self._check(value,resources=False);self._source_ack(value)
                 domain=self._domain(value)
                 require(domain.state(0)[0]==3, 'original creation is not paused during receipt recovery')
                 recover=getattr(self.capture_started,'read_original',None)
@@ -187,9 +191,16 @@ class VMBootDriver:
                 require(reference['uri']==self.definitions.session.profile['uri']
                         and reference['persistent_sha256']==value['ack']['persistent_sha256'], 'original creation recovery differs')
                 self.observer(deepcopy(reference),deepcopy(record))(value['birth'])
-                self._check(value);self._source_ack(value)
+                self._check(value,resources=False);self._source_ack(value)
                 require(domain.state(0)[0]==3, 'original guest ran before recovered durable proof')
-                value=self._advance(operation_id,'start_requested','paused',reference=reference,process_record=record)
+                def validate(candidate):
+                    self._check(candidate)
+                    self._observer(candidate)(candidate['birth'])
+                    require(self._domain(candidate).state(0)[0]==3,
+                            'original guest ran before creation publication')
+                    self.definitions._fence(candidate)
+                value=self._advance(operation_id,'start_requested','paused',validate=validate,
+                                    reference=reference,process_record=record)
                 self._check(value);self._source_ack(value);self._observer(value)(value['birth'])
                 require(self._domain(value).state(0)[0]==3, 'original recovered creation is not paused')
                 return value

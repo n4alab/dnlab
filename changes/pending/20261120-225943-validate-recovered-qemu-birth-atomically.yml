@@ -1,0 +1,14 @@
+id: 20261120-225943-validate-recovered-qemu-birth-atomically
+type: internal
+title: Validate recovered QEMU birth atomically with storage writers
+description: Publish an already durable original QEMU birth inside the transaction
+  that validates its overlays and writer census; roll back publication on conflicts
+  without repeating start or QMP.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

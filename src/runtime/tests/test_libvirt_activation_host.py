@@ -3,6 +3,7 @@
 from contextlib import contextmanager
 from copy import deepcopy
 import json
+import runpy
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -14,6 +15,20 @@ from tools import libvirt_activation_host as entry
 from tools import libvirt_bus_inventory_host, libvirt_native_activation_inputs
 from tools import libvirt_postboot_directories, libvirt_postboot_journal, libvirt_postboot_unit_revision
 from dnlab_runtime import libvirt_account_runner, libvirt_account_worker
+
+
+def test_frozen_entry_verifies_its_own_runtime_copy_without_live_checkout(tmp_path):
+    runtime=tmp_path/'frozen-runtime';tools=runtime/'tools';tools.mkdir(parents=True)
+    script=tools/'libvirt_activation_host.py';script.write_bytes(Path(entry.__file__).read_bytes())
+    namespace=runpy.run_path(str(script),run_name='qualified_frozen_activation')
+    assert namespace['RUNTIME']==runtime
+    recipe=tmp_path/'recipe';inputs={name:{} for name in entry.INPUTS}
+    receipt=namespace['prepare_recipe'](recipe,inputs)
+    assert receipt['runtime_root']==str(runtime)
+    assert namespace['verify_recipe'](recipe)[0]==inputs
+    script.write_text('changed frozen source\n')
+    with pytest.raises(ValueError,match='original runtime activation entry|recipe differs'):
+        namespace['verify_recipe'](recipe)
 
 
 @pytest.fixture
