@@ -1,0 +1,14 @@
+id: 20261120-230847-add-console-i-o-qualified-against-origin
+type: internal
+title: Add console I/O qualified against original VM generation
+description: Connect the Unix serial endpoint only through the qualified VM directory
+  and original QEMU peer, recheck boot and endpoint before I/O, and return short writes
+  without automatic replay.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

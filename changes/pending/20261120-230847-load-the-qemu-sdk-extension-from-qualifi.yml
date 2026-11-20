@@ -1,0 +1,14 @@
+id: 20261120-230847-load-the-qemu-sdk-extension-from-qualifi
+type: internal
+title: Load the QEMU SDK extension from qualified files
+description: Bind the official QEMU wrapper and native extension to the original main
+  libvirt SDK with one-shot import receipts and file verification, without issuing
+  monitor commands during import.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

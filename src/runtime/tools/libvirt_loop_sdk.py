@@ -28,10 +28,11 @@ def isolated_interpreter():
     return bool(sys.flags.isolated and sys.flags.no_site and sys.dont_write_bytecode)
 
 
-def extension_from_fd(fd):
+def extension_from_fd(fd, *, name='libvirtmod'):
+    require(name in ('libvirtmod', 'libvirtmod_qemu'), 'fixed libvirt extension name required')
     path='/proc/self/fd/'+str(fd)
-    loader=importlib.machinery.ExtensionFileLoader('libvirtmod',path)
-    spec=importlib.util.spec_from_file_location('libvirtmod',path,loader=loader)
+    loader=importlib.machinery.ExtensionFileLoader(name,path)
+    spec=importlib.util.spec_from_file_location(name,path,loader=loader)
     require(spec is not None, 'original libvirt extension spec required')
     module=importlib.util.module_from_spec(spec)
     loader.exec_module(module)
@@ -39,6 +40,11 @@ def extension_from_fd(fd):
 
 
 class LoopSDK:
+    SOURCE_MODULE = 'libvirt'
+    NATIVE_MODULE = 'libvirtmod'
+    TABLE = 'libvirt_loop_sdk_imports'
+    APIS = ('virEventRegisterDefaultImpl', 'virEventAddTimeout', 'virEventRunDefaultImpl')
+
     def __init__(self,journal,profile,*,preflight,isolated=isolated_interpreter,
                  opener=open_resource,load_extension=extension_from_fd):
         fields(profile,('source','extension'),'loop SDK profile')
@@ -54,7 +60,7 @@ class LoopSDK:
         self.preflight,self.isolated,self.opener,self.load_extension=preflight,isolated,opener,load_extension
         self.attempted=False;self.sdk=None;self.native=None;self.receipt=None
         with journal.transaction():
-            journal.db.execute('CREATE TABLE IF NOT EXISTS libvirt_loop_sdk_imports '
+            journal.db.execute(f'CREATE TABLE IF NOT EXISTS {self.TABLE} '
                 '(id TEXT PRIMARY KEY,payload TEXT NOT NULL,fingerprint TEXT NOT NULL)')
 
     def _guard(self):
@@ -63,7 +69,7 @@ class LoopSDK:
 
     def _save(self,value):
         with self.journal.transaction():
-            self.journal.db.execute('UPDATE libvirt_loop_sdk_imports SET payload=?,fingerprint=? WHERE id=?',
+            self.journal.db.execute(f'UPDATE {self.TABLE} SET payload=?,fingerprint=? WHERE id=?',
                 (canonical(value),fingerprint(value),value['id']))
 
     def _files(self,stack):
@@ -91,32 +97,32 @@ class LoopSDK:
         with self.journal.execution_lock:
             require(not self.attempted, 'original SDK import cannot be repeated')
             self.attempted=True;self._guard()
-            require('libvirt' not in sys.modules and 'libvirtmod' not in sys.modules,
+            require(self.SOURCE_MODULE not in sys.modules and self.NATIVE_MODULE not in sys.modules,
                     'fresh child required; existing SDK modules cannot be adopted')
             value=dict(id=uuid.uuid4().hex,profile=deepcopy(self.profile),phase='import_requested',
                        assets=None,error=None)
             with self.journal.transaction():
-                require(self.journal.db.execute('SELECT 1 FROM libvirt_loop_sdk_imports').fetchone() is None,
+                require(self.journal.db.execute(f'SELECT 1 FROM {self.TABLE}').fetchone() is None,
                         'SDK journal is one-shot; no replacement import')
-                self.journal.db.execute('INSERT INTO libvirt_loop_sdk_imports VALUES(?,?,?)',
+                self.journal.db.execute(f'INSERT INTO {self.TABLE} VALUES(?,?,?)',
                     (value['id'],canonical(value),fingerprint(value)))
             try:
                 with ExitStack() as stack:
                     files,proofs,source=self._files(stack)
                     value['assets']=proofs;self._save(value);self._guard()
                     native=self.load_extension(files['extension'])
-                    require(isinstance(native,types.ModuleType) and native.__name__=='libvirtmod'
-                            and ('libvirtmod' not in sys.modules or sys.modules['libvirtmod'] is native)
-                            and 'libvirt' not in sys.modules,
+                    require(isinstance(native,types.ModuleType) and native.__name__==self.NATIVE_MODULE
+                            and (self.NATIVE_MODULE not in sys.modules or sys.modules[self.NATIVE_MODULE] is native)
+                            and self.SOURCE_MODULE not in sys.modules,
                             'original freshly loaded native SDK module required')
-                    sys.modules['libvirtmod']=native
+                    sys.modules[self.NATIVE_MODULE]=native
                     self._guard()
-                    sdk=types.ModuleType('libvirt');sdk.__file__=self.profile['source']['path']
-                    sdk.__package__='';sys.modules['libvirt']=sdk
+                    sdk=types.ModuleType(self.SOURCE_MODULE);sdk.__file__=self.profile['source']['path']
+                    sdk.__package__='';sys.modules[self.SOURCE_MODULE]=sdk
                     exec(compile(source,self.profile['source']['path'],'exec',dont_inherit=True),sdk.__dict__)
                     self.sdk,self.native=sdk,native
-                    require(sdk.libvirtmod is native and all(callable(getattr(sdk,name,None)) for name in
-                        ('virEventRegisterDefaultImpl','virEventAddTimeout','virEventRunDefaultImpl')),
+                    require(getattr(sdk,self.NATIVE_MODULE,None) is native
+                            and all(callable(getattr(sdk,name,None)) for name in self.APIS),
                         'original SDK event API required')
                     self._guard()
                 # Reopen and hash after executing both initializers; path/content
@@ -138,9 +144,9 @@ class LoopSDK:
         require(self.receipt is not None and self.sdk is not None and self.native is not None,
                 'original completed SDK import required')
         self._guard()
-        require(sys.modules.get('libvirt') is self.sdk and sys.modules.get('libvirtmod') is self.native
-                and self.sdk.libvirtmod is self.native, 'original SDK module binding changed')
-        row=self.journal.db.execute('SELECT payload,fingerprint FROM libvirt_loop_sdk_imports WHERE id=?',
+        require(sys.modules.get(self.SOURCE_MODULE) is self.sdk and sys.modules.get(self.NATIVE_MODULE) is self.native
+                and getattr(self.sdk,self.NATIVE_MODULE,None) is self.native, 'original SDK module binding changed')
+        row=self.journal.db.execute(f'SELECT payload,fingerprint FROM {self.TABLE} WHERE id=?',
             (self.receipt['id'],)).fetchone()
         require(row is not None and json.loads(row['payload'])==self.receipt
                 and row['fingerprint']==fingerprint(self.receipt), 'original SDK import journal differs')
@@ -149,3 +155,32 @@ class LoopSDK:
             require(proofs==self.receipt['assets'], 'original SDK file provenance changed')
         self._guard()
         return self.sdk
+
+
+class QEMUSDK(LoopSDK):
+    """Qualified official QEMU extension bound to the original main SDK.
+
+    Loading this module performs no monitor call. PausedCPUQuery remains the
+    sole caller for the fixed, journaled query-cpus-fast operation.
+    """
+    SOURCE_MODULE = 'libvirt_qemu'
+    NATIVE_MODULE = 'libvirtmod_qemu'
+    TABLE = 'libvirt_qemu_sdk_imports'
+    APIS = ('qemuMonitorCommand',)
+
+    def __init__(self, journal, profile, *, base, preflight, isolated=isolated_interpreter,
+                 opener=open_resource, load_extension=None):
+        require(isinstance(base,LoopSDK) and base.SOURCE_MODULE == 'libvirt',
+                'original main libvirt SDK loader required')
+        self.base = base
+        super().__init__(journal, profile, preflight=preflight, isolated=isolated, opener=opener,
+            load_extension=load_extension or (lambda fd:extension_from_fd(fd,name='libvirtmod_qemu')))
+
+    def _guard(self):
+        self.base.check()
+        super()._guard()
+        if self.sdk is not None:
+            require(getattr(self.sdk,'libvirt',None) is self.base.sdk
+                    and type(getattr(self.sdk,'VIR_DOMAIN_QEMU_MONITOR_COMMAND_DEFAULT',None)) is int
+                    and self.sdk.VIR_DOMAIN_QEMU_MONITOR_COMMAND_DEFAULT == 0,
+                    'original QEMU extension/main SDK binding or flags differ')
