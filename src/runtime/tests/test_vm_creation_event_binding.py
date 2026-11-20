@@ -91,6 +91,35 @@ def test_lost_qmp_reply_cannot_reissue_query_or_acquire_process_on_recovery(pipe
     assert p.control==dict(queries=1,correlations=0) and e.state['starts']==1 and e.state['resumes']==0
 
 
+def test_initial_boot_with_live_storage_writer_census(pipeline,template):
+    p=pipeline;e=p.events;definitions=p.driver.definitions
+    storage,_,files,_,_=make_storage(definitions,e.original['birth'],template)
+    storage.apply(e.operation)
+    record=deepcopy(p.kernel.record);record['gid']=1001
+    session=definitions.session.profile
+    services={unit:dict(pid=i,start_ticks=i+100,boot_id=definitions.session.proof()['daemon']['boot_id'],
+        namespaces=deepcopy(record['namespaces']),pidfd_alive=True,uids=[session['uid']]*4,
+        gids=[session['gid']]*4,groups=[],executable_sha256='e'*64,argv=['synthetic'],environment={})
+        for i,unit in enumerate(UNITS,10)}
+    def inventory():
+        rows=[{key:value[key] for key in ('pid','uids','gids','groups')} for value in services.values()]
+        if e.state['domains'][e.original['birth']['uuid']].isActive():
+            rows.append(dict(pid=record['process']['pid'],uids=[record['uid']]*4,gids=[record['gid']]*4,groups=[]))
+        return deepcopy(rows)
+    storage.writers=SessionWriterCensus(definitions,inventory=inventory,services=services,
+        observe_services=lambda:deepcopy(services),observer=p.driver.observer)
+    original=definitions.preflight
+    def resources(value):
+        storage.observe(e.operation)
+        return original(value)
+    definitions.preflight=resources
+    result=p.driver.apply(e.operation)
+    assert result['boot']['phase']=='running'
+    assert storage.observe(e.operation)['phase']=='ready' and files['creates']==1
+    assert e.state['starts']==e.state['resumes']==1 and p.control==dict(queries=1,correlations=1)
+    assert p.driver.apply(e.operation)==result
+
+
 @pytest.fixture
 def pending_birth_with_storage(pipeline,template,monkeypatch):
     p=pipeline;e=p.events;definitions=p.driver.definitions

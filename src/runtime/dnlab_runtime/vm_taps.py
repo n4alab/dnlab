@@ -13,17 +13,20 @@ from xml.etree import ElementTree as ET
 
 from .backend_reservations import available, verify_tap_reservations
 from .manifest import Conflict, canonical, fingerprint
+from .qemu_process import validate_process_record
 from .vm_tap_device import context as namespace, request as tap_request, IFF_TAP, IFF_NO_PI, IFF_VNET_HDR
 from .vm_tap_retention import PERSIST, ownership, request_part, signature
 from .vm_template import digest, fields, require
 
 
 class VMTaps:
-    def __init__(self, definitions, *, endpoints, read_context, preflight):
+    def __init__(self, definitions, *, endpoints, read_context, preflight, writers=None):
         require(all(callable(getattr(endpoints,name,None)) for name in ('observe','create','recover'))
             and callable(read_context) and callable(preflight), 'qualified original VM TAP providers required')
         self.definitions, self.journal = definitions, definitions.journal
         self.endpoints,self.read_context,self.preflight = endpoints,read_context,preflight
+        require(writers is None or callable(writers), 'qualified VM TAP writer census required')
+        self.writers = writers
         with self.journal.transaction():
             self.journal.db.execute('CREATE TABLE IF NOT EXISTS vm_tap_intents '
                 '(id TEXT PRIMARY KEY,domain_uuid TEXT UNIQUE NOT NULL,payload TEXT NOT NULL,fingerprint TEXT NOT NULL)')
@@ -116,6 +119,22 @@ class VMTaps:
     def _bound(self, value):
         if self.read(value['id'])!=value:raise Conflict('original VM TAP intent changed')
 
+    def _writers(self, value, definition):
+        original = definition.get('boot', {}).get('process_record')
+        if self.writers is None:
+            require(original is None, 'original running TAP owner requires qualified writer census')
+            return []
+        writers = self.writers(deepcopy(value))
+        require(type(writers) is list and len(writers) <= 1, 'single qualified VM TAP writer required')
+        if writers:
+            writer = validate_process_record(writers[0])
+            session = self.definitions.session.profile
+            require(writer == original and writer['birth'] == value['birth']
+                    and writer['uid'] == session['uid'] and writer['gid'] == session['gid'],
+                    'VM TAP writer differs from original QEMU')
+        else:require(original is None, 'original VM TAP writer absence needs verified shutdown')
+        return writers
+
     def _check(self, value, *, mutate, held=True):
         if held:self._bound(value)
         definition=self.definitions.read(value['id'])
@@ -130,8 +149,10 @@ class VMTaps:
             self.definitions._absent(self.definitions.connection.lookupByUUIDString,value['birth']['uuid'])
             self.definitions._absent(self.definitions.connection.lookupByName,ET.fromstring(definition['xml']).findtext('name'))
         require(self.read_context()==value['context'], 'original VM TAP namespace changed')
+        writers = self._writers(value, definition)
+        if mutate:require(not writers, 'VM TAP allocation cannot run with a guest writer')
         expected=dict(definition_sha256=value['definition_sha256'],session_sha256=definition['session_sha256'],
-            context_sha256=fingerprint(value['context']),session_namespace_verified=True,guest_writers_absent=True)
+            context_sha256=fingerprint(value['context']),session_namespace_verified=True,guest_writers_absent=not bool(writers))
         require(self.preflight(deepcopy(value))==expected, 'complete original VM TAP host preflight required')
         claims={(row['ifindex'],row['interface_name']) for row in self.journal.db.execute(
             'SELECT ifindex,interface_name FROM vm_tap_ifindices WHERE operation_id=?',(value['id'],))}
@@ -147,6 +168,7 @@ class VMTaps:
         self.definitions._fence(definition);self.definitions._session(definition)
         require(self.read_context()==value['context'], 'original VM TAP namespace changed')
         require(self.preflight(deepcopy(value))==expected, 'VM TAP host preflight changed during observation')
+        require(self._writers(value,definition)==writers, 'original VM TAP writer changed during observation')
         if held:self._bound(value)
         self.definitions._fence(definition)
 

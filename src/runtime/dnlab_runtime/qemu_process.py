@@ -12,8 +12,9 @@ import os
 from pathlib import Path
 import select
 import stat
+import uuid
 
-from .manifest import Conflict
+from .manifest import Conflict, fingerprint
 from .vm_events import validate_birth, validate_observation
 from .vm_template import digest, fields, require
 
@@ -92,6 +93,41 @@ class QEMUProcFiles:
             return hashed.hexdigest()
 
 
+class QEMUExitWitness:
+    """An original live pidfd held until explicit retirement of this lease."""
+    def __init__(self, record, *, verify, context, poll, fd):
+        self._record = deepcopy(record)
+        self._verify, self._context, self._poll, self._fd = verify, context, poll, fd
+        self._active = True
+        self._reference = dict(kind='original-qemu-exit-witness-v1', id=uuid.uuid4().hex,
+            birth=deepcopy(record['birth']), process_record_sha256=fingerprint(record))
+
+    def reference(self):
+        require(self._active, 'original QEMU exit witness retired')
+        return deepcopy(self._reference)
+
+    def verify_live(self):
+        self.reference()
+        return self._verify()
+
+    def exited(self):
+        """None means still live; errors/ambiguous events never mean exit."""
+        reference = self.reference()
+        self._context()
+        events = self._poll.poll(0)
+        if not events:
+            self.verify_live()
+            return None
+        valid = (len(events) == 1 and events[0][0] == self._fd
+                 and events[0][1] & select.POLLIN
+                 and not events[0][1] & ~(select.POLLIN | select.POLLHUP))
+        if not valid:
+            self._active = False
+            raise Conflict('original QEMU pidfd exit status is ambiguous or erroneous')
+        self._context()
+        return dict(reference=reference, process=deepcopy(self._record['process']), exited=True)
+
+
 class PinnedQEMUProcess(QEMUProcFiles):
     def __init__(self, record, *, proc_root='/proc', pidfd_open=None, poll_factory=None, pid_namespace=None):
         self.record, self.proc_root = validate_process_record(record), Path(proc_root)
@@ -137,7 +173,7 @@ class PinnedQEMUProcess(QEMUProcFiles):
         return observed
 
     @contextmanager
-    def capture(self, birth):
+    def _pin(self, birth):
         if birth != self.record['birth']:raise Conflict('original QEMU birth differs')
         with ExitStack() as stack:
             self._pid_namespace()
@@ -157,5 +193,27 @@ class PinnedQEMUProcess(QEMUProcFiles):
                 if poll.poll(0):raise Conflict('QEMU exited during observation')
                 return result
             proof = verify()
-            yield deepcopy(proof)
+            def context():
+                self._pid_namespace()
+                boot = self._read('sys/kernel/random/boot_id', proc, 128).decode('ascii').strip()
+                require(boot == self.record['process']['boot_id'], 'original QEMU exit witness boot differs')
+            yield deepcopy(proof), verify, context, poll, fd
+
+    @contextmanager
+    def capture(self, birth):
+        with self._pin(birth) as (proof, verify, _, _, _):
+            yield proof
             verify()
+
+    @contextmanager
+    def exit_witness(self, birth):
+        """Acquire while live, before journaling/requesting ordinary shutdown.
+
+        The caller must durably bind reference() to its shutdown intent before
+        the guest action. This lease does not request shutdown, signal, wait,
+        discover a replacement process or reconstruct a lost descriptor.
+        """
+        with self._pin(birth) as (_, verify, context, poll, fd):
+            witness = QEMUExitWitness(self.record, verify=verify, context=context, poll=poll, fd=fd)
+            try:yield witness
+            finally:witness._active = False

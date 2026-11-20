@@ -1,0 +1,15 @@
+id: 20261120-231946-retain-an-original-qemu-pidfd-exit-witne
+type: internal
+title: Retain an original QEMU pidfd exit witness
+description: Expose a live-acquired pidfd witness for later shutdown completion, reject
+  error and ambiguous poll events, and restrict the SDK shutdown request to explicit
+  ACPI without force or fallback. Pair the original exit proof with unchanged inactive
+  domain identity and an explicit guest shutdown reason; state alone does not prove completion.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

@@ -70,6 +70,13 @@ class Domain:
 
     def resume(self):return self._call('resume', mutate=True)
 
+    def shutdownFlags(self, flags):
+        # An ACPI request is not proof that the NOS supports it or has exited.
+        # The lifecycle controller must qualify capability and retain a pidfd
+        # exit witness before issuing this single request.
+        require(type(flags) is int and flags == 1, 'explicit ACPI shutdown flag required')
+        return self._call('shutdownFlags', flags, mutate=True)
+
 
 class Connection:
     def __init__(self, session, original, socket_fd, raw, readonly, transport_uri, event_loop=None, loop_sha256=None, sdk=None):

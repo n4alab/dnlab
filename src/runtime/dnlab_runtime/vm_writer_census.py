@@ -128,6 +128,13 @@ class SessionWriterCensus:
             if value['birth']['host_id']==self.definitions.session.profile['host_id']:values[row['id']] = value
         return values
 
+    def _inactive_start(self, value):
+        require(value['phase'] == 'defined' and isinstance(value.get('ack'), dict),
+                'uncertain QEMU creation requires original boot recovery')
+        domain = self.definitions.connection.lookupByUUIDString(value['birth']['uuid'])
+        require(domain.state(0)[0] == 5 and self.definitions._ack(value, domain) == value['ack'],
+                'uncertain QEMU creation requires original boot recovery')
+
     def __call__(self, storage):
         with self.journal.execution_lock:
             values = self._definitions();operation = storage['id']
@@ -145,13 +152,22 @@ class SessionWriterCensus:
                 candidates[item['pid']] = item
             require(all(candidates.get(pid)==value for pid,value in services.items()),
                     'original dedicated daemon missing or credentials changed')
-            qemu = {};writers = [];observers = []
+            qemu = {};writers = [];observers = [];inactive_starts = []
             for value in values.values():
                 boot = value.get('boot')
                 if not boot:continue
                 if boot.get('process_record') is None:
-                    require(boot.get('phase') in ('prepared','arming_requested','armed'),
-                            'uncertain QEMU creation requires original boot recovery')
+                    if boot.get('phase') == 'start_requested':
+                        # The first caller rechecks resources after saving the
+                        # intent, before issuing createWithFlags. This proves
+                        # absence only; it does not permit replaying start.
+                        # Any not-yet-attributed process is still rejected by
+                        # the complete inventory comparison below.
+                        self._inactive_start(value)
+                        inactive_starts.append(value)
+                    else:
+                        require(boot.get('phase') in ('prepared','arming_requested','armed'),
+                                'uncertain QEMU creation requires original boot recovery')
                     continue
                 record = validate_process_record(boot['process_record']);reference = boot.get('reference')
                 session = self.definitions.session.profile
@@ -177,6 +193,7 @@ class SessionWriterCensus:
             require(self._inventory()==first, 'dedicated session processes changed during writer census')
             for observe,birth,proof in observers:
                 require(observe(birth)==proof, 'QEMU writer changed during session census')
+            for value in inactive_starts:self._inactive_start(value)
             self._services();self.definitions._session(values[operation])
             require(self._definitions()==values, 'VM generation changed during writer census')
             return writers

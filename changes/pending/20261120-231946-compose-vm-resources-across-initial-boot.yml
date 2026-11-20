@@ -1,0 +1,14 @@
+id: 20261120-231946-compose-vm-resources-across-initial-boot
+type: internal
+title: Compose VM resources across initial boot checkpoints
+description: Verify original directories, disks, TAPs and templates together; admit
+  the inactive first-start checkpoint only with stable writer inventory and permit
+  retained TAP observation only for the original qualified QEMU writer.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

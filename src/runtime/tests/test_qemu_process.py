@@ -6,7 +6,7 @@ import select
 
 import pytest
 
-from dnlab_runtime.manifest import Conflict, fingerprint
+from dnlab_runtime.manifest import Conflict, RuntimeErrorBase, fingerprint
 from dnlab_runtime.qemu_process import PinnedQEMUProcess, stat_start
 from test_libvirt_observer import observer, template, instance
 
@@ -140,3 +140,40 @@ def test_caller_namespace_is_rechecked_after_observer_body(process):
 @pytest.mark.parametrize('raw',[b'',b'1234 (qemu) S 0',b'1234 qemu S '+b'0 '*20])
 def test_malformed_stat_is_not_a_process_proof(raw):
     with pytest.raises(Conflict):stat_start(raw,1234)
+
+
+def test_original_exit_witness_is_acquired_live_and_retired_without_signals(process):
+    provider,record,state,_,_,_,_=process
+    with provider.exit_witness(record['birth']) as witness:
+        reference=witness.reference()
+        assert reference['birth']==record['birth'] and reference['process_record_sha256']==fingerprint(record)
+        assert witness.exited() is None and witness.verify_live()==record['process']
+        state['events']=[(state['fds'][-1],select.POLLIN|select.POLLHUP)]
+        assert witness.exited()==dict(reference=reference,process=record['process'],exited=True)
+    closed(state)
+    with pytest.raises(RuntimeErrorBase,match='retired'):witness.exited()
+
+
+@pytest.mark.parametrize('event',[select.POLLERR,select.POLLNVAL,select.POLLHUP,
+                                  select.POLLIN|select.POLLERR])
+def test_pidfd_errors_do_not_authorize_shutdown_completion(process,event):
+    provider,record,state,_,_,_,_=process
+    with provider.exit_witness(record['birth']) as witness:
+        state['events']=[(state['fds'][-1],event)]
+        with pytest.raises(RuntimeErrorBase,match='ambiguous or erroneous'):witness.exited()
+    closed(state)
+
+
+def test_exit_witness_refuses_another_descriptor_or_changed_boot(process):
+    provider,record,state,_,_,boot,_=process
+    with provider.exit_witness(record['birth']) as witness:
+        state['events']=[(state['fds'][-1]+1,select.POLLIN)]
+        with pytest.raises(RuntimeErrorBase):witness.exited()
+        state['events']=[(state['fds'][-1],select.POLLIN)]
+        with pytest.raises(RuntimeErrorBase,match='retired'):witness.exited()
+    state['events']=[]
+    with provider.exit_witness(record['birth']) as witness:
+        state['events']=[(witness._fd,select.POLLIN)]
+        boot.write_text('foreign-boot\n')
+        with pytest.raises(RuntimeErrorBase,match='boot differs'):witness.exited()
+    closed(state)

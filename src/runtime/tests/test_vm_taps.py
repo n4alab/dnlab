@@ -10,6 +10,7 @@ from dnlab_runtime.vm_tap_device import IFF_TAP, IFF_NO_PI, IFF_VNET_HDR
 from dnlab_runtime.vm_tap_retention import PERSIST, request_part
 from dnlab_runtime.vm_taps import VMTaps
 from test_vm_definition import definition, template, instance
+from test_vm_boot import boot as boot_fixture
 
 
 @pytest.fixture
@@ -229,3 +230,24 @@ def test_host_writer_appearing_during_inventory_invalidates_preflight(taps,monke
     monkeypatch.setattr(driver.endpoints,'observe',changed)
     with pytest.raises(RuntimeErrorBase,match='preflight changed'):driver._check(value,mutate=True)
     assert state['creates']==[] and driver.read(value['id'])==value
+
+
+def test_running_original_qemu_can_observe_retained_taps_with_writer_proof(taps,definition,monkeypatch):
+    driver,value,state,_,definitions,_,_=taps
+    retained=driver.apply(value['id'])
+    boot,operation,_,_,_=boot_fixture.__wrapped__(definition,monkeypatch)
+    running=boot.apply(operation);record=deepcopy(running['boot']['process_record'])
+    state['writer']=True
+    with pytest.raises(RuntimeErrorBase,match='requires qualified writer census'):driver.observe(operation)
+    driver.writers=lambda value:[deepcopy(record)]
+    assert driver.observe(operation)==retained
+    original=definitions.preflight
+    def resources(value):
+        driver.observe(operation)
+        return original(value)
+    definitions.preflight=resources
+    assert boot.apply(operation)==running
+    assert len(state['creates'])==len(retained['items']) and state['recovers']==[]
+    record['process']['start_ticks']+=1
+    with pytest.raises(RuntimeErrorBase,match='differs from original QEMU'):driver.observe(operation)
+    assert driver.read(operation)==retained
