@@ -1,0 +1,14 @@
+id: 20261121-205118-wire-qualified-qemu-boot-factories-into
+type: internal
+title: Wire qualified QEMU boot factories into the VM runtime
+description: Connect the original libvirt collector, fixed QMP query and kernel correlation
+  to a reusable boot factory. Recheck runtime, binary and immutable process policy
+  at boot boundaries without new subscriptions, retries or PID discovery.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
