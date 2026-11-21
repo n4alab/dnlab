@@ -152,7 +152,7 @@ class SessionWriterCensus:
                 candidates[item['pid']] = item
             require(all(candidates.get(pid)==value for pid,value in services.items()),
                     'original dedicated daemon missing or credentials changed')
-            qemu = {};writers = [];observers = [];inactive_starts = []
+            qemu = {};writers = [];observers = [];inactive_starts = [];stopped = []
             for value in values.values():
                 boot = value.get('boot')
                 if not boot:continue
@@ -179,6 +179,10 @@ class SessionWriterCensus:
                         and boot.get('phase') in ('paused','activation_requested','monitored_paused','resume_requested','running')
                         and reference.get('process_sha256')==fingerprint(record['process']),
                         'original unique QEMU writer receipt required')
+                from .vm_shutdown import stopped_proof
+                if stopped_proof(self.definitions,value,required=False) is not None:
+                    stopped.append(value)
+                    continue
                 pid = record['process']['pid'];candidate = candidates.get(pid)
                 require(candidate is not None and candidate['uids']==[record['uid']]*4
                         and candidate['gids']==[record['gid']]*4, 'original QEMU writer missing or credentials changed')
@@ -194,6 +198,7 @@ class SessionWriterCensus:
             for observe,birth,proof in observers:
                 require(observe(birth)==proof, 'QEMU writer changed during session census')
             for value in inactive_starts:self._inactive_start(value)
+            for value in stopped:stopped_proof(self.definitions,value)
             self._services();self.definitions._session(values[operation])
             require(self._definitions()==values, 'VM generation changed during writer census')
             return writers

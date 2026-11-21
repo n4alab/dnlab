@@ -132,7 +132,9 @@ class VMTaps:
             require(writer == original and writer['birth'] == value['birth']
                     and writer['uid'] == session['uid'] and writer['gid'] == session['gid'],
                     'VM TAP writer differs from original QEMU')
-        else:require(original is None, 'original VM TAP writer absence needs verified shutdown')
+        elif original is not None:
+            from .vm_shutdown import stopped_proof
+            stopped_proof(self.definitions,definition)
         return writers
 
     def _check(self, value, *, mutate, held=True):

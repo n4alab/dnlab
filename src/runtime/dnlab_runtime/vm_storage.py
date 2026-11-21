@@ -122,7 +122,8 @@ class VMStorage:
                     and writer['uid'] == self.definitions.session.profile['uid']
                     and writer['gid'] == self.definitions.session.profile['gid'], 'VM disk writer differs from original QEMU')
         elif original is not None:
-            raise Conflict('original VM disk writer absence needs verified shutdown')
+            from .vm_shutdown import stopped_proof
+            stopped_proof(self.definitions,definition)
         return writers
 
     def _check(self, value, *, mutate):

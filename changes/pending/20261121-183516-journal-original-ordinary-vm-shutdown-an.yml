@@ -1,0 +1,14 @@
+id: 20261121-183516-journal-original-ordinary-vm-shutdown-an
+type: internal
+title: Journal original ordinary VM shutdown and writer release proof
+description: Require qualified template capability and the original held pidfd before
+  one ACPI request, recover lost replies without resend, and publish ordinary exit
+  atomically with disk/TAP/writer checks while retaining backend and cleanup fences.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

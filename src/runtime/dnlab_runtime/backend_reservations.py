@@ -46,7 +46,7 @@ def vm_reservations(journal, lab, node, *, domain_uuid=None):
         result = []
         for table in ('vm_definition_intents', 'vm_event_streams', 'vm_storage_intents', 'vm_definition_retirements',
                       'vm_tap_intents','vm_tap_actors','vm_tap_creators','vm_tap_tasks','vm_runtime_references',
-                      'vm_directory_intents','vm_initial_starts'):
+                      'vm_directory_intents','vm_initial_starts','vm_shutdown_intents'):
             if table not in tables:continue
             for row in journal.db.execute(f'SELECT * FROM {table} ORDER BY id'):
                 try:
@@ -63,6 +63,10 @@ def vm_reservations(journal, lab, node, *, domain_uuid=None):
                     if table == 'vm_initial_starts' and (row['id'] != birth['creator_operation_id']
                             or value['id'] != row['id'] or value['phase'] not in ('pending','running')):
                         raise ValueError('owner')
+                    if table == 'vm_shutdown_intents' and (row['definition_id'] != birth['creator_operation_id']
+                            or value['definition_id'] != row['definition_id'] or value['id'] != row['id']
+                            or row['boot_source_id'] != value['original']['boot']['source_id']
+                            or value['original']['birth'] != birth):raise ValueError('owner')
                     if table == 'vm_directory_intents' and (row['domain_uuid'] != birth['uuid']
                             or row['id'] != birth['creator_operation_id'] or value['id'] != row['id']
                             or value['spec']['path'] != row['path']):raise ValueError('owner')
