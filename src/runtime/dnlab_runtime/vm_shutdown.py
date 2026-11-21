@@ -69,10 +69,31 @@ def stopped_proof(definitions, original, *, required=True):
     if value is None or value['phase'] != 'completed':
         if required:raise Conflict('original VM writer absence needs verified shutdown')
         return None
-    require(definitions.read(value['definition_id']) == original == value['original'],
-            'completed VM shutdown belongs to another generation')
+    current = definitions.read(value['definition_id'])
+    retirement = None
+    if current.get('retirement') is not None:
+        from .vm_definition_retirement import stopped_retirement_lineage
+        retirement = stopped_retirement_lineage(definitions,current,original,value)
+    else:
+        require(current == original == value['original'],
+                'completed VM shutdown belongs to another generation')
+    original = value['original']
     definitions._session(original)
-    domain = definitions.connection.lookupByUUIDString(original['birth']['uuid'])
+    try:domain = definitions.connection.lookupByUUIDString(original['birth']['uuid'])
+    except Exception as error:
+        code = getattr(error,'get_error_code',None)
+        require(retirement is not None and retirement['phase'] in ('undefine_requested','retired')
+                and callable(code) and code() == definitions.missing,
+                'stopped VM absence requires original undefine intent')
+        try:definitions.connection.lookupByName(original['ack']['name'])
+        except Exception as name_error:
+            name_code = getattr(name_error,'get_error_code',None)
+            require(callable(name_code) and name_code() == definitions.missing,
+                    'retired VM name absence is not qualified')
+        else:raise Conflict('retired VM name is occupied')
+        return deepcopy(value['proof'])
+    require(retirement is None or retirement['phase'] != 'retired',
+            'retired VM definition reappeared')
     require(VMShutdownObservation._ordinary_state(domain)
             and definitions._ack(original,domain) == original['ack'], 'original stopped VM definition changed')
     return deepcopy(value['proof'])

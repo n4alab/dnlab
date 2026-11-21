@@ -1,4 +1,4 @@
-"""Definition-only retirement of an acknowledged VM that has never booted.
+"""Definition-only retirement with separate never-booted and verified-stop paths.
 
 No shutdown, disk/TAP deletion or reservation release is performed. Original
 resources and journal history stay held for their separately qualified cleanup.
@@ -16,7 +16,7 @@ from .vm_template import require
 
 class UnstartedDefinitionRetirement:
     def __init__(self, definitions, *, preflight):
-        require(callable(preflight), 'complete never-started retirement preflight required')
+        require(callable(preflight), 'complete original definition retirement preflight required')
         self.definitions, self.journal, self.preflight = definitions, definitions.journal, preflight
         with self.journal.transaction():
             self.journal.db.execute('CREATE TABLE IF NOT EXISTS vm_definition_retirements '
@@ -32,8 +32,9 @@ class UnstartedDefinitionRetirement:
                 or value['birth'] != value['definition']['birth']
                 or value['definition_sha256'] != fingerprint(value['definition'])
                 or value['phase'] not in ('prepared','undefine_requested','retired')
-                or 'boot' in value['definition'] or value['definition'].get('retirement') is not None):
+                or value['definition'].get('retirement') is not None):
             raise Conflict('original never-started retirement differs')
+        self._validate_history(value)
         creation_acknowledgement(value['definition'])
         if value['call_ack'] not in (None, {'return_code':0}):raise Conflict('original undefine response differs')
         if value['phase'] == 'prepared' and value['call_ack'] is not None:
@@ -41,10 +42,20 @@ class UnstartedDefinitionRetirement:
         if value['phase'] == 'retired':
             expected = dict(definition_sha256=value['definition_sha256'],
                 creation_sha256=fingerprint(value['definition']['creation_ack']), domain_absent_verified=True,
-                never_started=True, undefine_response=value['call_ack'])
+                **self._proof_history(value), undefine_response=value['call_ack'])
             if value['proof'] != expected:raise Conflict('original definition absence receipt differs')
         elif value['proof'] is not None:raise Conflict('unexpected early definition absence receipt')
         return value
+
+    def _validate_history(self, value):
+        if 'boot' in value['definition'] or 'shutdown' in value:
+            raise Conflict('never-started retirement cannot accept boot history')
+
+    def _history(self, original):
+        if 'boot' in original:raise Conflict('boot history requires qualified VM shutdown before retirement')
+        return {}
+
+    def _proof_history(self, value):return dict(never_started=True)
 
     def _save(self, value):
         self.journal.db.execute('UPDATE vm_definition_retirements SET payload=?,fingerprint=? WHERE id=?',
@@ -58,17 +69,17 @@ class UnstartedDefinitionRetirement:
             expected['phase'] = 'retired' if value['phase'] == 'retired' else 'retirement_requested'
             expected['retirement'] = dict(id=value['id'],definition_sha256=value['definition_sha256'])
         if current != expected:raise Conflict('original never-started definition changed')
-        if 'boot' in current:raise Conflict('boot history requires qualified VM shutdown before retirement')
+        self._validate_history(value)
         from .backend_reservations import available
         available(self.journal,current['birth']['lab_id'],current['birth']['node_id'],'libvirt',vm_birth=current['birth'])
         self.definitions._session(current)
         # This initial path deliberately retains the original open lab epoch.
-        # Closing-lab teardown and previously booted domains need their own
-        # verified exit/cleanup operation; no fence is bypassed here.
+        # Closing-lab teardown needs its own qualified operation; this path
+        # never bypasses the lab fence, even with a completed shutdown.
         self.definitions._resources(current)
         observed = self.preflight(deepcopy(current))
         require(observed == dict(definition_sha256=value['definition_sha256'],
-            session_sha256=original['session_sha256'], never_started=True,
+            session_sha256=original['session_sha256'], **self._proof_history(value),
             writers_absent=True, resources_unchanged=True), 'complete never-started cleanup preflight differs')
         return current
 
@@ -129,12 +140,12 @@ class UnstartedDefinitionRetirement:
                 self._domain(value, absence=value['phase'] != 'prepared')
                 return value
             original = self.definitions.read(definition_id)
-            if ('boot' in original or original.get('retirement') is not None
+            if (original.get('retirement') is not None
                     or original['phase'] not in ('defined','define_requested','recovery_required')):
                 raise Conflict('only an original acknowledged never-started definition can retire')
             creation_acknowledgement(original)
             value = dict(id=operation,birth=deepcopy(original['birth']),definition=original,definition_sha256=fingerprint(original),
-                         phase='prepared',call_ack=None,proof=None)
+                         phase='prepared',call_ack=None,proof=None,**self._history(original))
             self._domain(value, held=False)
             with self.journal.transaction():
                 self._source(value, held=False)
@@ -150,7 +161,7 @@ class UnstartedDefinitionRetirement:
             raise Conflict('uncertain undefine left original domain present; no resend')
         proof = dict(definition_sha256=value['definition_sha256'],
             creation_sha256=fingerprint(value['definition']['creation_ack']), domain_absent_verified=True,
-            never_started=True, undefine_response=value['call_ack'])
+            **self._proof_history(value), undefine_response=value['call_ack'])
         with self.journal.transaction():
             current = self._source(value)
             if self._domain(value, absence=True) is not None:raise Conflict('original definition reappeared before retirement commit')
@@ -178,3 +189,44 @@ class UnstartedDefinitionRetirement:
             value['call_ack'] = {'return_code':0}
             with self.journal.transaction():self._save(value)
             return self._finish(value)
+
+
+class StoppedDefinitionRetirement(UnstartedDefinitionRetirement):
+    """Retain original boot and completed shutdown throughout undefine/recovery."""
+    def _history(self, original):
+        from .vm_shutdown import _read, stopped_proof
+        proof = stopped_proof(self.definitions, original)
+        row = self.journal.db.execute(
+            'SELECT id FROM vm_shutdown_intents WHERE definition_id=? AND boot_source_id=?',
+            (original['birth']['creator_operation_id'], original['boot']['source_id'])).fetchone()
+        shutdown = _read(self.journal, row['id'])
+        require(shutdown['proof'] == proof, 'original retirement shutdown differs')
+        return dict(shutdown=shutdown)
+
+    def _validate_history(self, value):
+        from .vm_shutdown import _read
+        shutdown = value.get('shutdown')
+        require(isinstance(shutdown, dict) and shutdown.get('phase') == 'completed'
+                and shutdown.get('original') == value['definition'],
+                'retirement requires original completed shutdown')
+        require(fingerprint(_read(self.journal, shutdown['id'])) == fingerprint(shutdown),
+                'original retirement shutdown receipt changed')
+
+    def _proof_history(self, value):
+        return dict(never_started=False, shutdown_sha256=fingerprint(value['shutdown']))
+
+
+def stopped_retirement_lineage(definitions, current, original, shutdown):
+    """Accept only the explicit successor of this exact immutable shutdown."""
+    marker = current.get('retirement')
+    require(isinstance(marker, dict), 'original stopped definition retirement missing')
+    reader = StoppedDefinitionRetirement.__new__(StoppedDefinitionRetirement)
+    reader.journal = definitions.journal
+    value = reader.read(marker['id'])
+    expected = deepcopy(value['definition'])
+    expected.update(phase='retired' if value['phase'] == 'retired' else 'retirement_requested',
+                    retirement=dict(id=value['id'], definition_sha256=value['definition_sha256']))
+    require(current == expected and original in (current, value['definition'])
+            and fingerprint(value['shutdown']) == fingerprint(shutdown),
+            'completed shutdown retirement lineage differs')
+    return value

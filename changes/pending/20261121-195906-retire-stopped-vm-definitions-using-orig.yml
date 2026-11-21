@@ -1,0 +1,13 @@
+id: 20261121-195906-retire-stopped-vm-definitions-using-orig
+type: internal
+title: Retire stopped VM definitions using original shutdown evidence
+description: Preserve boot and verified shutdown lineage through one-shot undefine
+  and recovery, retaining storage, TAPs and reservations for qualified cleanup.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

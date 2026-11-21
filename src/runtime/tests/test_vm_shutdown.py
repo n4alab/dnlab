@@ -38,7 +38,8 @@ def shutdown(pipeline,template,monkeypatch):
     control=dict(calls=0,auto_exit=True,lost_ack=False,witness=None,after_effect=None,extra=[],qualified=True)
     def inventory():
         rows=[{key:value[key] for key in ('pid','uids','gids','groups')} for value in services.values()]
-        if e.state['domains'][e.original['birth']['uuid']].isActive():
+        domain = e.state['domains'].get(e.original['birth']['uuid'])
+        if domain is not None and domain.isActive():
             rows.append(dict(pid=record['process']['pid'],uids=[record['uid']]*4,gids=[record['gid']]*4,groups=[]))
         return deepcopy(rows+control['extra'])
     storage.writers=SessionWriterCensus(definitions,inventory=inventory,services=services,
