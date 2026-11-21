@@ -1,0 +1,14 @@
+id: 20261121-235423-add-isolated-tap-handoff-diagnostic
+type: internal
+title: Add isolated TAP handoff diagnostic
+description: Probe single-queue TAP refusal and explicit descriptor handoff in a fresh
+  network namespace without VMs; preserve phased evidence and reject identity changes.
+  This diagnostic does not qualify production recovery.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
