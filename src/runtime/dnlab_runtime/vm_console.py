@@ -15,6 +15,7 @@ import struct
 from xml.etree import ElementTree as ET
 
 from .manifest import Conflict
+from .vm_console_endpoint import read as endpoint_receipt, remember
 from .vm_overlay_files import directory_identity
 from .vm_template import require
 
@@ -66,6 +67,10 @@ class VMConsole:
                 'original VM boot, directory and socket providers required')
         self.boot, self.directories, self.operation = boot, directories, operation
         self.pin_directory, self.socket_factory = pin_directory, socket_factory
+        with boot.journal.transaction():
+            boot.journal.db.execute('CREATE TABLE IF NOT EXISTS vm_console_endpoints '
+                '(id TEXT PRIMARY KEY,definition_id TEXT NOT NULL,source_id TEXT NOT NULL,'
+                'payload TEXT NOT NULL,fingerprint TEXT NOT NULL,UNIQUE(definition_id,source_id))')
 
     @contextmanager
     def connect(self, *, timeout=1):
@@ -96,6 +101,8 @@ class VMConsole:
             require(directory_identity(fd) == parent, 'original console parent changed')
             endpoint = socket_identity(fd, path.name)
             require((endpoint['uid'], endpoint['gid']) == peer[1:], 'original console socket owner differs')
+            prior = endpoint_receipt(self.boot.journal,original,directory)
+            require(prior is None or prior['endpoint'] == endpoint, 'original console endpoint cannot be replaced')
             # Hold a pidfd for the original incarnation throughout serial I/O.
             process = self.boot._observer(original).process
             stack.enter_context(process.capture(deepcopy(original['birth'])))
@@ -103,18 +110,31 @@ class VMConsole:
             stack.callback(stream.close)
             stream.settimeout(timeout)
 
-            def verify(*, connected=True):
+            def verify(*, connected=True, events=True):
                 with self.boot.journal.execution_lock:
                     if definitions.read(self.operation) != original or self.directories.observe(self.operation) != directory:
                         raise Conflict('original console generation or directory changed')
                     require(directory_identity(fd) == parent and socket_identity(fd, path.name) == endpoint,
                             'original console endpoint replaced')
-                    self.boot._instance(original, 1)
+                    if events:self.boot._instance(original, 1)
+                    else:
+                        # Event-source verification may pump its own journal.
+                        # Inside this transaction use readonly resource, process
+                        # and CPU checks; run the full event check outside it.
+                        self.boot._check(original)
+                        self.boot._observer(original)(original['birth'])
+                        require(self.boot._domain(original).state(0)[0] == 1, 'original console VM stopped during publication')
                     if connected:
                         credentials = stream.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, struct.calcsize('3i'))
                         require(struct.unpack('3i', credentials) == peer, 'console peer is not original QEMU')
             verify(connected=False)
             stream.connect(f'/proc/self/fd/{fd}/{path.name}')
+            verify()
+            with self.boot.journal.execution_lock:
+                with self.boot.journal.transaction():
+                    verify(events=False)
+                    remember(self.boot.journal,original,directory,endpoint)
+                    verify(events=False)
             verify()
             lease = ConsoleStream(stream, verify)
             try:

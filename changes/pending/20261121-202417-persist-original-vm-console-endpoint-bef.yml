@@ -1,0 +1,14 @@
+id: 20261121-202417-persist-original-vm-console-endpoint-bef
+type: internal
+title: Persist original VM console endpoint before guest I/O
+description: Record the original console inode and QEMU peer under pidfd and directory
+  verification before exposing serial I/O. Reject endpoint replacement, roll back
+  changed publication and retain independent backend and cleanup fences.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

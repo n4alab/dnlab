@@ -13,6 +13,7 @@ import pytest
 
 from dnlab_runtime import vm_console
 from dnlab_runtime.manifest import RuntimeErrorBase
+from dnlab_runtime.vm_console_endpoint import read as endpoint_receipt
 from test_vm_boot import boot, definition, template, instance
 
 
@@ -105,3 +106,57 @@ def test_lost_monitor_rejects_console_without_restarting_guest(console):
     with pytest.raises(RuntimeErrorBase):
         with value.connect():pytest.fail('lost monitor admitted')
     assert not observed['connects'] and state['starts']==state['resumes']==1
+
+
+def test_endpoint_proof_is_durable_before_guest_io_and_immutable_on_reconnect(console):
+    value,observed,directory,process,_ = console
+    original = value.boot.definitions.read(value.operation)
+    with value.connect() as stream:
+        proof = endpoint_receipt(value.boot.journal,original,directory)
+        assert proof['endpoint'] == observed['endpoint']
+        assert proof['peer'] == dict(pid=process['pid'],uid=1001,gid=1001)
+        assert observed['sends'] == []
+        stream.send(b'one command')
+    with value.connect():
+        assert endpoint_receipt(value.boot.journal,original,directory) == proof
+    assert len(observed['connects']) == 2
+    assert value.boot.journal.db.execute('SELECT count(*) FROM vm_console_endpoints').fetchone()[0] == 1
+
+
+def test_replaced_endpoint_on_new_connection_is_not_adopted(console):
+    value,observed,directory,_,_ = console
+    original = value.boot.definitions.read(value.operation)
+    with value.connect():pass
+    proof = endpoint_receipt(value.boot.journal,original,directory)
+    observed['endpoint']['inode'] += 1
+    with pytest.raises(RuntimeErrorBase,match='cannot be replaced'):
+        with value.connect():pytest.fail('replacement console admitted')
+    assert len(observed['connects']) == 1
+    assert endpoint_receipt(value.boot.journal,original,directory) == proof
+
+
+def test_endpoint_change_during_publication_rolls_back_proof_before_io(console,monkeypatch):
+    value,observed,_,_,_ = console;remember = vm_console.remember
+    def change(*args):
+        result = remember(*args)
+        observed['endpoint']['inode'] += 1
+        return result
+    monkeypatch.setattr(vm_console,'remember',change)
+    with pytest.raises(RuntimeErrorBase,match='replaced'):
+        with value.connect():pytest.fail('changed console exposed')
+    assert value.boot.journal.db.execute('SELECT count(*) FROM vm_console_endpoints').fetchone()[0] == 0
+    assert observed['sends'] == [] and observed['closed'] == 1
+
+
+def test_console_receipt_alone_keeps_backend_and_cleanup_protected(console):
+    from dnlab_runtime.backend_reservations import available
+    from dnlab_runtime.inspection import cleanup_inventory
+    value,_,directory,_,_ = console
+    original = value.boot.definitions.read(value.operation);journal = value.boot.journal
+    with value.connect():pass
+    with journal.transaction():
+        for table in ('vm_definition_intents','vm_event_streams'):
+            journal.db.execute('DELETE FROM '+table)
+    with pytest.raises(RuntimeErrorBase):available(journal,original['birth']['lab_id'],original['birth']['node_id'],'docker')
+    assert 'vm_console_endpoints' in cleanup_inventory(journal,original['birth']['lab_id'])['blocked']
+    assert endpoint_receipt(journal,original,directory)['birth'] == original['birth']
