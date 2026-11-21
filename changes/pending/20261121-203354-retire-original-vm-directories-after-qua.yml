@@ -1,0 +1,15 @@
+id: 20261121-203354-retire-original-vm-directories-after-qua
+type: internal
+title: Retire original VM directories after qualified resource cleanup
+description: Require completed original disk and TAP cleanup and writer absence before
+  retiring the VM directory. Track quarantine, residual console unlink and nonrecursive
+  rmdir with durability and lost-response recovery; preserve foreign contents and
+  original receipts.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

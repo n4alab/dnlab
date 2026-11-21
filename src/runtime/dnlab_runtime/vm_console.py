@@ -22,7 +22,7 @@ from .vm_template import require
 
 def socket_identity(parent, name):
     info = os.stat(name, dir_fd=parent, follow_symlinks=False)
-    require(stat.S_ISSOCK(info.st_mode), 'original QEMU console socket required')
+    require(stat.S_ISSOCK(info.st_mode) and info.st_nlink == 1, 'original unaliased QEMU console socket required')
     return dict(device=info.st_dev, inode=info.st_ino, uid=info.st_uid,
                 gid=info.st_gid, mode=info.st_mode)
 
