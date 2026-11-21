@@ -239,3 +239,14 @@ class LocalTapEndpoints:
             if self._read(item['spec']['tap']['nonce']) is None:
                 raise Conflict('original TAP creator intent missing; no create on recovery')
             return self._finish(item,operation)
+
+    def retirement_lease(self, item, operation, *, preflight):
+        """Reuse only this actor's original device; never invoke allocation guards."""
+        original = self._source(item,operation)
+        require(original is not None and original['phase'] == 'retained'
+                and item['proof'] == original['proof'] and callable(preflight),
+                'original retained TAP birth and retirement observer required')
+        device = self.live[item['spec']['tap']['nonce']]['device']
+        require(device._birth_proof == original['records'][-1]['proof'],
+                'original TAP birth changed before retirement')
+        return TapRetention(self.journal,device,preflight=preflight,existing=True)

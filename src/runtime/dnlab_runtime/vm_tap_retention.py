@@ -53,10 +53,15 @@ def request_part(value):
 
 
 class TapRetention:
-    def __init__(self, journal, device, *, preflight):
+    def __init__(self, journal, device, *, preflight, existing=False):
         require(isinstance(device,RetainedTapDevice) and callable(preflight),
                 'original retained TAP device and complete preflight required')
         self.journal,self.device,self.preflight = journal,device,preflight
+        require(type(existing) is bool, 'explicit original TAP journal mode required')
+        if existing:
+            require(journal.db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='vm_tap_retention_intents'").fetchone() is not None,
+                    'original TAP retention journal missing')
+            return
         with journal.transaction():
             journal.db.execute('CREATE TABLE IF NOT EXISTS vm_tap_retention_intents '
                 '(id TEXT PRIMARY KEY,nonce TEXT UNIQUE NOT NULL,ifname TEXT UNIQUE NOT NULL, '

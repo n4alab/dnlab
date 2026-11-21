@@ -141,7 +141,7 @@ def cleanup_inventory(journal,lab):
     for table in ('vm_event_streams','vm_definition_intents','vm_storage_intents','vm_definition_retirements',
                   'vm_tap_intents','vm_tap_actors','vm_tap_creators','vm_tap_tasks','vm_runtime_references','vm_directory_intents',
                   'vm_libvirt_boot_sources','vm_qemu_cpu_queries','vm_qemu_process_creations','vm_libvirt_creation_events',
-                  'vm_initial_starts','vm_shutdown_intents','vm_storage_retirements'):
+                  'vm_initial_starts','vm_shutdown_intents','vm_storage_retirements','vm_tap_retirements'):
         if table not in tables:continue
         # Definition-only retirement does not release disks, TAPs or the
         # node reservation. Full workload cleanup remains a separate step.

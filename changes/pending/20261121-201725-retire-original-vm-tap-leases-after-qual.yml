@@ -1,0 +1,14 @@
+id: 20261121-201725-retire-original-vm-tap-leases-after-qual
+type: internal
+title: Retire original VM TAP leases after qualified domain removal
+description: Release persistence and close only the original TAP descriptors after
+  complete-set preflight. Preserve creator receipts, name/ifindex claims and backend
+  fences through partial cleanup and lost replies without interface adoption.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
