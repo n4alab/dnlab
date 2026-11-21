@@ -83,12 +83,33 @@ class OverlayRetirement:
         except FileNotFoundError:return False
         return True
 
-    def _verify(self, parent, value, name):
+    def _verify(self, parent, value, name, *, preflight=True):
         item = deepcopy(value['item'])
         item['spec']['path'] = str(PurePosixPath(self.files.root)/name)
         with self.files._file(parent,item,value['original']) as fd:
             self.files._chain(fd,value['item']['spec'],allow_dirty=False)
-            self._check(value)
+            if preflight:self._check(value)
+
+    def _layout(self, value):
+        """Readonly set verification for the parent coordinator; no callbacks."""
+        item = value['item']
+        require(self.files._load(item,value['operation_id']) == value['original'],
+                'original overlay birth changed during layout observation')
+        with self.files._root() as parent:
+            leaf = self.files._leaf(item);quarantine = value['quarantine']
+            source = self._exists(parent,leaf);target = self._exists(parent,quarantine)
+            phase = value['phase']
+            if phase == 'prepared':
+                require(source and not target, 'prepared overlay retirement layout differs')
+                self._verify(parent,value,leaf,preflight=False)
+            elif phase in ('rename_requested','quarantined'):
+                require(source != target and (phase != 'quarantined' or target),
+                        'original overlay quarantine layout differs')
+                self._verify(parent,value,leaf if source else quarantine,preflight=False)
+            elif phase == 'unlink_requested':
+                require(not source, 'original overlay path reoccupied during unlink')
+                if target:self._verify(parent,value,quarantine,preflight=False)
+            else:require(not source and not target, 'removed overlay path reoccupied')
 
     def prepare(self, item, operation, *, definition_retirement_sha256):
         require(digest(definition_retirement_sha256) and item['phase'] == 'ready',

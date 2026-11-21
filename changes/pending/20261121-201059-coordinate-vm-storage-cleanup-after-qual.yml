@@ -1,0 +1,14 @@
+id: 20261121-201059-coordinate-vm-storage-cleanup-after-qual
+type: internal
+title: Coordinate VM storage cleanup after qualified domain retirement
+description: Bind overlay removal to the original retired definition, verify every
+  remaining disk and endpoint before mutations, recover partial sets, and retain cleanup
+  and backend reservations independently of child intents.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
