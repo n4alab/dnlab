@@ -1,0 +1,14 @@
+id: 20261121-200457-track-original-local-vm-overlay-retireme
+type: internal
+title: Track original local VM overlay retirement
+description: Add an explicit overlay retirement adapter with qualified exclusive window,
+  original inode and marker checks, durable quarantine and one-shot unlink recovery.
+  Preserve birth history and require a trusted definition-retirement preflight.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
