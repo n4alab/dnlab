@@ -82,6 +82,24 @@ def test_formatting_changes_do_not_hide_or_invent_config_changes(observer):
     assert value(birth)['process']==state['process']
 
 
+def test_root_interleave_preserves_hash_without_sorting_nic_order(observer):
+    value,birth,state,_=observer;xml=state['xml'][0]
+    root=ET.fromstring(xml);root[:]=list(reversed(list(root)))
+    reordered=ET.tostring(root,encoding='unicode')
+    assert xml_fingerprint(reordered,birth)==xml_fingerprint(xml,birth)
+    devices=root.find('devices');nics=devices.findall('interface')
+    assert len(nics)==2
+    positions=[list(devices).index(nic) for nic in nics]
+    for position,nic in zip(positions,reversed(nics)):devices[position]=nic
+    assert xml_fingerprint(ET.tostring(root,encoding='unicode'),birth)!=xml_fingerprint(xml,birth)
+
+
+def test_duplicate_root_element_is_not_accepted_as_reordering(observer):
+    _,birth,state,_=observer;root=ET.fromstring(state['xml'][0]);root.append(deepcopy(root.find('cpu')))
+    with pytest.raises(RuntimeErrorBase,match='unique root VM elements'):
+        xml_fingerprint(ET.tostring(root,encoding='unicode'),birth)
+
+
 def test_observer_composes_with_durable_tracker_without_hypervisor_commands(observer,tmp_path):
     value,birth,state,_=observer
     journal=Journal(tmp_path/'journal')

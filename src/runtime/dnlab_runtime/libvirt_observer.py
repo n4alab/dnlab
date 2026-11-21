@@ -30,10 +30,16 @@ def xml_fingerprint(xml, birth):
     require(set(owner) == set(expected) | {'management_port'}
             and all(owner[key] == value for key, value in expected.items()) and owner['management_port'],
             'domain XML original birth differs')
+    # domaincontents is an interleave in libvirt's domain schema. Normalize
+    # order only for unique root elements; repeated roots need their own
+    # qualified profile. Device/NIC/disk/boot child order remains significant.
+    tags = [child.tag for child in root]
+    require(len(tags) == len(set(tags)), 'unique root VM elements required for qualified XML comparison')
     def describe(element):
         text = element.text if element.text and element.text.strip() else None
         tail = element.tail if element.tail and element.tail.strip() else None
-        return [element.tag, dict(element.attrib), text, tail, [describe(child) for child in element]]
+        children = sorted(element,key=lambda child:child.tag) if element is root else element
+        return [element.tag, dict(element.attrib), text, tail, [describe(child) for child in children]]
     return fingerprint(describe(root))
 
 

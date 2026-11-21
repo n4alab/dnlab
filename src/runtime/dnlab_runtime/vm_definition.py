@@ -1,8 +1,9 @@
 """One-shot persistent definition intent; no VM start or automatic redefinition.
 
 Only an exclusive dedicated session writer may use this driver. Definition
-normalization must already be qualified: an unexpected libvirt rewrite keeps
-the original domain and journal in recovery, without boot or cleanup.
+normalization beyond unique root-element order must already be qualified. An
+unexpected libvirt rewrite keeps the original domain and journal in recovery,
+without boot or cleanup.
 """
 import json
 from xml.etree import ElementTree as ET

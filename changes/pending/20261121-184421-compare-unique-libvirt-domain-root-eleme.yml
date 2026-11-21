@@ -1,0 +1,14 @@
+id: 20261121-184421-compare-unique-libvirt-domain-root-eleme
+type: internal
+title: Compare unique libvirt domain root elements by schema semantics
+description: Normalize only ordering of unique root XML elements permitted by the
+  domain interleave schema; preserve NIC/disk/device subtree order and reject repeated
+  roots, added values and hardware changes.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

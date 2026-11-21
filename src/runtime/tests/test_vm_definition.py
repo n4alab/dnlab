@@ -78,6 +78,19 @@ def test_definition_records_original_ack_once_and_does_not_boot(definition):
     assert driver.prepare('first-define',birth,xml)==value
 
 
+def test_libvirt_root_interleave_reordering_keeps_original_definition(definition,monkeypatch):
+    driver,birth,_,state,_,domain_type=definition
+    def formatted(self,flags):
+        assert flags==2
+        root=ET.fromstring(self.xml)
+        cpu=root.find('cpu');root.remove(cpu);root.append(cpu)
+        return ET.tostring(root,encoding='unicode')
+    monkeypatch.setattr(domain_type,'XMLDesc',formatted)
+    value=driver.apply(birth['creator_operation_id'])
+    assert value['phase']=='defined' and state['calls'].count(('define',))==1
+    assert driver.apply(birth['creator_operation_id'])==value
+
+
 def test_lost_define_response_never_causes_second_define_or_cleanup(definition):
     driver,birth,_,state,_,_=definition
     state['lost']=True
