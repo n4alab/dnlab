@@ -1,0 +1,15 @@
+id: 20261121-210121-bind-local-vm-storage-factories-to-origi
+type: internal
+title: Bind local VM storage factories to original runtime and TAP actor
+description: Reuse original per-VM storage and tracked formatter capabilities under
+  the runtime epoch. Bind only the original TAP actor and verify formatter assets
+  and shared writer census before overlay allocation; refuse lost or replaced providers
+  without spawning replacements.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
