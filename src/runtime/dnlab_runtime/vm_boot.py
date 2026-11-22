@@ -25,6 +25,12 @@ class VMBootDriver:
         self.definitions, self.journal = definitions, definitions.journal
         self.source, self.capture_started, self.observer = source, capture_started, observer
 
+    def _before_start(self, value):
+        """Optional backend capability hook; default preserves existing callers."""
+
+    def _before_resume(self, value):
+        """Optional backend capability hook; CPU resume follows full checks."""
+
     def _boot(self, value):
         boot = value['boot']
         fields(boot, ('phase', 'source_id', 'definition_sha256', 'source_ack', 'reference', 'process_record',
@@ -225,6 +231,7 @@ class VMBootDriver:
                         self._advance(operation_id, 'arming_requested', 'armed', source_ack=ack)
                     elif stage == 'armed':
                         self._source_ack(value); self._inactive(value)
+                        self._before_start(value)
                         value = self._advance(operation_id, stage, 'start_requested')
                         self._check(value); self._source_ack(value); domain = self._inactive(value)
                         require(domain.createWithFlags(1) == 0, 'paused VM start did not complete')
@@ -250,6 +257,7 @@ class VMBootDriver:
                         self._activation(candidate)
                         self._advance(operation_id, 'activation_requested', 'monitored_paused', activation_ack=ack)
                     elif stage == 'monitored_paused':
+                        self._before_resume(value)
                         self._instance(value, 3)
                         value = self._advance(operation_id, stage, 'resume_requested')
                         domain = self._instance(value, 3)

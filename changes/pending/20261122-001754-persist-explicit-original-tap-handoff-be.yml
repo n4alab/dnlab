@@ -1,0 +1,17 @@
+id: 20261122-001754-persist-explicit-original-tap-handoff-be
+type: internal
+title: Persist explicit original TAP handoff before VM boot and resume
+description: Keep historical TAP births immutable while recording creator descriptor
+  release and original QEMU acquisition in the existing journal. Gate start and resume
+  on complete resource checks, preserve uncertain close receipts without resend and
+  keep cleanup/backend reservations held. Add non-consuming link-monitor checks for
+  SQL transaction boundaries; native VM and transferred-TAP retirement qualification
+  remain separate.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

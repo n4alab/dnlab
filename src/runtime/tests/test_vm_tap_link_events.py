@@ -34,10 +34,10 @@ def case():
         def getsockopt(self, level, option):
             assert (level, option) == (270, 5)
             return 0
-        def recvmsg(self, size):
+        def recvmsg(self, size, ancillary=0, flags=0):
             if not state['queue']:
                 raise BlockingIOError(errno.EAGAIN, 'empty')
-            value = state['queue'].pop(0)
+            value = state['queue'][0] if flags & socket.MSG_PEEK else state['queue'].pop(0)
             if isinstance(value, BaseException):
                 raise value
             return value, [], 0, (0, 1)
@@ -139,6 +139,28 @@ def test_birth_requires_original_newlink_event(case):
     state['queue'] = [packet(kind=17), packet()]
     with pytest.raises(RuntimeErrorBase, match='NEWLINK birth'):
         monitor.birth('dtp-one', 110)
+
+
+def test_transaction_check_does_not_consume_or_record_pending_input(case):
+    monitor, state = case
+    state['queue'] = [packet()]
+    birth = monitor.birth('dtp-one', 110)
+    before = deepcopy(state['records'])
+    assert monitor.verify(birth, pump=False)['continuity_verified']
+    assert state['records'] == before
+    state['queue'] = [packet()]
+    with pytest.raises(RuntimeErrorBase, match='outside transaction'):
+        monitor.verify(birth, pump=False)
+    assert state['queue'] == [packet()] and state['records'] == before and not monitor.poisoned
+    assert monitor.verify(birth)['cursor'] == 2
+
+
+def test_transaction_peek_still_rejects_event_loss(case):
+    monitor, state = case
+    state['queue'] = [OSError(errno.ENOBUFS, 'lost')]
+    with pytest.raises(OSError):
+        monitor.quiescent()
+    assert monitor.poisoned
 
 
 @pytest.mark.parametrize('deletion', [True, False])

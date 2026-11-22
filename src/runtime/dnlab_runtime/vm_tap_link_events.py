@@ -162,8 +162,32 @@ class TapLinkEvents:
             self.births[key] = deepcopy(value)
         return deepcopy(value)
 
-    def verify(self, birth):
-        self.drain()
+    def quiescent(self):
+        """Do not consume input or call the recorder inside a caller transaction.
+
+        A pending event requires an explicit drain outside that transaction.
+        Loss or a bad socket still poisons this original subscription.
+        """
+        try:
+            self._check()
+            try:
+                data, ancillary, flags, sender = self.socket.recvmsg(65536, 0, socket.MSG_PEEK)
+            except BlockingIOError as error:
+                require(error.errno in (errno.EAGAIN, errno.EWOULDBLOCK), 'unknown netlink peek refusal')
+                self._check()
+                return
+            require(not ancillary, 'unexpected netlink control data')
+            decode(data, sender, flags)
+            self._check()
+        except BaseException:
+            self.poisoned = True
+            raise
+        raise Conflict('pending TAP events require durable drain outside transaction')
+
+    def verify(self, birth, *, pump=True):
+        require(type(pump) is bool, 'explicit TAP event consumption mode required')
+        if pump:self.drain()
+        else:self.quiescent()
         key = (birth.get('name'), birth.get('ifindex'))
         require(key in self.births and self.births[key] == birth, 'original TAP monitor birth missing')
         relevant = self.events[birth['sequence'] - 1:]
