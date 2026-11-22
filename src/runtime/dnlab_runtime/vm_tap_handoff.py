@@ -169,14 +169,35 @@ class VMTapHandoff:
                 and self.closed.get(item['nonce']) == self._closed_proof(value,item),
                 'original TAP close acknowledgement lost; no descriptor adoption')
         if definition.get('boot', {}).get('process_record') is not None:
-            proof = self._descriptors(value,definition)
-            if value['phase'] == 'acquired':
-                require(value['acquisition'] == proof, 'original QEMU TAP acquisition changed')
+            writers = self.taps._writers(value['tap_set'],definition)
+            if writers:
+                proof = self._descriptors(value,definition)
+                if value['phase'] == 'acquired':
+                    require(value['acquisition'] == proof, 'original QEMU TAP acquisition changed')
+            else:
+                from .vm_shutdown import stopped_proof
+                stopped_proof(self.definitions,definition)
+                require(value['phase'] == 'acquired'
+                        and value['acquisition']['process_record_sha256'] ==
+                            fingerprint(definition['boot']['process_record'])
+                        and value['acquisition']['context_sha256'] == fingerprint(value['tap_set']['context']),
+                        'original stopped TAP acquisition receipt required')
             require(definition['boot']['phase'] not in ('resume_requested','running') or value['phase'] == 'acquired',
                     'QEMU TAP acquisition must be durable before guest resume')
         # This is the immutable retention BIRTH, not a claim that its creator
         # descriptor remains open. Current ownership was checked separately.
         return deepcopy(source['proof'])
+
+    def drain_for_exit(self, operation):
+        """Consume and record original events before shutdown's SQL publication.
+
+        This does not assert writer absence or complete shutdown. The existing
+        shutdown transaction must still qualify the original pidfd exit and
+        recheck all resources with the candidate completion receipt visible.
+        """
+        value = self.read(operation);self._source(value)
+        for item, source in zip(value['items'],value['tap_set']['items']):
+            self._link(value,item,source)
 
     def _full(self, value):
         definition = self._source(value)

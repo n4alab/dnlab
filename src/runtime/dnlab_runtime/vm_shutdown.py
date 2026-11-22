@@ -167,6 +167,8 @@ class VMShutdownDriver:
         original = self._source(value);self._witness(value,witness)
         proof = self.observe_exit(original,witness)
         if proof is None:return self.read(value['id'])
+        before_publication = getattr(self.boot,'_before_exit_publication',None)
+        if before_publication is not None:before_publication(deepcopy(original))
         with self.journal.transaction():
             current = self.read(value['id']);self._source(current);self._witness(current,witness)
             require(current['phase'] == 'requested', 'original shutdown checkpoint changed')

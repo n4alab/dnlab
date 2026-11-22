@@ -1,0 +1,15 @@
+id: 20261122-002355-preserve-handed-off-tap-ownership-throug
+type: internal
+title: Preserve handed-off TAP ownership through verified VM shutdown
+description: Use the committed original shutdown proof after QEMU exits instead of
+  observing dead process descriptors. Drain original link events before SQL exit publication,
+  retain acquisition provenance and reject process absence or foreign writers without
+  qualified shutdown.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

@@ -31,6 +31,9 @@ class VMBootDriver:
     def _before_resume(self, value):
         """Optional backend capability hook; CPU resume follows full checks."""
 
+    def _before_exit_publication(self, value):
+        """Drain backend events before shutdown enters its SQL transaction."""
+
     def _boot(self, value):
         boot = value['boot']
         fields(boot, ('phase', 'source_id', 'definition_sha256', 'source_ack', 'reference', 'process_record',

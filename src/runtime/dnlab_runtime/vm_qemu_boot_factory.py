@@ -38,6 +38,9 @@ class _QualifiedBoot(VMBootDriver):
     def _before_resume(self, value):
         if self.handoff is not None:self.handoff.acquire(value['birth']['creator_operation_id'])
 
+    def _before_exit_publication(self, value):
+        if self.handoff is not None:self.handoff.drain_for_exit(value['birth']['creator_operation_id'])
+
 
 class VMQEMUBootFactory:
     def __init__(self, definitions, source, runtime, qemu_sdk, *, qemu, policy, verify_qemu,
