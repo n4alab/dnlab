@@ -197,6 +197,22 @@ class TapLinkEvents:
         self._check()
         return dict(birth_sha256=fingerprint(birth), cursor=len(self.events), continuity_verified=True)
 
+    def verify_removed(self, birth, *, pump=True):
+        """Observe planned final deletion; never authorize deletion itself."""
+        require(type(pump) is bool, 'explicit TAP event consumption mode required')
+        if pump:self.drain()
+        else:self.quiescent()
+        key = (birth.get('name'),birth.get('ifindex'))
+        require(key in self.births and self.births[key] == birth, 'original TAP monitor birth missing')
+        relevant = [(n + 1,e) for n,e in enumerate(self.events) if n + 1 >= birth['sequence']
+                    and (e['name'] == birth['name'] or e['ifindex'] == birth['ifindex'])]
+        require(relevant and relevant[-1][1]['kind'] == DELLINK
+                and all(e['name'] == birth['name'] and e['ifindex'] == birth['ifindex']
+                        and e['kind'] == (DELLINK if n == relevant[-1][0] else NEWLINK)
+                        for n,e in relevant), 'original final TAP deletion missing, ambiguous or followed by replacement')
+        self._check()
+        return dict(birth_sha256=fingerprint(birth), removal_sequence=relevant[-1][0], original_removal_verified=True)
+
     def close(self):
         self.poisoned = True
         if self.socket is not None:

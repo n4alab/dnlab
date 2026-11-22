@@ -1,0 +1,15 @@
+id: 20261122-003206-add-separately-owned-cleanup-handles-for
+type: internal
+title: Add separately owned cleanup handles for handed-off TAPs
+description: Acquire a new monitored cleanup descriptor only under explicit retired-domain
+  and writer-absence preflight. Preserve creator history, qualify final deletion and
+  reject uncertain reattachment, repeated ioctls, replacement or reoccupation. Integration
+  with the VM retirement coordinator remains experimental follow-up.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
