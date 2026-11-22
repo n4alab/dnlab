@@ -1,0 +1,14 @@
+id: 20261122-000521-verify-original-qemu-tap-descriptors-und
+type: internal
+title: Verify original QEMU TAP descriptors under pidfd
+description: Observe the complete planned TUN descriptor set through original process
+  procfs while its pidfd is held, require monitored link continuity and reject missing,
+  duplicate, foreign or changing descriptors. Native QEMU handoff remains to qualify.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
