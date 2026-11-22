@@ -1,0 +1,15 @@
+id: 20261122-004142-coordinate-full-set-retirement-of-handed
+type: internal
+title: Coordinate full-set retirement of handed-off VM TAPs
+description: Compose stopped-domain retirement with separately journaled cleanup handles
+  for every transferred TAP. Preflight the complete set before effects, preserve creator
+  and handoff histories, recover original acknowledgements without repeated ioctl
+  and reject missing live handles or reoccupation.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
