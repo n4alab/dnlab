@@ -1,0 +1,15 @@
+id: 20261122-000009-observe-original-tap-link-events-across
+type: internal
+title: Observe original TAP link events across handoff
+description: Register an original namespace-bound RTNL feed before TAP creation, retain
+  raw events before admission and refuse deletion, replacement, overflow or lost recorder/runtime
+  provenance. Add an isolated monitored handoff diagnostic; production lifecycle integration
+  remains separate.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
