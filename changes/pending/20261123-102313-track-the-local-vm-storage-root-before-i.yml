@@ -1,0 +1,14 @@
+id: 20261123-102313-track-the-local-vm-storage-root-before-i
+type: internal
+title: Track the local VM storage root before instance allocation
+description: Provision the shared ext4 root through the existing directory birth and
+  durability adapter, preserving original parents, intent and pending recovery without
+  adopting existing targets.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
