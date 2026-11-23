@@ -1,0 +1,13 @@
+id: 20261123-100836-reuse-qualified-dedicated-libvirt-sessio
+type: internal
+title: Reuse qualified dedicated libvirt session for VM controllers
+description: Connect VM controllers and writer census to original activation, daemon,
+  socket and directory proofs without service actions or domain discovery.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
