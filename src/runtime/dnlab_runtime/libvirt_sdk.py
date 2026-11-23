@@ -77,6 +77,12 @@ class Domain:
         require(type(flags) is int and flags == 1, 'explicit ACPI shutdown flag required')
         return self._call('shutdownFlags', flags, mutate=True)
 
+    def destroyFlags(self, flags):
+        # Stop VD is an explicit lifecycle operation. Flag zero would allow
+        # libvirt's SIGKILL fallback; REMOVE_LOGS and combined flags are refused.
+        require(type(flags) is int and flags == 1, 'explicit SIGTERM-only hypervisor stop flag required')
+        return self._call('destroyFlags', flags, mutate=True)
+
 
 class Connection:
     def __init__(self, session, original, socket_fd, raw, readonly, transport_uri, event_loop=None, loop_sha256=None, sdk=None):

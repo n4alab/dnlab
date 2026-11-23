@@ -1,0 +1,15 @@
+id: 20261123-092129-separate-explicit-sigterm-only-vm-stop-f
+type: internal
+title: Separate explicit SIGTERM-only VM stop from NOS shutdown
+description: Add an explicit libvirt graceful-stop policy and distinct original-pidfd
+  exit receipt, preserve NOS ACPI qualification and refuse method switching or forced
+  flags. Support proven monitored-paused guests without CPU resume, retain disks and
+  TAPs, and recover uncertain stop responses without a second request.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

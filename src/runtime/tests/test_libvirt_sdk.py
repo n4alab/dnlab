@@ -33,6 +33,7 @@ def case(monkeypatch):
         def createWithFlags(self, flags):calls.append(('start', flags))
         def resume(self):calls.append(('resume',))
         def shutdownFlags(self,flags):calls.append(('shutdown',flags));return 0
+        def destroyFlags(self,flags):calls.append(('stop',flags));return 0
         def autostart(self):return 0
         def snapshotNum(self, flags):assert flags == 0;return 0
         def listAllCheckpoints(self, flags):assert flags == 0;return []
@@ -97,7 +98,7 @@ def test_write_connection_defines_once_and_starts_paused(case):
     assert [call[0] for call in case.calls] == ['open', 'define', 'start', 'resume', 'close']
 
 
-@pytest.mark.parametrize('action', ['define', 'start', 'resume', 'undefine', 'shutdown'])
+@pytest.mark.parametrize('action', ['define', 'start', 'resume', 'undefine', 'shutdown', 'stop'])
 def test_readonly_mutation_rejected_before_sdk(case, action):
     with case.connect() as connection:
         domain = connection.lookupByUUIDString(UUID)
@@ -106,6 +107,7 @@ def test_readonly_mutation_rejected_before_sdk(case, action):
             elif action == 'start':domain.createWithFlags(1)
             elif action == 'resume':domain.resume()
             elif action == 'shutdown':domain.shutdownFlags(1)
+            elif action == 'stop':domain.destroyFlags(1)
             else:domain.undefineFlags(0)
     assert [call[0] for call in case.calls] == ['open', 'close']
 
@@ -117,6 +119,15 @@ def test_shutdown_sdk_requests_only_explicit_acpi_without_force_or_fallback(case
         for flag in (0,2,8,True):
             with pytest.raises(RuntimeErrorBase):domain.shutdownFlags(flag)
     assert [call for call in case.calls if call[0]=='shutdown']==[('shutdown',1)]
+
+
+def test_stop_sdk_refuses_force_and_log_removal_flags(case):
+    with case.connect(False) as connection:
+        domain = connection.lookupByUUIDString(UUID)
+        assert domain.destroyFlags(1) == 0
+        for flag in (0,2,3,8,True):
+            with pytest.raises(RuntimeErrorBase):domain.destroyFlags(flag)
+    assert [call for call in case.calls if call[0] == 'stop'] == [('stop',1)]
 
 
 @pytest.mark.parametrize('change', ['peer', 'fd'])

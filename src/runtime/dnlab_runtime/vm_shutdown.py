@@ -1,9 +1,10 @@
-"""One ordinary ACPI request, followed by original pidfd/domain observation.
+"""Distinct guest-shutdown and explicit hypervisor-stop operations.
 
-Capability qualification is mandatory and supplied by the trusted template
-registry. This module does not qualify an NOS by assertion, wait indefinitely,
-force exit, retire resources or renew a lost witness. Publication uses the same
-journal transaction as the final readonly resource checks.
+Guest shutdown requires a qualified NOS capability. Explicit Stop VD requires
+its separate approved policy and never certifies guest shutdown or guest flush.
+Neither operation retries uncertain requests, escalates to SIGKILL, retires
+resources or renews a lost witness. Exit publication and final readonly resource
+checks share one journal transaction.
 """
 from copy import deepcopy
 import json
@@ -11,11 +12,18 @@ import re
 
 from .manifest import Conflict, canonical, fingerprint
 from .qemu_process import validate_process_record
-from .vm_shutdown_observation import VMShutdownObservation
+from .vm_shutdown_observation import VMShutdownObservation, VMStopObservation
 from .vm_template import digest, fields, require
 
 
-def _capability(value, original):
+def _capability(value, original, method='acpi'):
+    if method == 'libvirt-sigterm':
+        fields(value,('method','template_sha256','policy_sha256','explicit'),'explicit hypervisor stop policy')
+        require(value['method'] == method and value['explicit'] is True
+                and value['template_sha256'] == original['birth']['template_sha256']
+                and digest(value['policy_sha256']), 'explicit original SIGTERM-only stop policy required')
+        return
+    require(method == 'acpi', 'unknown VM exit operation method')
     fields(value,('method','template_sha256','qualification_sha256','qualified'),'qualified VM shutdown capability')
     require(value['method'] == 'acpi' and value['qualified'] is True
             and value['template_sha256'] == original['birth']['template_sha256']
@@ -29,15 +37,17 @@ def _read(journal, operation):
     fields(value,('id','definition_id','birth','original','original_sha256','capability',
                   'witness','phase','request_ack','proof','error_type'), 'VM shutdown intent')
     original = value['original'];reference = value['witness']
+    method = value['capability'].get('method')
+    observation = VMShutdownObservation if method == 'acpi' else VMStopObservation
     record = validate_process_record(original['boot']['process_record'])
     require(value['id'] == operation and fingerprint(value) == row['fingerprint']
             and value['definition_id'] == row['definition_id'] == value['birth']['creator_operation_id']
             and value['birth'] == original['birth'] and value['original_sha256'] == fingerprint(original)
             and row['boot_source_id'] == original['boot']['source_id']
-            and original['boot']['phase'] == 'running'
+            and original['boot']['phase'] in observation.BOOT_PHASES
             and record['birth'] == value['birth']
             and value['phase'] in ('prepared','requested','completed'), 'original VM shutdown lineage differs')
-    _capability(value['capability'],original)
+    _capability(value['capability'],original,method)
     fields(reference,('kind','id','birth','process_record_sha256'),'original VM shutdown witness')
     require(reference['kind'] == 'original-qemu-exit-witness-v1'
             and isinstance(reference['id'],str) and re.fullmatch('[0-9a-f]{32}',reference['id'])
@@ -49,10 +59,10 @@ def _read(journal, operation):
                             and type(ack['return_code']) is int and ack['return_code'] == 0))
             and (value['phase'] != 'prepared' or value['request_ack'] is None), 'original ACPI acknowledgement differs')
     if value['phase'] == 'completed':
-        expected = dict(kind='ordinary-qemu-shutdown-v1',birth=deepcopy(value['birth']),
+        expected = dict(kind=observation.KIND,birth=deepcopy(value['birth']),
             definition_sha256=original['request_fingerprint'],
             exit=dict(reference=reference,process=original['boot']['process_record']['process'],exited=True),
-            inactive_ack=original['ack'],reason='guest-shutdown')
+            inactive_ack=original['ack'],reason=observation.REASON, **observation.EXTRA)
         require(fingerprint(value['proof']) == fingerprint(expected), 'original ordinary VM shutdown receipt differs')
     else:require(value['proof'] is None, 'unexpected early VM shutdown completion')
     return value
@@ -94,23 +104,32 @@ def stopped_proof(definitions, original, *, required=True):
         return deepcopy(value['proof'])
     require(retirement is None or retirement['phase'] != 'retired',
             'retired VM definition reappeared')
-    require(VMShutdownObservation._ordinary_state(domain)
+    observation = VMShutdownObservation if value['capability']['method'] == 'acpi' else VMStopObservation
+    require(observation._ordinary_state(domain)
             and definitions._ack(original,domain) == original['ack'], 'original stopped VM definition changed')
     return deepcopy(value['proof'])
 
 
 class VMShutdownDriver:
+    METHOD = 'acpi'
+    OBSERVATION = VMShutdownObservation
+    REQUEST_ERROR = 'original ACPI shutdown request did not complete'
     def __init__(self, boot, *, capability):
         require(callable(capability), 'qualified readonly template shutdown provider required')
         self.boot,self.definitions,self.journal = boot,boot.definitions,boot.journal
         self.capability = capability
-        self.observe_exit = VMShutdownObservation(boot)
+        self.observe_exit = self.OBSERVATION(boot)
         with self.journal.transaction():
             self.journal.db.execute('CREATE TABLE IF NOT EXISTS vm_shutdown_intents '
                 '(id TEXT PRIMARY KEY,definition_id TEXT NOT NULL,boot_source_id TEXT NOT NULL,'
                 'payload TEXT NOT NULL,fingerprint TEXT NOT NULL,UNIQUE(definition_id,boot_source_id))')
 
-    def read(self, operation):return _read(self.journal,operation)
+    def read(self, operation):
+        value = _read(self.journal,operation)
+        require(value['capability']['method'] == self.METHOD, 'original VM exit operation method differs; no fallback')
+        return value
+
+    def _request(self, domain):return domain.shutdownFlags(1)
 
     def _write(self, value):
         self.journal.db.execute('UPDATE vm_shutdown_intents SET payload=?,fingerprint=? WHERE id=?',
@@ -122,7 +141,7 @@ class VMShutdownDriver:
         self.definitions._fence(original);self.definitions._session(original)
         capability = self.capability(deepcopy(original))
         require(fingerprint(capability) == fingerprint(value['capability']), 'original shutdown qualification changed')
-        _capability(capability,original)
+        _capability(capability,original,self.METHOD)
         return original
 
     @staticmethod
@@ -147,12 +166,12 @@ class VMShutdownDriver:
                 self._source(value)
                 return value
             original = self.definitions.read(definition_id)
-            require(self.boot._boot(original)['phase'] == 'running' and witness is not None,
+            require(self.boot._boot(original)['phase'] in self.OBSERVATION.BOOT_PHASES and witness is not None,
                     'original running boot and held pidfd required before shutdown')
             held = self.journal.db.execute('SELECT id FROM vm_shutdown_intents WHERE definition_id=? AND boot_source_id=?',
                 (definition_id,original['boot']['source_id'])).fetchone()
             if held is not None:raise Conflict('original boot already has a shutdown intent; no replacement')
-            capability = self.capability(deepcopy(original));_capability(capability,original)
+            capability = self.capability(deepcopy(original));_capability(capability,original,self.METHOD)
             value = dict(id=operation,definition_id=definition_id,birth=deepcopy(original['birth']),
                 original=deepcopy(original),original_sha256=fingerprint(original),capability=deepcopy(capability),
                 witness=witness.reference(),phase='prepared',request_ack=None,proof=None,error_type='')
@@ -197,7 +216,7 @@ class VMShutdownDriver:
                         current['phase'] = 'requested';self._write(current)
                     value = self.read(operation)
                     domain = self._live(value,witness)
-                    require(domain.shutdownFlags(1) == 0, 'original ACPI shutdown request did not complete')
+                    require(self._request(domain) == 0, self.REQUEST_ERROR)
                     with self.journal.transaction():
                         current = self.read(operation)
                         require(current['phase'] == 'requested', 'original shutdown acknowledgement checkpoint changed')
@@ -214,3 +233,32 @@ class VMShutdownDriver:
                 except Exception as recording_error:
                     error.add_note('shutdown diagnostic persistence also failed: '+str(recording_error))
                 raise
+
+
+class VMStopDriver(VMShutdownDriver):
+    """Explicit approved Stop VD, separate from the NOS ACPI capability.
+
+    The policy is authorization, not a claim of prior guest qualification.
+    Only VIR_DOMAIN_DESTROY_GRACEFUL (1) is sent once. No flag-zero fallback,
+    SIGKILL, disk wipe or retry of an uncertain request is permitted.
+    """
+    METHOD = 'libvirt-sigterm'
+    OBSERVATION = VMStopObservation
+    REQUEST_ERROR = 'original explicit Stop VD request did not complete'
+
+    def _request(self, domain):return domain.destroyFlags(1)
+
+    def _live(self, value, witness):
+        original = self._source(value);self._witness(value,witness)
+        require(witness.verify_live() == original['boot']['process_record']['process'],
+                'original live stop process differs')
+        self.boot._check(original);self.boot._activation(original)
+        self.boot._observer(original)(original['birth'])
+        handoff = getattr(self.boot,'handoff',None)
+        if handoff is not None:handoff.acquire(value['definition_id'])
+        domain = self.boot._domain(original)
+        require(domain.state(0)[0] in (1,3), 'original VM must be running or monitored paused before explicit stop')
+        self.boot._check(original);self.boot._activation(original)
+        require(witness.verify_live() == original['boot']['process_record']['process'],
+                'original stop process changed before request')
+        return domain
