@@ -1,0 +1,14 @@
+id: 20261125-155922-bind-vm-host-preflight-to-live-prerequis
+type: internal
+title: Bind VM host preflight to live prerequisite leases
+description: Add experimental shared directory and TAP host preflight using original
+  session services, immutable template, administrative parent and gate-scope providers;
+  reject changed owners, namespaces, capabilities and foreign writers before allocation.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
