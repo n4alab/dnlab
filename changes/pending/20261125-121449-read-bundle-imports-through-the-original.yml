@@ -1,0 +1,14 @@
+id: 20261125-121449-read-bundle-imports-through-the-original
+type: internal
+title: Read bundle imports through the original template store
+description: Allow experimental VM template imports to retain independent journals
+  while reading the original store birth through a live readonly dependency, with
+  physical binding and immutable publication checks.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

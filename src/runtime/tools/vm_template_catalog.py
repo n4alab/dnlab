@@ -16,7 +16,8 @@ from types import SimpleNamespace
 
 from dnlab_runtime.libvirt_install_files import InstallationFiles
 from dnlab_runtime.libvirt_provisioning import ProvisioningWindow
-from dnlab_runtime.manifest import Conflict
+from dnlab_runtime.manifest import Conflict, fingerprint
+from dnlab_runtime.readonly_resource_journal import readonly_resource_journal
 from dnlab_runtime.vm_bundle import metadata
 from dnlab_runtime.vm_template_files import identity
 from dnlab_runtime.vm_template_install import TemplateBundleInstall
@@ -137,3 +138,77 @@ def open_catalog(binding, *, store_item, store_operation, store_proof, import_wi
             except Exception as error:original.add_note('catalog final observation also failed: '+str(error))
             raise
         else:check()
+
+
+def store_reference(catalog):
+    """Describe an already qualified original store capability, never acquire it."""
+    if (not isinstance(catalog, ReadonlyTemplateCatalog) or not catalog.readonly
+            or getattr(catalog.journal, 'closed', False)):
+        raise Conflict('live original readonly template store required')
+    catalog.check()
+    return dict(root=catalog.root, parent=deepcopy(catalog.parent),
+                journal_identity=catalog.journal.identity, window_sha256=catalog.window.sha256)
+
+
+@contextmanager
+def open_bundle_catalog(binding, *, store, original_store, publication, import_window,
+                        verify, expected_binding=None):
+    """Read a later import journal while retaining the original store lease.
+
+    The store birth stays in its original journal. The later journal owns only
+    its bundle's directory/file births. Both capabilities must remain live;
+    neither journal is opened writable, initialized, or copied into the other.
+    """
+    binding, original_store, publication, import_window = deepcopy(
+        (binding, original_store, publication, import_window))
+    if (not isinstance(binding, dict)
+            or set(binding) != {'directory', 'identity', 'directory_identity', 'database_identity', 'lock_identity'}
+            or not callable(verify) or store_reference(store) != original_store
+            or publication.get('directory') != str(Path(original_store['root']) / publication.get('template_sha256', ''))):
+        raise Conflict('original bundle journal, publication and store dependency required')
+    original_check, original_journal = store.check, store.journal
+    def forbidden(*args, **kwargs):
+        raise Conflict('readonly bundle catalog cannot reopen an import window')
+
+    window = ProvisioningWindow(import_window, forbidden)
+    resource_sha256 = fingerprint(dict(store=original_store, publication=publication))
+
+    def check_inputs():
+        verify()
+        if (store.check is not original_check or store.journal is not original_journal
+                or store_reference(store) != original_store):
+            raise Conflict('original template store dependency changed or closed')
+        directory = Path(binding['directory'])
+        wanted = {'': binding['directory_identity'], 'journal.sqlite3': binding['database_identity'],
+                  'workload.lock': binding['lock_identity']}
+        for name, expected in wanted.items():
+            path = directory / name if name else directory
+            if identity(os.stat(path, follow_symlinks=False)) != expected:
+                raise Conflict('original bundle journal physical binding differs')
+
+    def driver(journal, kind=TemplateBundleInstall):
+        return kind(journal, root=original_store['root'], parent_identity=original_store['parent'],
+                    window=window, preflight=forbidden, readonly=True)
+
+    def validate(journal):
+        check_inputs()
+        observed = driver(journal).observe(publication['operation_id'])
+        if observed != publication:
+            raise Conflict('original later bundle publication differs')
+        check_inputs()
+        return resource_sha256
+
+    view = None
+    try:
+        with readonly_resource_journal(binding['directory'], journal_identity=binding['identity'],
+                resource_sha256=resource_sha256, verify=check_inputs, validate=validate,
+                expected_binding=expected_binding) as lease:
+            view = lease.journal
+            view.closed = False
+            catalog = driver(view, ReadonlyTemplateCatalog)
+            catalog.check = lease.check
+            catalog.binding = deepcopy(lease.receipt)
+            yield catalog
+    finally:
+        if view is not None:
+            view.closed = True
