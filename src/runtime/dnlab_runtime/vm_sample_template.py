@@ -1,4 +1,4 @@
-"""Explicit candidate hardware for the first two direct-VM samples.
+"""Explicit candidate hardware for direct-VM samples.
 
 This translates reviewed V2 source facts, without running launcher code or
 claiming guest qualification. Machine, root PCI placement, resources and NIC
@@ -12,6 +12,9 @@ from .vm_template import fields, require, validate_template
 
 
 def sample_template(kind, *, source, base, machine, resources, nic_count, placement, firmware=None):
+    if kind == 'openwrt-v2':
+        return _openwrt_template(source=source, base=base, machine=machine, resources=resources,
+                                 nic_count=nic_count, placement=placement, firmware=firmware)
     require(kind in ('n9kv-9500-v2', 'vios-l2-v2'), 'unsupported initial VM sample')
     fields(source, ('repository', 'branch', 'commit'), 'sample source revision')
     fields(resources, ('memory_mib', 'vcpus', 'cpu'), 'sample resources')
@@ -59,3 +62,42 @@ def sample_template(kind, *, source, base, machine, resources, nic_count, placem
                                      eligible_ports=['p00'] if n9kv else [nic['id'] for nic in nics]),
                      profiles=dict(bootstrap='manual', readiness='manual', shutdown='unqualified'))
     return validate_template(candidate)
+
+
+def _openwrt_template(*, source, base, machine, resources, nic_count, placement, firmware):
+    """Reviewed OpenWrt_V2 layout: IDE boot, virtio NICs and eth0 management.
+
+    PCI placement is supplied explicitly, as for the Cisco samples. Nothing
+    imports the launcher, converts its raw disk or enables guest automation.
+    """
+    fields(source, ('repository', 'branch', 'commit'), 'sample source revision')
+    fields(resources, ('memory_mib', 'vcpus', 'cpu'), 'sample resources')
+    fields(placement, ('bridges', 'first_nic', 'disk', 'ide_controller'),
+           'explicit OpenWrt PCI and drive placement')
+    require(firmware is None, 'OpenWrt sample has no source firmware override')
+    require(type(base) is dict and base.get('format') == 'raw', 'explicit raw OpenWrt base required')
+    require(type(nic_count) is int and 2 <= nic_count <= 65,
+            'explicit OpenWrt management and data NIC count required')
+    bridges = placement['bridges']
+    require(type(bridges) is list and len(bridges) == math.ceil((nic_count - 1) / 26),
+            'complete OpenWrt source PCI bridge inventory required')
+    require(all(type(address) is dict and address.get('bus') == 0
+                for address in [*bridges, placement['first_nic'], placement['ide_controller']]),
+            'OpenWrt root PCI addresses must be explicit on bus zero')
+    controllers = [dict(type='pci', index=0, model='pci-root')]
+    controllers.extend(dict(type='pci', index=index, model='pci-bridge', address=deepcopy(address))
+                       for index, address in enumerate(bridges, 1))
+    controllers.append(dict(type='ide', index=0, address=deepcopy(placement['ide_controller'])))
+    nics = [dict(id=f'p{index:02d}', model='virtio', guest_name=f'eth{index}',
+                 role='oob' if index == 0 else 'data',
+                 address=deepcopy(placement['first_nic']) if index == 0 else
+                 dict(bus=index // 26 + 1, slot=index % 26 + 1, function=0))
+            for index in range(nic_count)]
+    return validate_template(dict(schema_version=1, id='openwrt-v2',
+        source=dict(deepcopy(source), launcher='openwrt_V2/docker/launch.py'),
+        assets=dict(base=deepcopy(base)),
+        hardware=dict(arch='x86_64', machine=machine, **deepcopy(resources), firmware=dict(mode='bios'),
+            controllers=controllers, disks=[dict(id='boot', asset='base', bus='ide', target='hda',
+                                               address=deepcopy(placement['disk']))], nics=nics),
+        management=dict(mode='oob', eligible_ports=['p00']),
+        profiles=dict(bootstrap='manual', readiness='manual', shutdown='unqualified')))

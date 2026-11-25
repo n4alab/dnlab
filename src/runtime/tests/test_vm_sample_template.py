@@ -1,10 +1,13 @@
 """V2 translation from explicit inputs; no vendor assets or hypervisor IO."""
 from copy import deepcopy
+from xml.etree import ElementTree as ET
 
 import pytest
 
 from dnlab_runtime.vm_sample_template import sample_template
-from dnlab_runtime.vm_template import TemplateError
+from dnlab_runtime.vm_template import TemplateError, template_digest, validate_template
+from dnlab_runtime.libvirt_xml import render_domain
+from dnlab_runtime.vm_storage import disk_plan
 
 
 @pytest.fixture
@@ -54,3 +57,80 @@ def test_no_implicit_hardware_or_resource_fallback(inputs, fault):
     elif fault == 'firmware':inputs['firmware'] = dict(path='firmware.fd', sha256='c' * 64, size=4096, format='raw')
     else:inputs['resources']['vcpus'] = True
     with pytest.raises(TemplateError):sample_template('vios-l2-v2', **inputs)
+
+
+@pytest.fixture
+def openwrt_inputs(inputs):
+    value = deepcopy(inputs)
+    value.update(base=dict(path='disks/base.img', sha256='b' * 64, size=1234, format='raw'),
+                 resources=dict(memory_mib=128, vcpus=1, cpu='host'))
+    value['placement'] = dict(bridges=[dict(bus=0, slot=4, function=0)],
+        first_nic=dict(bus=0, slot=5, function=0),
+        ide_controller=dict(bus=0, slot=1, function=1),
+        disk=dict(controller=0, bus=0, target=0, unit=0))
+    return value
+
+
+def test_openwrt_preserves_raw_base_ide_boot_and_separate_management(openwrt_inputs):
+    before = deepcopy(openwrt_inputs)
+    value = sample_template('openwrt-v2', **openwrt_inputs)
+    assert openwrt_inputs == before
+    assert value['source']['launcher'] == 'openwrt_V2/docker/launch.py'
+    assert value['hardware']['memory_mib'] == 128
+    assert value['assets']['base']['format'] == 'raw'
+    assert value['hardware']['disks'][0]['bus'] == 'ide'
+    assert value['hardware']['nics'][0]['guest_name'] == 'eth0'
+    assert value['management'] == dict(mode='oob', eligible_ports=['p00'])
+    assert [nic['guest_name'] for nic in value['hardware']['nics']] == [f'eth{i}' for i in range(9)]
+    assert all(nic['model'] == 'virtio' for nic in value['hardware']['nics'])
+    assert all(nic['role'] == 'data' for nic in value['hardware']['nics'][1:])
+    assert value['profiles'] == dict(bootstrap='manual', readiness='manual', shutdown='unqualified')
+
+
+def test_openwrt_xml_and_overlay_plan_keep_raw_backing_and_ide_mapping(openwrt_inputs):
+    value = sample_template('openwrt-v2', **openwrt_inputs)
+    domain = dict(name='openwrt-test', uuid='12345678-1234-4234-8234-123456789abc',
+        lab_id='lab', node_id='openwrt', host_id='worker', generation=1,
+        creator_operation_id='c' * 32, nonce='d' * 32, management_port='p00')
+    interfaces = {nic['id']:dict(tap=f'dt-openwrt{i}', mac=f'02:00:00:00:00:{i:02x}',
+                                mtu=1500, link_state='down')
+                  for i,nic in enumerate(value['hardware']['nics'])}
+    xml = render_domain(value, bundle_root='/templates/openwrt', domain=domain,
+        overlays=dict(boot='/persist/openwrt/boot.qcow2'), interfaces=interfaces,
+        console_path='/persist/openwrt/console.sock', emulator='/usr/bin/qemu-system-x86_64')
+    root = ET.fromstring(xml)
+    assert root.find('devices/controller[@type="ide"]').get('index') == '0'
+    assert root.find('devices/disk/target').attrib == dict(dev='hda', bus='ide')
+    assert root.find('devices/disk/driver').get('type') == 'qcow2'
+    assert root.find('devices/disk/address').attrib == dict(type='drive', controller='0', bus='0', target='0', unit='0')
+    birth = {key:item for key,item in domain.items() if key not in ('name','management_port')}
+    birth['template_sha256'] = template_digest(value)
+    plan = disk_plan(dict(xml=xml, birth=birth), value, '/templates/openwrt', dict(uid=1001, gid=1002))
+    assert plan[0]['base_format'] == 'raw'
+    assert plan[0]['base_path'] == '/templates/openwrt/disks/base.img'
+
+
+@pytest.mark.parametrize('fault', ['qcow2-base','missing-ide','missing-bridge','pci-conflict',
+                                  'drive-controller','machine-alias','firmware','too-many-nics'])
+def test_openwrt_refuses_unqualified_layout_without_fallback(openwrt_inputs, fault):
+    if fault == 'qcow2-base':openwrt_inputs['base']['format'] = 'qcow2'
+    elif fault == 'missing-ide':del openwrt_inputs['placement']['ide_controller']
+    elif fault == 'missing-bridge':openwrt_inputs['placement']['bridges'] = []
+    elif fault == 'pci-conflict':openwrt_inputs['placement']['ide_controller'] = deepcopy(openwrt_inputs['placement']['first_nic'])
+    elif fault == 'drive-controller':openwrt_inputs['placement']['disk']['controller'] = 1
+    elif fault == 'machine-alias':openwrt_inputs['machine'] = 'pc'
+    elif fault == 'firmware':openwrt_inputs['firmware'] = dict(path='firmware.fd', sha256='c' * 64, size=4096, format='raw')
+    else:openwrt_inputs['nic_count'] = 66
+    with pytest.raises(TemplateError):sample_template('openwrt-v2', **openwrt_inputs)
+
+
+@pytest.mark.parametrize('fault', ['missing','wrong-type','duplicate'])
+def test_ide_disk_requires_its_own_unique_controller(openwrt_inputs, fault):
+    value = sample_template('openwrt-v2', **openwrt_inputs)
+    controllers = value['hardware']['controllers']
+    if fault == 'missing':controllers.pop()
+    elif fault == 'wrong-type':controllers[-1]['type'] = 'sata'
+    else:
+        duplicate = deepcopy(controllers[-1]);duplicate['address']['slot'] = 7
+        controllers.append(duplicate)
+    with pytest.raises(TemplateError):validate_template(value)

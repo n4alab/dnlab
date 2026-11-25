@@ -93,7 +93,7 @@ def validate_template(raw):
         else:
             names = ('type', 'index', 'model', 'address') if kind == 'pci' else ('type', 'index', 'address')
             fields(controller, names, 'controller')
-            require(kind in ('pci', 'sata') and buses, 'unsupported controller')
+            require(kind in ('pci', 'sata', 'ide') and buses, 'unsupported controller')
             address = pci(controller['address'])
             require(address[0] in buses and address not in occupied, 'controller PCI address conflict')
             occupied.add(address)
@@ -101,8 +101,8 @@ def validate_template(raw):
                 require(controller['model'] == 'pci-bridge' and index == len(buses), 'contiguous PCI bridges required')
                 buses.add(index)
             else:
-                require(index not in disk_controllers, 'duplicate SATA controller')
-                disk_controllers.add(index)
+                require((kind, index) not in disk_controllers, 'duplicate disk controller')
+                disk_controllers.add((kind, index))
     disks = hardware['disks']
     require(type(disks) is list and 1 <= len(disks) <= 32, 'explicit VM disks required')
     disk_ids, targets, drive_addresses = set(), set(), set()
@@ -121,7 +121,7 @@ def validate_template(raw):
             address = tuple(disk['address'][k] for k in ('controller', 'bus', 'target', 'unit'))
             require(all(type(v) is int and v >= 0 for v in address)
                     and (disk['bus'], address) not in drive_addresses, 'invalid or duplicate drive address')
-            require(disk['bus'] != 'sata' or address[0] in disk_controllers, 'missing SATA controller')
+            require((disk['bus'], address[0]) in disk_controllers, 'missing disk controller')
             drive_addresses.add((disk['bus'], address))
     nics = hardware['nics']
     require(type(nics) is list and 1 <= len(nics) <= 256, 'explicit guest NICs required')

@@ -1,0 +1,14 @@
+id: 20261125-120001-add-an-explicit-openwrt-vm-sample
+type: internal
+title: Add an explicit OpenWrt VM sample
+description: Extend experimental direct VM templates with the OpenWrt V2 raw disk,
+  explicit IDE controller, virtio NIC mapping and separate management port; retain
+  manual readiness and shutdown qualification.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
