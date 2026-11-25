@@ -1,0 +1,14 @@
+id: 20261125-163036-add-a-bounded-openwrt-vm-serial-shell-pr
+type: internal
+title: Add a bounded OpenWrt VM serial shell probe
+description: Prepare the experimental first-VM gate to verify a nonce response, kernel
+  release and guest boot ID through the original console without accepting terminal
+  echo or replaying uncertain input.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
