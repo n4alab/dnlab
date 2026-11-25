@@ -1,0 +1,14 @@
+id: 20261125-105731-read-original-resource-journals-through
+type: internal
+title: Read original resource journals through shared readonly leases
+description: Validate original resource proofs in quiet pinned journals without SQLite
+  sidecars, reject active writers and replacements, and retain explicit bindings for
+  later acquisitions.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
