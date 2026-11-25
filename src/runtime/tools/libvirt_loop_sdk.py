@@ -14,6 +14,7 @@ import json
 import os
 import stat
 import sys
+import threading
 import types
 import uuid
 
@@ -24,13 +25,24 @@ from dnlab_runtime.vm_bundle import metadata
 from dnlab_runtime.vm_template import digest, fields, require
 
 
+# dlopen may cache /proc/self/fd/N by its path. These two bounded pins must
+# survive every import stack and failed initializer until process exit; closing
+# one could let another extension reuse its native-loader cache entry.
+_EXTENSION_PINS = {}
+_EXTENSION_LOCK = threading.Lock()
+
+
 def isolated_interpreter():
     return bool(sys.flags.isolated and sys.flags.no_site and sys.dont_write_bytecode)
 
 
 def extension_from_fd(fd, *, name='libvirtmod'):
     require(name in ('libvirtmod', 'libvirtmod_qemu'), 'fixed libvirt extension name required')
-    path='/proc/self/fd/'+str(fd)
+    with _EXTENSION_LOCK:
+        require(name not in _EXTENSION_PINS, 'fresh process required; native extension import already attempted')
+        pinned = os.dup(fd)
+        _EXTENSION_PINS[name] = pinned
+    path='/proc/self/fd/'+str(pinned)
     loader=importlib.machinery.ExtensionFileLoader(name,path)
     spec=importlib.util.spec_from_file_location(name,path,loader=loader)
     require(spec is not None, 'original libvirt extension spec required')

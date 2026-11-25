@@ -1,0 +1,16 @@
+id: 20261125-234608-keep-native-libvirt-extension-loader-pat
+type: none
+title: Keep native libvirt extension loader paths distinct
+description: Retain bounded process-lifetime extension file descriptors so importing
+  the QEMU SDK cannot reuse the main SDK native-loader cache path; preserve failed
+  import reservations.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
+reason: Experimental runtime branch only; no release deployment or public API behavior
+  changes.
