@@ -18,15 +18,19 @@ from dnlab_runtime.libvirt_xml import absolute
 from dnlab_runtime.manifest import fingerprint
 from dnlab_runtime.procfs_context import check as check_procfs
 from dnlab_runtime.vm_template import TemplateError, require
+from cleanup_container_observer import config_digest
+from image_build_healthcheck import KIND as HEALTHCHECK_KIND
 
 DIRECTORY = os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW|os.O_CLOEXEC
 
 
 class ActivityChanged(TemplateError):
-    def __init__(self, pid, changes, *, container, reason, command, observed_command):
+    def __init__(self, pid, changes, *, container, reason, command, observed_command,
+                 observed_container=None, observed_reason=None):
         self.diagnostic=dict(pid=pid,changed_fields=changes,original_container_member=container,
             original_builder_reason=reason,command_sha256=hashlib.sha256(command).hexdigest(),
-            observed_command_sha256=hashlib.sha256(observed_command).hexdigest())
+            observed_command_sha256=hashlib.sha256(observed_command).hexdigest(),
+            observed_container_member=observed_container,observed_builder_reason=observed_reason)
         super().__init__('process changed during activity census '
             f'(pid={pid}, fields={",".join(changes)}, container={container}, builder={reason is not None})')
 
@@ -90,11 +94,51 @@ def _stat(raw,pid):
 
 
 class ImageBuildActivity:
-    def __init__(self, api, *, context, read_context, proc_identity, roots, proc_root='/proc'):
+    def __init__(self, api, *, context, read_context, proc_identity, roots, proc_root='/proc', record=None,
+                 qualify_healthcheck=None):
         require(callable(read_context) and type(roots) is list and roots, 'qualified activity context and build roots required')
         for path in roots:absolute(path)
         self.api,self.context,self.read_context=api,deepcopy(context),read_context
         self.proc_identity,self.roots,self.proc_root=deepcopy(proc_identity),list(roots),proc_root
+        require(record is None or callable(record), 'private activity diagnostic writer required')
+        self.record,self.diagnostics=record,[]
+        require(qualify_healthcheck is None or callable(qualify_healthcheck), 'qualified original healthcheck provider required')
+        self.qualify_healthcheck=qualify_healthcheck
+
+    def _classify(self, command, cgroup, root, cid):
+        require(not command or command.endswith(b'\0') and command[0]!=0, 'complete activity argv required')
+        argv=[os.fsdecode(part) for part in command[:-1].split(b'\0')] if command else []
+        belongs=re.search(rb'(?<![0-9a-f])'+cid.encode('ascii')+rb'(?![0-9a-f])',cgroup) is not None
+        cwd=None
+        if argv and (PurePosixPath(argv[0]).name in ('make','gmake','ninja')
+                or PurePosixPath(argv[0]).name=='qemu-img' and len(argv)>1
+                and argv[1] in ('create','convert','resize','rebase','amend','commit')):
+            cwd=os.readlink('cwd',dir_fd=root)
+            require(len(os.fsencode(cwd))<=4096, 'bounded activity cwd required')
+        return belongs,builder_reason(argv,cwd,self.roots),cwd
+
+    def _record(self, diagnostic):
+        require(len(self.diagnostics)<1024, 'activity transition diagnostic bound exceeded')
+        self.diagnostics.append(deepcopy(diagnostic))
+        if self.record is not None:self.record(deepcopy(diagnostic))
+
+    def _healthchecks(self, value, inspected, rows):
+        if not inspected['State']['Running'] or self.qualify_healthcheck is None:return rows
+        members=[row for row in rows if row['container']]
+        main=[row for row in members if row['pid']==inspected['State']['Pid']]
+        extra=[row for row in members if row not in main]
+        if not extra:return rows
+        require(len(main)==1, 'original main API missing; no healthcheck exemption')
+        proof=self.qualify_healthcheck(deepcopy(value),deepcopy(inspected),deepcopy(members))
+        require(type(proof) is dict and set(proof)=={'kind','container_id','image_id','config_sha256',
+                'generation_sha256','main_process','processes','evidence_sha256'}
+                and proof['kind']==HEALTHCHECK_KIND and proof['container_id']==inspected['Id']
+                and proof['image_id']==inspected['Image'] and proof['config_sha256']==config_digest(inspected)
+                and proof['main_process']==main[0] and proof['processes']==extra
+                and all(type(proof[key]) is str and re.fullmatch('[0-9a-f]{64}',proof[key])
+                    for key in ('generation_sha256','evidence_sha256')), 'original qualified healthcheck evidence differs')
+        self._record(proof)
+        return [row for row in rows if row not in extra]
 
     def _context(self,proc):
         check_procfs(proc,context=self.context,read_context=self.read_context,
@@ -117,25 +161,21 @@ class ImageBuildActivity:
                         return data
                     pid=int(name);before=read('stat',16384);ticks=_stat(before,pid)
                     command=read('cmdline',1024*1024);cgroup=read('cgroup',65536)
-                    require(not command or command.endswith(b'\0') and command[0]!=0, 'complete activity argv required')
-                    argv=[os.fsdecode(part) for part in command[:-1].split(b'\0')] if command else []
-                    belongs=re.search(rb'(?<![0-9a-f])'+cid.encode('ascii')+rb'(?![0-9a-f])',cgroup) is not None
-                    cwd=None
-                    needs_cwd=bool(argv) and (PurePosixPath(argv[0]).name in ('make','gmake','ninja')
-                        or PurePosixPath(argv[0]).name=='qemu-img' and len(argv)>1
-                        and argv[1] in ('create','convert','resize','rebase','amend','commit'))
-                    if needs_cwd:
-                        cwd=os.readlink('cwd',dir_fd=root);require(len(os.fsencode(cwd))<=4096, 'bounded activity cwd required')
-                    reason=builder_reason(argv,cwd,self.roots)
+                    belongs,reason,cwd=self._classify(command,cgroup,root,cid)
                     again=read('stat',16384);next_command=read('cmdline',1024*1024);next_cgroup=read('cgroup',65536)
+                    next_belongs,next_reason,next_cwd=self._classify(next_command,next_cgroup,root,cid)
                     changes=[name for name,changed in (('stat',_stat(again,pid)!=ticks),
-                             ('cmdline',next_command!=command),('cgroup',next_cgroup!=cgroup)) if changed]
-                    if changes:
-                        raise ActivityChanged(pid,changes,container=belongs,reason=reason,
-                                              command=command,observed_command=next_command)
-                    if needs_cwd:require(os.readlink('cwd',dir_fd=root)==cwd, 'process cwd changed during activity census')
+                             ('cmdline',next_command!=command),('cgroup',next_cgroup!=cgroup),('cwd',next_cwd!=cwd)) if changed]
+                    if next_cwd is not None:
+                        require(os.readlink('cwd',dir_fd=root)==next_cwd, 'process cwd changed during activity census')
                     original=os.fstat(root);visible=os.stat(name,dir_fd=proc,follow_symlinks=False)
                     require((original.st_dev,original.st_ino)==(visible.st_dev,visible.st_ino), 'activity proc directory replaced')
+                    if changes:
+                        error=ActivityChanged(pid,changes,container=belongs,reason=reason,command=command,
+                            observed_command=next_command,observed_container=next_belongs,observed_reason=next_reason)
+                        unrelated=not (belongs or next_belongs or reason or next_reason) and 'stat' not in changes
+                        self._record(dict(kind='unrelated-transition' if unrelated else 'candidate-conflict',**error.diagnostic))
+                        if not unrelated:raise error
                     if belongs or reason:
                         selected.append(dict(pid=pid,start_ticks=ticks,command_sha256=hashlib.sha256(command).hexdigest(),
                             cgroup_sha256=hashlib.sha256(cgroup).hexdigest(),container=belongs,reason=reason))
@@ -148,6 +188,7 @@ class ImageBuildActivity:
             return sorted(selected,key=lambda value:value['pid'])
 
     def __call__(self,value):
+        self.diagnostics=[]
         actor=value['actor'];cid=actor['container_id']
         require(re.fullmatch('[0-9a-f]{64}',cid) and actor['context_sha256']==fingerprint(self.context)
                 and value['scope']['host_id']==self.context['host_id'] and value['scope']['boot_id']==self.context['boot_id'],
@@ -155,7 +196,8 @@ class ImageBuildActivity:
         before=self.api.inspect(cid)
         require(type(before) is dict and before.get('Id')==cid and before.get('Image')==actor['image_id'],
                 'original image-build activity container missing/replaced')
-        first=self._scan(cid);second=self._scan(cid)
+        first=self._healthchecks(value,before,self._scan(cid))
+        second=self._healthchecks(value,before,self._scan(cid))
         require(first==second, 'image-build processes changed between activity observations')
         container_pids=[row['pid'] for row in first if row['container']]
         if before['State']['Running']:

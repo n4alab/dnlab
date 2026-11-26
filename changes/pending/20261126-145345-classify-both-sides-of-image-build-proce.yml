@@ -1,0 +1,14 @@
+id: 20261126-145345-classify-both-sides-of-image-build-proce
+type: internal
+title: Classify both sides of image-build process transitions
+description: Experimental activity census records changes outside the declared container
+  and builder scope only when both observations remain unrelated, while refusing candidate
+  transitions and process replacement.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

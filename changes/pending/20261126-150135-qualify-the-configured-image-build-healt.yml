@@ -1,0 +1,14 @@
+id: 20261126-150135-qualify-the-configured-image-build-healt
+type: internal
+title: Qualify the configured image-build healthcheck in activity census
+description: Experimental image-build activity may exclude only fixed shell/Python
+  healthcheck processes after original generation, image/configuration, executable,
+  source, credentials and namespace verification; default census remains strict.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
