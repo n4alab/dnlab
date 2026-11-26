@@ -1,0 +1,14 @@
+id: 20261126-143254-bind-administrative-retirement-to-the-or
+type: internal
+title: Bind administrative retirement to the original gate journal
+description: Experimental image-build recovery atomically retires only the original
+  claim, preserves uncertain startup history, and blocks reuse of retired command
+  references.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

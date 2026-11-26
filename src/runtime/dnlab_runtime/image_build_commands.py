@@ -96,6 +96,11 @@ class ImageBuildCommands:
             require(retired is None, 'original command arm retired; reference cannot be reused')
         row=self.journal.db.execute('SELECT * FROM image_build_control_commands WHERE id=?',(reference['token'],)).fetchone()
         if row is None:raise Conflict('original image-build command reference missing')
+        if not historical:
+            table=self.journal.db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='image_build_administrative_retirements'").fetchone()
+            require(not table or self.journal.db.execute(
+                'SELECT 1 FROM image_build_administrative_retirements WHERE hold_id=?',(row['operation_id'],)).fetchone() is None,
+                'original gate administratively retired; reference cannot be reused')
         value=json.loads(row['payload']);command=value['command']
         validate_command(command);reference_proof(reference,command)
         require(fingerprint(value)==row['fingerprint'] and value['id']==row['id']==reference['token']
