@@ -1,0 +1,14 @@
+id: 20261126-152119-wire-qualified-healthchecks-into-image-b
+type: internal
+title: Wire qualified healthchecks into image-build gate preparation
+description: Experimental VM gate preparation explicitly wires the configured healthcheck,
+  durable activity diagnostics and same-command startup checkpoints into the original
+  image-build session.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
