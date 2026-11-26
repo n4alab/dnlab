@@ -1,0 +1,16 @@
+id: 20261125-235754-capture-the-vm-gate-census-in-its-origin
+type: none
+title: Capture the VM gate census in its original session
+description: Reconfirm original actors and all scheduled definitions before effects,
+  persist the current parent timestamps in the gate process, and reject later source,
+  owner or actor changes.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
+reason: Experimental runtime gate preparation only; no installed service or release
+  behavior changed.
