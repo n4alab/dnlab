@@ -10,6 +10,7 @@ from pathlib import PurePosixPath
 import re
 
 from cleanup_execution import canonical_digest, require, sha
+from cleanup_healthcheck import qualify_processes
 
 
 def classify(argv):
@@ -93,10 +94,14 @@ class CleanupCensus:
     ``process_inventory()`` must provide a complete bounded scan, with each
     candidate's identity and command checked before/after reading. The two
     expected generations come from current qualified container provenance.
+    An optional trusted healthcheck qualifier may prove one exact original
+    daemon status process per scan. Its transient identity is retained in
+    diagnostics; both primary generations remain mandatory on every scan.
     """
 
     def __init__(self, *, context, expected_processes, scheduled_sha256,
-                 read_context, process_inventory, sources, qualify_sources=None):
+                 read_context, process_inventory, sources, qualify_sources=None,
+                 qualify_healthcheck=None):
         require(type(context) is dict and context, 'declared coordinator context required')
         require(type(expected_processes) is list and len(expected_processes) == 2,
                 'two qualified cleanup process generations required')
@@ -116,6 +121,9 @@ class CleanupCensus:
         self._read_context, self._processes, self._sources = read_context, process_inventory, sources
         require(qualify_sources is None or callable(qualify_sources), 'trusted scope qualifier required')
         self._qualify_sources = qualify_sources
+        require(qualify_healthcheck is None or callable(qualify_healthcheck),
+                'trusted original healthcheck qualifier required')
+        self._qualify_healthcheck = qualify_healthcheck
         self.diagnostics = None
 
     def __call__(self):
@@ -131,8 +139,9 @@ class CleanupCensus:
             self.diagnostics['observations'].append({'groups': deepcopy(groups)})
             require(not groups['unqualified_script'], 'unqualified script entrypoint observed')
             require(not groups['image_build'], 'image-build is running; qualified hold required')
-            observed = groups['cleanup']
-            require(observed == self._expected, 'cleanup process set differs or native CLI is active')
+            observed, healthchecks = qualify_processes(
+                groups['cleanup'], self._expected, self._qualify_healthcheck)
+            self.diagnostics['observations'][-1]['healthchecks'] = healthchecks
             sources = deepcopy(self._sources())
             require(type(sources) is dict and set(sources) == {'complete', 'candidates'}
                     and sources['complete'] is True and type(sources['candidates']) is list,

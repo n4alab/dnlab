@@ -1,0 +1,14 @@
+id: 20261126-084912-qualify-the-original-cleanup-status-heal
+type: bugfix
+title: Qualify the original cleanup status healthcheck in experimental census
+description: Allow one exact status healthcheck only through explicit current container,
+  process, namespace and source qualification, retaining all other cleanup CLI conflicts
+  and rejected-process diagnostics.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
