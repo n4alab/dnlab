@@ -1,0 +1,16 @@
+id: 20261126-223102-bind-unreleased-retirement-to-the-origin
+type: none
+title: Bind unreleased retirement to the original journal
+description: Prepare a frozen metadata-only entry with durable write binding, restricted
+  readonly service transports and recovery of exact committed receipts after SQLite
+  checkpoint removes the WAL.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
+reason: Experimental OpenWrt recovery recipe preparation and synthetic verification
+  only; no host retirement or installed service change.

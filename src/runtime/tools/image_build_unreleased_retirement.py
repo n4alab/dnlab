@@ -80,6 +80,27 @@ def _observation(request, original):
         owner_absent=True,execution_lock_held=True)
 
 
+def _payload(request, original):
+    wanted=_observation(request,original)
+    receipt=dict(kind=KIND,recovery_id=request['id'],original_sha256=request['original_sha256'],
+        claim_released=True,command_never_released=True,owner_absence_verified=True,
+        shutdown_claimed=False,start_claimed=False,service_actions_performed=0)
+    return dict(request=deepcopy(request),observation=wanted,receipt=receipt)
+
+
+def completed_unreleased(db, request, *, hold_id, command_id, epoch):
+    """SELECT only: prove an already committed retirement, never infer one."""
+    original=unreleased_state(db,hold_id=hold_id,command_id=command_id,epoch=epoch,claim_present=False)
+    expected=_payload(request,original)
+    table=db.execute("SELECT 1 FROM sqlite_master WHERE name='image_build_administrative_retirements' AND type='table'").fetchone()
+    require(table is not None, 'original committed retirement missing')
+    rows=db.execute('SELECT * FROM image_build_administrative_retirements LIMIT 2').fetchall()
+    require(len(rows)==1 and rows[0]['hold_id']==hold_id and rows[0]['command_id']==command_id
+            and rows[0]['id']==request['id'] and json.loads(rows[0]['payload'])==expected
+            and rows[0]['fingerprint']==fingerprint(expected), 'original committed retirement differs')
+    return deepcopy(expected['receipt'])
+
+
 def retire_unreleased(db, request, *, hold_id, command_id, epoch, observe):
     """Atomic tombstone/claim release; mandatory observations may only read.
 
@@ -98,16 +119,12 @@ def retire_unreleased(db, request, *, hold_id, command_id, epoch, observe):
         require(len(existing)<=1 and (not existing or existing[0]['hold_id']==hold_id),
                 'foreign administrative retirement exists')
         original=unreleased_state(db,hold_id=hold_id,command_id=command_id,epoch=epoch,claim_present=not existing)
-        wanted=_observation(request,original)
+        payload=_payload(request,original);wanted=payload['observation'];receipt=payload['receipt']
         def check():
             proof=observe()
             require(type(proof) is dict and canonical(proof)==canonical(wanted),
                     'qualified producer absence, lock, sources or unchanged service unavailable')
         check()
-        receipt=dict(kind=KIND,recovery_id=request['id'],original_sha256=request['original_sha256'],
-            claim_released=True,command_never_released=True,owner_absence_verified=True,
-            shutdown_claimed=False,start_claimed=False,service_actions_performed=0)
-        payload=dict(request=deepcopy(request),observation=wanted,receipt=receipt)
         if existing:
             row=existing[0]
             require(row['id']==request['id'] and row['command_id']==command_id
