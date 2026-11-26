@@ -3,7 +3,8 @@ type: bugfix
 title: Qualify the original cleanup status healthcheck in experimental census
 description: Allow one exact status healthcheck only through explicit current container,
   process, namespace and source qualification, retaining all other cleanup CLI conflicts
-  and rejected-process diagnostics.
+  and rejected-process diagnostics. Reuse the same proof for the initial baseline
+  while requiring the exact original image-build process before its hold.
 components:
 - runtime
 audience:

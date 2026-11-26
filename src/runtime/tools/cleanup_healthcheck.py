@@ -147,3 +147,24 @@ def qualify_processes(observed, expected, qualifier=None):
         'container_id', 'artifact_sha256', 'generation_sha256', 'process_evidence_sha256')),
         'complete healthcheck provenance required')
     return deepcopy(expected), [deepcopy(proof)]
+
+
+def qualify_initial_processes(groups, expected, qualifier=None):
+    """Before the hold, image-build must still be the exact original actor.
+
+    Use the same healthcheck provider as the subsequent held census. Only its
+    transient status process may differ; image-build and unknown entrypoints
+    receive no exception. Persist returned healthchecks separately from the
+    stable groups used by same-session baseline verification.
+    """
+    keys = {'cleanup', 'image_build', 'unqualified_script'}
+    require(type(groups) is dict and type(expected) is dict
+            and set(groups) == set(expected) == keys
+            and all(type(value) is list for value in (*groups.values(), *expected.values()))
+            and len(expected['cleanup']) == 2 and len(expected['image_build']) == 1
+            and not expected['unqualified_script'], 'complete original initial actor set required')
+    require(not groups['unqualified_script']
+            and groups['image_build'] == expected['image_build'],
+            'original initial actor set changed')
+    primary, proofs = qualify_processes(groups['cleanup'], expected['cleanup'], qualifier)
+    return {'groups': {**deepcopy(expected), 'cleanup': primary}, 'healthchecks': proofs}

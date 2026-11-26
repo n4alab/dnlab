@@ -11,7 +11,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'runtime/tools'))
 from cleanup_census import CleanupCensus, processes
 from cleanup_container_observer import config_digest
 from cleanup_execution import canonical_digest
-from cleanup_healthcheck import ARGV, COMMAND_SHA256, TEST, StatusHealthcheck, qualify_processes
+from cleanup_healthcheck import (ARGV, COMMAND_SHA256, TEST, StatusHealthcheck,
+                                qualify_initial_processes, qualify_processes)
 
 
 @pytest.fixture
@@ -268,3 +269,45 @@ def test_real_status_callback_uses_only_synthetic_snapshot_and_logging(tmp_path,
         assert json.loads(result.output) == snapshot
     else:
         assert 'state is unavailable' in result.output
+
+
+def initial_groups(proof, row):
+    main = {key: proof._main['evidence']['process'][key] for key in row}
+    return dict(cleanup=[main, dict(pid=42, start_ticks='200', cmdline_sha256='8' * 64)],
+                image_build=[dict(pid=43, start_ticks='250', cmdline_sha256='7' * 64)],
+                unqualified_script=[])
+
+
+def test_initial_baseline_rechecks_same_healthcheck_without_transient_digest(healthcheck):
+    proof, row, *_ = healthcheck
+    expected = initial_groups(proof, row)
+    original = deepcopy(expected)
+    evidence = []
+    for present in (True, False, True):
+        observed = deepcopy(expected)
+        if present:
+            observed['cleanup'].append(row)
+        result = qualify_initial_processes(observed, expected, proof)
+        assert result['groups'] == expected
+        assert len(result['healthchecks']) == int(present)
+        evidence.append(result)
+    assert expected == original and len(evidence[0]['healthchecks']) == 1
+    assert healthcheck[-1].count(('pin', 99)) == 2
+
+
+@pytest.mark.parametrize('change', ['missing_build', 'changed_build', 'extra_build',
+                                 'unknown', 'missing_main', 'sync', 'extra_key'])
+def test_initial_healthcheck_does_not_exempt_other_actors(healthcheck, change):
+    proof, row, *_ = healthcheck
+    expected = initial_groups(proof, row)
+    observed = deepcopy(expected)
+    observed['cleanup'].append(deepcopy(row))
+    if change == 'missing_build': observed['image_build'].clear()
+    elif change == 'changed_build': observed['image_build'][0]['start_ticks'] = '251'
+    elif change == 'extra_build': observed['image_build'].append(dict(pid=44, start_ticks='260', cmdline_sha256='6' * 64))
+    elif change == 'unknown': observed['unqualified_script'].append(row)
+    elif change == 'missing_main': observed['cleanup'].pop(0)
+    elif change == 'sync': observed['cleanup'][-1]['cmdline_sha256'] = '5' * 64
+    else: observed['other'] = []
+    with pytest.raises(ValueError): qualify_initial_processes(observed, expected, proof)
+    assert ('pin', 99) not in healthcheck[-1]
