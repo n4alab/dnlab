@@ -1,0 +1,14 @@
+id: 20261126-142515-track-separate-administrative-image-buil
+type: internal
+title: Track separate administrative image-build recovery
+description: Experimental recovery tracks retirement of the original gate producer
+  and restores policy on a qualified current service generation while preserving the
+  old uncertain start.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
