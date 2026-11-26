@@ -1,5 +1,6 @@
 """Finite coordinator census with synthetic inventories and scheduled sources."""
 from copy import deepcopy
+import json
 from pathlib import Path
 import sys
 
@@ -49,6 +50,23 @@ def test_any_recognized_extra_cli_blocks_native_exclusion(census, argv):
     rows.append(dict(pid=99, start_ticks='300', argv=argv))
     with pytest.raises(ValueError, match='process set differs'):
         observer()
+
+
+def test_rejected_process_set_is_retained_without_plaintext_arguments(census):
+    observer, rows, *_ = census
+    rows.append(dict(pid=99, start_ticks='300',
+                     argv=['dnlab-multinode', 'status', '--synthetic-private-argument']))
+    with pytest.raises(ValueError, match='process set differs'):
+        observer()
+    rejected = deepcopy(observer.diagnostics)
+    assert rejected['status'] == 'partial'
+    assert [row['pid'] for row in rejected['expected_processes']] == [41, 42]
+    assert [row['pid'] for row in rejected['observations'][0]['groups']['cleanup']] == [41, 42, 99]
+    assert '--synthetic-private-argument' not in json.dumps(rejected)
+    rows.pop()
+    observer()
+    assert observer.diagnostics['status'] == 'complete'
+    assert len(rejected['observations'][0]['groups']['cleanup']) == 3
 
 
 @pytest.mark.parametrize('change', ['removed', 'restarted', 'command', 'duplicate'])

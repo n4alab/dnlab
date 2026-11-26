@@ -1,0 +1,16 @@
+id: 20261126-001130-retain-the-rejected-cleanup-census-proce
+type: none
+title: Retain the rejected cleanup census process set
+description: Keep PID, starttime and command hashes before census validation so a
+  transient extra or changed process can be diagnosed without exposing plaintext arguments
+  or weakening admission.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
+reason: Experimental gate diagnostics only; cleanup admission and installed services
+  are unchanged.

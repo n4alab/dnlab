@@ -116,12 +116,19 @@ class CleanupCensus:
         self._read_context, self._processes, self._sources = read_context, process_inventory, sources
         require(qualify_sources is None or callable(qualify_sources), 'trusted scope qualifier required')
         self._qualify_sources = qualify_sources
+        self.diagnostics = None
 
     def __call__(self):
-        require(self._read_context() == self._context, 'coordinator census context differs')
+        current_context = self._read_context()
+        self.diagnostics = {'status': 'partial', 'context': deepcopy(current_context),
+                            'expected_processes': deepcopy(self._expected), 'observations': []}
+        require(current_context == self._context, 'coordinator census context differs')
         snapshots = []
         for _ in range(2):
             groups = process_groups(self._processes())
+            # Preserve the exact rejected set before any validation. Groups
+            # contain PID/starttime/argv hashes only, never raw command lines.
+            self.diagnostics['observations'].append({'groups': deepcopy(groups)})
             require(not groups['unqualified_script'], 'unqualified script entrypoint observed')
             require(not groups['image_build'], 'image-build is running; qualified hold required')
             observed = groups['cleanup']
@@ -137,6 +144,7 @@ class CleanupCensus:
                               'observed_scheduled_sha256': canonical_digest(sources)})
         require(snapshots[0] == snapshots[1] and self._read_context() == self._context,
                 'coordinator census changed during observation')
+        self.diagnostics['status'] = 'complete'
         return {'context': deepcopy(self._context), **snapshots[1], 'unexpected_actors': [],
                 'scope': 'declared-single-coordinator-recognized-entrypoints',
                 'gate_allowed': False}
