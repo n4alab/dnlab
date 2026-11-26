@@ -49,9 +49,8 @@ def native_observer(inputs, fence, *, verify_sources, read_context, record):
     api=ReadonlyService(hold['actor']['container_id']);engine=ReadonlyLockAsset(hold['actor']['container_id'])
     def no_dispatch(value):raise RuntimeError('unreleased retirement cannot observe a start or stop receipt')
     health=ImageBuildHealthcheck(api,profile,shell_asset=inputs['shell_asset'],read_context=read_context,startup=no_dispatch)
-    proc_identity=dict(zip(('device','inode'),original['epoch']['snapshot']['proc_identity'],strict=True))
     activity=ImageBuildActivity(api,context=profile['context'],read_context=read_context,
-        proc_identity=proc_identity,roots=inputs['build_roots'],record=record,qualify_healthcheck=health)
+        proc_identity=inputs['proc_identity'],roots=inputs['build_roots'],record=record,qualify_healthcheck=health)
     binding=ImageBuildBinding(inputs['binding'],expected_sha256=fingerprint(inputs['binding']),
         read_context=read_context,read_lock=engine.lock_asset)
     ledger=JobLedger(inputs['ledger'],expected_sha256=profile['ledger_sha256'],read_context=read_context)
@@ -59,13 +58,14 @@ def native_observer(inputs, fence, *, verify_sources, read_context, record):
         query=ImageBuildNamespaceQuery(api,profile,read_context=read_context),binding=binding,ledger=ledger,
         activity=activity,exit_receipt=no_dispatch,startup=no_dispatch,process=LinuxProcess())
     return UnreleasedObservation(inputs['request'],original,service=service,networks=inputs['networks'],
-        fence=fence,verify_sources=verify_sources,read_context=read_context)
+        fence=fence,verify_sources=verify_sources,read_context=read_context,
+        proc_identity=inputs['proc_identity'],record=record)
 
 
 def execute_recipe(inputs, *, snapshot, persist, record, verify_sources, read_context, clock=time.monotonic):
     inputs=deepcopy(inputs)
     fields(inputs,('schema_version','execution_allowed','request','original','profile','networks','binding',
-                  'ledger','shell_asset','build_roots','directory','physical'),'unreleased recipe')
+                  'ledger','shell_asset','build_roots','directory','physical','proc_identity'),'unreleased recipe')
     require(type(inputs['schema_version']) is int and inputs['schema_version']==1
             and inputs['execution_allowed'] is True and all(callable(fn) for fn in
                 (persist,record,verify_sources,read_context,clock)), 'explicit frozen recipe and qualified providers required')

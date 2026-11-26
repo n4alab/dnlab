@@ -2,6 +2,7 @@
 from copy import deepcopy
 from pathlib import Path
 import sys
+from types import SimpleNamespace
 
 import pytest
 
@@ -10,6 +11,7 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'tools'))
 from dnlab_runtime.manifest import fingerprint
 from dnlab_runtime.vm_template import TemplateError
 import image_build_unreleased_recipe as recipe
+from image_build_unreleased_recipe import native_observer as build_native_observer
 from test_image_build_unreleased_execution import physical
 from test_image_build_unreleased_retirement import unreleased
 from test_image_build_executor import executor
@@ -23,7 +25,8 @@ def configured(physical,executor,monkeypatch):
     profile=deepcopy(executor[-1].observation.profile)
     inputs=dict(schema_version=1,execution_allowed=True,request=request,original=original,profile=profile,
         networks=deepcopy(executor[3]['inspect']['NetworkSettings']['Networks']),binding={},ledger={},
-        shell_asset={},build_roots=['/synthetic/build'],directory=str(root),physical=binding)
+        shell_asset={},build_roots=['/synthetic/build'],directory=str(root),physical=binding,
+        proc_identity=dict(device=52,inode=1))
     calls=[]
     def observer(value,fence,**providers):
         assert value==inputs;calls.append('observer')
@@ -70,3 +73,27 @@ def test_recipe_transports_refuse_every_mutating_or_foreign_request(action):
         elif action=='policy':engine.update_policy(dict(Name='no',MaximumRetryCount=0))
         elif action=='other-container':api.inspect('b'*64)
         else:api.request('GET','/containers/json')
+
+
+def test_native_wiring_uses_explicit_procfs_root_for_both_readers(configured,monkeypatch):
+    inputs,_=configured;seen={}
+    def inert(*args,**kwargs):return SimpleNamespace(lock_asset=lambda value:None)
+    for name in ('ReadonlyService','ReadonlyLockAsset','ImageBuildHealthcheck','ImageBuildBinding',
+                 'JobLedger','ImageBuildNamespaceQuery','ImageBuildObservation','LinuxProcess'):
+        monkeypatch.setattr(recipe,name,inert)
+    def activity(*args,**kwargs):seen['activity']=deepcopy(kwargs['proc_identity']);return inert()
+    def absence(*args,**kwargs):seen['absence']=deepcopy(kwargs['proc_identity']);return inert()
+    monkeypatch.setattr(recipe,'ImageBuildActivity',activity)
+    monkeypatch.setattr(recipe,'UnreleasedObservation',absence)
+    build_native_observer(inputs,SimpleNamespace(),verify_sources=lambda:None,
+                          read_context=lambda:None,record=lambda proof:None)
+    assert seen==dict(activity=inputs['proc_identity'],absence=inputs['proc_identity'])
+    assert list(inputs['proc_identity'].values())!=inputs['original']['epoch']['snapshot']['proc_identity']
+
+
+def test_missing_explicit_procfs_root_is_not_backfilled_from_the_epoch(configured,tmp_path):
+    inputs,calls=configured;inputs.pop('proc_identity')
+    with pytest.raises(TemplateError,match='invalid unreleased recipe fields'):
+        recipe.execute_recipe(inputs,snapshot=tmp_path/'snapshot',persist=lambda *a:None,record=lambda p:None,
+            verify_sources=lambda:inputs['request']['sources_sha256'],read_context=lambda:inputs['profile']['context'])
+    assert calls==[]

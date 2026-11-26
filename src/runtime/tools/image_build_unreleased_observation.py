@@ -11,7 +11,7 @@ import os
 from dnlab_runtime.image_build_commands import ImageBuildCommands
 from dnlab_runtime.manifest import canonical, fingerprint
 from dnlab_runtime.procfs_context import check as check_procfs
-from dnlab_runtime.vm_template import require
+from dnlab_runtime.vm_template import fields, require
 from image_build_observation import ImageBuildObservation
 from image_build_unreleased_retirement import _observation
 
@@ -20,13 +20,16 @@ DIRECTORY=os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW|os.O_CLOEXEC
 
 class UnreleasedObservation:
     def __init__(self, request, original, *, service, networks, fence,
-                 verify_sources, read_context, proc_root='/proc'):
+                 verify_sources, read_context, proc_identity, record, proc_root='/proc'):
         self.original=deepcopy(original);self.request=deepcopy(request)
         self.expected=_observation(self.request,self.original)
         self.context=ImageBuildCommands._context(self.original['epoch'])
         require(isinstance(service,ImageBuildObservation) and callable(getattr(fence,'check',None))
-                and callable(verify_sources) and callable(read_context),
+                and all(callable(fn) for fn in (verify_sources,read_context,record)),
                 'qualified original service, held physical fence and readonly providers required')
+        fields(proc_identity,('device','inode'),'original procfs root identity')
+        require(all(type(value) is int and value>0 for value in proc_identity.values()),
+                'explicit qualified procfs root identity required')
         hold=self.original['hold']
         require(service.profile['actor']==hold['actor'] and service.profile['context']==self.context
                 and service.profile['policy']==hold['policy']
@@ -35,7 +38,7 @@ class UnreleasedObservation:
         self.service,self.networks,self.fence=service,deepcopy(networks),fence
         self.service_profile_sha256=fingerprint(service.profile)
         self.verify_sources,self.read_context,self.proc_root=verify_sources,read_context,proc_root
-        self.proc_identity=dict(zip(('device','inode'),self.original['epoch']['snapshot']['proc_identity'],strict=True))
+        self.proc_identity=deepcopy(proc_identity);self.record=record
 
     def _checks(self, proc):
         self.fence.check()
@@ -43,6 +46,10 @@ class UnreleasedObservation:
                 and fingerprint(self.service.profile)==self.service_profile_sha256
                 and _observation(self.request,self.original)==self.expected,
                 'original unreleased retirement source/context/profile differs')
+        info=os.fstat(proc)
+        self.record(dict(kind='unreleased-procfs-binding',expected=deepcopy(self.proc_identity),
+            observed=dict(device=info.st_dev,inode=info.st_ino),
+            original_process_directory=deepcopy(self.original['epoch']['snapshot']['proc_identity'])))
         check_procfs(proc,context=self.context,read_context=self.read_context,
                      proc_identity=self.proc_identity,proc_root=self.proc_root)
 

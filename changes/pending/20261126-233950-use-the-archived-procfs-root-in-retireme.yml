@@ -1,0 +1,16 @@
+id: 20261126-233950-use-the-archived-procfs-root-in-retireme
+type: none
+title: Use the archived procfs root in retirement preflight
+description: Pass an explicit procfs-root identity to the unreleased-retirement observer
+  and activity reader instead of the producer process-directory identity, and save
+  expected/observed values before refusal.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
+reason: Experimental metadata recovery wiring correction only; the failed host attempt
+  is preserved and no second apply or installed-service change is performed.
