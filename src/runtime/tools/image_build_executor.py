@@ -84,6 +84,19 @@ class ImageBuildExecutor:
         check()
         return self._finish_stop(command,reference,original['exit_progress']['pidfd'],check=check)
 
+    def recover(self, reference):
+        original=self.commands.qualified_snapshot(reference);command=original['command']
+        if command['action']=='stop':return self.recover_stop(reference)
+        require(command['action']=='start' and 'start_ack' in original and 'start_progress' in original,
+                'original durable start acknowledgement and first generation required')
+        def check():return self._current(command,reference,observation_only=True)
+        value=check()
+        proof=self.observation.observe_start(value,reference,deepcopy(original['start_progress']),
+                                             check=check,clock=self.clock,pause=self.pause)
+        check()
+        return dict(evidence=dict(actor=deepcopy(proof['actor']),original_start_verified=True),
+                    details=dict(startup=proof))
+
     def __call__(self, command, reference):
         with self.commands.journal.execution_lock:
             original=self.commands._read(reference)
@@ -118,8 +131,10 @@ class ImageBuildExecutor:
             return self._finish_stop(command,reference,exited,check=lambda:self._current(command,reference))
         require(action=='start', 'original image-build action required')
         self.engine.start()  # Only a known HTTP 204 permits capture; no adoption after a lost ACK.
+        self.commands.checkpoint_start_ack(reference)
         value=self._current(command,reference)
         proof=self.observation.capture_start(value,reference,check=lambda:self._current(command,reference),
+                                             checkpoint=lambda proof:self.commands.checkpoint_start(reference,proof),
                                              clock=self.clock,pause=self.pause)
         self._current(command,reference)
         return dict(evidence=dict(actor=deepcopy(proof['actor']),original_start_verified=True),

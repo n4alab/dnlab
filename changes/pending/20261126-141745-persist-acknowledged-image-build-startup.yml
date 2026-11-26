@@ -1,0 +1,14 @@
+id: 20261126-141745-persist-acknowledged-image-build-startup
+type: internal
+title: Persist acknowledged image-build startup before readiness checks
+description: Experimental runtime recovery reobserves the saved first process generation
+  after a known start acknowledgement without resending start; missing acknowledgement
+  or identity remains pending.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []

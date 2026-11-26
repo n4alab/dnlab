@@ -178,7 +178,7 @@ class ImageBuildObservation:
         require(outcome is not None, 'original stop outcome required')
         return self._observe(value,stop_outcome=outcome)
 
-    def capture_start(self, value, reference, *, check, timeout=30, clock=time.monotonic, pause=time.sleep):
+    def capture_start(self, value, reference, *, check, checkpoint=None, timeout=30, clock=time.monotonic, pause=time.sleep):
         """Capture after a known start ACK; never called to adopt an uncertain start.
 
         Readiness queries must be bounded by their provider. Only the explicit
@@ -201,6 +201,19 @@ class ImageBuildObservation:
         current_actor=deepcopy(self.profile['actor']);current_actor['process_sha256']=process_digest(capture,generation)
         proof=dict(reference=deepcopy(reference),command_sha256=fingerprint(start['command']),capture=capture,
                    generation=generation,actor=current_actor,original_start_verified=True)
+        if checkpoint is not None:
+            require(callable(checkpoint), 'original startup checkpoint callback required')
+            checkpoint(deepcopy(proof))
+        return self.observe_start(value,reference,proof,check=check,timeout=timeout,clock=clock,pause=pause)
+
+    def observe_start(self, value, reference, proof, *, check, timeout=30, clock=time.monotonic, pause=time.sleep):
+        """Re-observe the saved first generation; never capture a replacement."""
+        require(callable(check) and callable(clock) and callable(pause)
+                and type(timeout) in (int,float) and 0<timeout<=30, 'bounded original startup observation required')
+        start=value['actions'].get('start')
+        require(start is not None and start['reference']==reference and start['phase']=='release_requested'
+                and proof['reference']==reference and proof['command_sha256']==fingerprint(start['command']),
+                'original startup reference required')
         deadline=clock()+timeout
         while True:
             check()

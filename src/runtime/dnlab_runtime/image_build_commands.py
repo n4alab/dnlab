@@ -113,6 +113,17 @@ class ImageBuildCommands:
                     and value['phase'] in ('release_requested','completed')
                     and progress['actor_sha256']==fingerprint(command['actor']), 'original exit checkpoint owner differs')
             self._exit_proof(progress['pidfd'])
+        if 'start_ack' in value:
+            ack=value['start_ack']
+            fields(ack,('container_id','status','empty_body'),'original start acknowledgement')
+            require(command['action']=='start' and value.get('native_dispatch_started') is True
+                    and value['phase'] in ('release_requested','completed')
+                    and type(ack['status']) is int and ack['status']==204 and ack['empty_body'] is True
+                    and ack['container_id']==command['actor']['container_id'],
+                    'original start acknowledgement differs')
+        if 'start_progress' in value:
+            require('start_ack' in value, 'original start acknowledgement required before capture')
+            self._start_proof(value['start_progress'],command,reference)
         source=self.journal.db.execute('SELECT * FROM vm_runtime_epochs WHERE id=?',(value['epoch_id'],)).fetchone()
         require(source is not None and source['fingerprint']==value['epoch_sha256'], 'original control runtime epoch missing')
         epoch=json.loads(source['payload'])
@@ -147,6 +158,47 @@ class ImageBuildCommands:
             value['exit_progress']=progress;self._save(value)
             self._epoch(command,value);self._claim(command)
             return deepcopy(progress)
+
+    @staticmethod
+    def _start_proof(proof, command, reference):
+        fields(proof,('reference','command_sha256','capture','generation','actor','original_start_verified'),
+               'original startup checkpoint')
+        actor(proof['actor'])
+        fields(proof['generation'],('started_at','restart_count'),'original startup generation')
+        require(proof['reference']==reference and proof['command_sha256']==fingerprint(command)
+                and proof['original_start_verified'] is True
+                and type(proof['capture']) is dict
+                and type(proof['generation']['started_at']) is str and proof['generation']['started_at']
+                and type(proof['generation']['restart_count']) is int and proof['generation']['restart_count']>=0
+                and all(proof['actor'][key]==command['actor'][key] for key in command['actor'] if key!='process_sha256')
+                and proof['actor']['process_sha256']==fingerprint(dict(capture=proof['capture'],generation=proof['generation']))
+                and proof['actor']['process_sha256']!=command['actor']['process_sha256']
+                and len(canonical(proof).encode())<=1024*1024, 'original startup checkpoint differs')
+
+    def _checkpoint_start(self, reference, key, proof):
+        with self.journal.execution_lock:
+            value=self._read(reference);command=value['command']
+            require(command['action']=='start' and value['phase']=='release_requested'
+                    and value.get('native_dispatch_started') is True, 'original start dispatch required')
+            self._epoch(command,value);self._claim(command)
+            if key in value:
+                require(value[key]==proof, 'original start checkpoint cannot be replaced')
+                return deepcopy(proof)
+            if key=='start_progress':
+                require('start_ack' in value, 'original start acknowledgement required before capture')
+                self._start_proof(proof,command,reference)
+            value[key]=deepcopy(proof);self._save(value)
+            self._epoch(command,value);self._claim(command)
+            return deepcopy(proof)
+
+    def checkpoint_start_ack(self, reference):
+        """Called only after the original transport accepted HTTP 204/empty body."""
+        value=self._read(reference)
+        return self._checkpoint_start(reference,'start_ack',
+            dict(container_id=value['command']['actor']['container_id'],status=204,empty_body=True))
+
+    def checkpoint_start(self, reference, proof):
+        return self._checkpoint_start(reference,'start_progress',proof)
 
     def arm(self, command):
         with self.journal.execution_lock:
@@ -221,21 +273,21 @@ class ImageBuildCommands:
             return deepcopy(value['outcome'])
 
     def recover_outcome(self, reference):
-        """Complete only from an original durable exit plus fresh readonly proof."""
+        """Complete only from original durable progress plus fresh readonly proof."""
         with self.journal.execution_lock:
             value=self.qualified_snapshot(reference)
             if value['outcome'] is not None:return deepcopy(value['outcome'])
-            if self.recover_callback is None or 'exit_progress' not in value:return None
-            require(value['phase']=='release_requested' and value['command']['action']=='stop',
-                    'only original exited stop permits observational recovery')
-            progress=deepcopy(value['exit_progress']);self._claim(value['command'])
+            key={'stop':'exit_progress','start':'start_progress'}.get(value['command']['action'])
+            if self.recover_callback is None or key is None or key not in value:return None
+            require(value['phase']=='release_requested', 'original pending command required for observational recovery')
+            progress=deepcopy(value[key]);self._claim(value['command'])
             result=self.recover_callback(deepcopy(reference))
-            fields(result,('evidence','details'),'qualified observed stop result')
+            fields(result,('evidence','details'),'qualified observed control result')
             require(type(result['evidence']) is dict and type(result['details']) is dict
                     and len(canonical(result).encode())<=1024*1024, 'bounded original recovery result required')
             value=self.qualified_snapshot(reference);self._claim(value['command'])
-            require(value['phase']=='release_requested' and value.get('exit_progress')==progress,
-                    'original stop checkpoint changed during observation')
+            require(value['phase']=='release_requested' and value.get(key)==progress,
+                    'original control checkpoint changed during observation')
             value.update(phase='completed',details=deepcopy(result['details']),outcome=dict(reference=deepcopy(reference),
                 command_sha256=fingerprint(value['command']),dispatch_count=1,evidence=deepcopy(result['evidence'])))
             self._save(value)
