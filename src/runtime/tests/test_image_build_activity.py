@@ -222,8 +222,9 @@ def test_only_qualified_healthcheck_can_finish_between_census_passes(activity):
         return proof
     driver.qualify_healthcheck=qualify
     assert driver(value)==dict(container_pids=[44],host_build_processes=[],complete=True)
-    assert driver.diagnostics[0]['kind']==HEALTHCHECK_KIND
+    assert driver.diagnostics[0]['kind']=='healthcheck-candidates'
     assert driver.diagnostics[0]['processes'][0]['pid']==45
+    assert driver.diagnostics[1]['kind']==HEALTHCHECK_KIND
 
 
 @pytest.mark.parametrize('fault',['kind','main','processes','container','generation'])
@@ -241,3 +242,34 @@ def test_incomplete_healthcheck_proof_cannot_hide_container_process(activity,fau
         return proof
     driver.qualify_healthcheck=qualify
     with pytest.raises(TemplateError,match='healthcheck evidence'):driver(value)
+    assert len(driver.diagnostics)==1
+    assert driver.diagnostics[0]['kind']=='healthcheck-candidates'
+    assert driver.diagnostics[0]['processes'][0]['pid']==45
+
+
+@pytest.mark.parametrize('duplicate',[False,True])
+def test_rejected_healthcheck_candidates_are_saved_before_qualification(activity,duplicate):
+    driver,value,state,add,_=activity;add(45,['unknown-private-command'],container=True)
+    if duplicate:add(46,['unknown-private-command'],container=True)
+    persisted=[];driver.record=lambda proof:persisted.append(deepcopy(proof))
+    def qualify(owner,inspected,rows):
+        assert len(persisted)==1
+        assert persisted[0]['main_process']==rows[0]
+        assert persisted[0]['processes']==rows[1:]
+        raise TemplateError('only one exact configured shell/Python healthcheck eligible')
+    driver.qualify_healthcheck=qualify
+    with pytest.raises(TemplateError,match='only one exact'):driver(value)
+    assert persisted==driver.diagnostics
+    assert len(persisted[0]['processes'])==(2 if duplicate else 1)
+    assert persisted[0]['generation']['Pid']==state['inspect']['State']['Pid']
+    assert 'unknown-private-command' not in str(persisted)
+
+
+def test_candidate_writer_failure_prevents_healthcheck_exemption(activity):
+    driver,value,_,add,_=activity;add(45,['candidate'],container=True)
+    called=[]
+    def fail(proof):raise OSError('diagnostic write failed')
+    driver.record=fail
+    driver.qualify_healthcheck=lambda *args:called.append(True)
+    with pytest.raises(OSError,match='diagnostic write failed'):driver(value)
+    assert called==[]

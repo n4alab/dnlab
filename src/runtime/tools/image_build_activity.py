@@ -129,6 +129,13 @@ class ImageBuildActivity:
         extra=[row for row in members if row not in main]
         if not extra:return rows
         require(len(main)==1, 'original main API missing; no healthcheck exemption')
+        # Persist candidates before qualification can fail. Keep command hashes,
+        # never raw argv or environment; an observed candidate is not an exemption.
+        self._record(dict(kind='healthcheck-candidates',container_id=inspected['Id'],
+            image_id=inspected['Image'],config_sha256=config_digest(inspected),
+            generation=dict(restart_count=inspected['RestartCount'],
+                **{key:inspected['State'][key] for key in ('Pid','Running','Status','StartedAt')}),
+            main_process=main[0],processes=extra))
         proof=self.qualify_healthcheck(deepcopy(value),deepcopy(inspected),deepcopy(members))
         require(type(proof) is dict and set(proof)=={'kind','container_id','image_id','config_sha256',
                 'generation_sha256','main_process','processes','evidence_sha256'}

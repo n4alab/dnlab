@@ -1,0 +1,15 @@
+id: 20261126-203614-preserve-rejected-image-build-healthchec
+type: none
+title: Preserve rejected image-build healthcheck candidates
+description: Record process identity and command hashes before experimental healthcheck
+  qualification so refusals retain diagnostic evidence without broadening exemptions.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
+reason: Experimental VM gate diagnostics only; no installed service or release behavior
+  changed.
