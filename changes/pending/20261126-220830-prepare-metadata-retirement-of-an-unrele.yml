@@ -1,0 +1,16 @@
+id: 20261126-220830-prepare-metadata-retirement-of-an-unrele
+type: none
+title: Prepare metadata retirement of an unreleased image-build arm
+description: Add separate administrative retirement and readonly preflight for the
+  first armed image-build command with no release, preserving original history and
+  refusing missing process, source, lock or service evidence.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
+reason: Experimental VM gate recovery preparation with synthetic validation only;
+  no installed service, live journal or release behavior changed.
