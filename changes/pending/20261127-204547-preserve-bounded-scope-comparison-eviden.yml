@@ -1,0 +1,15 @@
+id: 20261127-204547-preserve-bounded-scope-comparison-eviden
+type: none
+title: Preserve bounded scope-comparison evidence in gate errors
+description: Keep expected and observed transient-entry fingerprints and bounded differences
+  on rejected comparisons, with exception-chain reporting for future gate recipes.
+  Admission rules remain unchanged.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
+reason: Diagnostics for the experimental VM gate; no operational permissions or rollout.

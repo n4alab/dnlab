@@ -117,3 +117,36 @@ def test_census_normalizes_scopes_but_retains_actual_observation_and_default_den
     assert result['gate_allowed'] is False
     observer._qualify_sources = None
     with pytest.raises(ValueError, match='descriptor differs'): observer()
+
+
+def test_rejected_scope_reports_the_actual_entry_difference(scope):
+    from cleanup_scope_sources import ScopeComparisonError
+    qualifier, _, current, *_ = scope
+    root = next(row for row in current['candidates'] if row['source_id'] == ROOT)
+    root['names'].append('session-unexpected.scope')
+    previous = deepcopy(current)
+    with pytest.raises(ScopeComparisonError) as error:
+        qualifier(current)
+    proof = error.value.diagnostic
+    assert proof['unexpected_added'] == ['session-unexpected.scope']
+    assert proof['unexpected_removed'] == []
+    assert proof['observed_count'] == proof['expected_count']+1
+    assert proof['expected_sha256'] != proof['observed_sha256']
+    assert current == previous
+
+
+def test_scope_diagnostic_survives_wrapping_and_is_bounded():
+    from cleanup_scope_sources import ScopeComparisonError
+    from cleanup_gate_diagnostics import exception_chain
+    original = ScopeComparisonError(['original.scope'], ['new-'+str(n) for n in range(200)],
+                                    added=set(), removed=set(), completed=set())
+    wrapped = RuntimeError('attestation rejected')
+    wrapped.__cause__ = original
+    proof = exception_chain(wrapped)
+    assert [row['type'] for row in proof] == ['RuntimeError', 'ScopeComparisonError']
+    assert proof[1]['scope_comparison']['unexpected_added_count'] == 200
+    assert len(proof[1]['scope_comparison']['unexpected_added']) == 128
+    proof[1]['scope_comparison']['unexpected_added'].clear()
+    assert len(original.diagnostic['unexpected_added']) == 128
+    original.__cause__ = wrapped
+    assert len(exception_chain(wrapped)) == 2

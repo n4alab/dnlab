@@ -13,6 +13,26 @@ CONTEXT = {'gate_id', 'lab_id', 'host_id', 'coordinator_id', 'boot_id',
            'window_id', 'image_build_hold_sha256'}
 
 
+class ScopeComparisonError(ValueError):
+    """A rejected directory comparison with bounded, non-authorizing evidence."""
+    def __init__(self, baseline, observed, *, added, removed, completed):
+        expected = (set(baseline) - removed) | added
+        actual = set(observed)
+        self.diagnostic = dict(kind='transient-directory-comparison-v1',
+            baseline_count=len(baseline), expected_count=len(expected), observed_count=len(actual),
+            baseline_sha256=canonical_digest(sorted(baseline)),
+            expected_sha256=canonical_digest(sorted(expected)),
+            observed_sha256=canonical_digest(sorted(actual)))
+        for name, values in dict(unexpected_added=actual-expected, unexpected_removed=expected-actual,
+                                 claimed_added=added, claimed_removed=removed,
+                                 completed=completed, added_already_present=added & set(baseline),
+                                 removed_not_in_baseline=removed-set(baseline),
+                                 completed_in_baseline=completed & set(baseline)).items():
+            self.diagnostic[name] = sorted(values)[:128]
+            self.diagnostic[name+'_count'] = len(values)
+        super().__init__('unrelated transient directory entries changed')
+
+
 def indexed(value):
     require(type(value) is dict and set(value) == {'complete', 'candidates'}
             and value['complete'] is True and type(value['candidates']) is list,
@@ -120,10 +140,12 @@ class QualifiedScopeSources:
                         'complete transient directory identity required')
             require(after['metadata'][:5] == before['metadata'][:5],
                     'transient directory identity or permissions changed')
-            require(not (added & set(before['names'])) and removed <= set(before['names'])
+            valid = (not (added & set(before['names'])) and removed <= set(before['names'])
                     and not (completed & set(before['names']))
-                    and set(after['names']) == (set(before['names']) - removed) | added,
-                    'unrelated transient directory entries changed')
+                    and set(after['names']) == (set(before['names']) - removed) | added)
+            if not valid:
+                raise ScopeComparisonError(before['names'], after['names'],
+                                           added=added, removed=removed, completed=completed)
             # Only entry-dependent size/mtime/ctime may differ, after all
             # changed entries have authenticated original gate proofs.
             normalized[ROOT] = deepcopy(before)
