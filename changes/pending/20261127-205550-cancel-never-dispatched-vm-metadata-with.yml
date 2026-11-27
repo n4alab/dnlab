@@ -1,0 +1,16 @@
+id: 20261127-205550-cancel-never-dispatched-vm-metadata-with
+type: none
+title: Cancel never-dispatched VM metadata with original history and lab fence
+description: Archive original prepared definition and initial-start records, close
+  the test lab generation, and release only qualified VM reservations while preserving
+  the infrastructure hold for ordinary restoration.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
+reason: Separate administrative recovery for the experimental first-VM gate; no release-line
+  deployment.
