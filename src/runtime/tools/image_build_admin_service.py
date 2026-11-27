@@ -16,7 +16,7 @@ from image_build_observation import process_digest, terminal_jobs_digest
 
 class AdministrativeService:
     def __init__(self, original_profile, original_hold, *, capture, generation, networks, api,
-                 read_context, query_factory, binding, ledger, process=None):
+                 read_context, query_factory, binding, ledger, process=None, generation_origin="acknowledged-start"):
         self.original=deepcopy(original_profile);self.hold=deepcopy(original_hold)
         self.networks=deepcopy(networks)
         self.profile=deepcopy(original_profile)
@@ -25,7 +25,11 @@ class AdministrativeService:
         actor(self.profile['actor']);policy(self.profile['policy'])
         stable=lambda row:{key:value for key,value in row.items() if key not in ('pid','start_ticks','namespaces')}
         require(all(callable(fn) for fn in (read_context,query_factory,binding,ledger))
-                and generation['started_at']!=original_profile['generation']['started_at']
+                and ((generation_origin == 'acknowledged-start'
+                      and generation['started_at'] != original_profile['generation']['started_at'])
+                     or (generation_origin == 'original-profile'
+                         and capture == original_profile['capture']
+                         and generation == original_profile['generation']))
                 and generation['restart_count']==original_profile['generation']['restart_count']
                 and set(capture['sources'])==set(original_profile['copies'])
                 and all(capture['sources'][path]['sha256']==digest for path,digest in original_profile['copies'].items())

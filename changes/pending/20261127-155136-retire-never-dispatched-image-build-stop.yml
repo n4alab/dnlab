@@ -1,0 +1,15 @@
+id: 20261127-155136-retire-never-dispatched-image-build-stop
+type: none
+title: Retire never-dispatched image-build stop and restore policy
+description: Add a separate experimental recovery for a completed policy suspension
+  and an armed stop, preserving original command history and restoring only the restart
+  policy on the original service generation.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
+reason: Experimental custom-runtime gate recovery; no release-line deployment.
