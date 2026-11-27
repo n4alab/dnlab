@@ -213,6 +213,9 @@ class ImageBuildHold:
             self.commands.release(deepcopy(item['reference']))
         if item['phase']=='release_requested':
             outcome = self.commands.outcome(deepcopy(item['reference']))
+            if outcome is None and recover and callable(getattr(self.commands,'resume_unreleased',None)):
+                self.commands.resume_unreleased(deepcopy(item['reference']))
+                outcome = self.commands.outcome(deepcopy(item['reference']))
             if outcome is None and recover and callable(getattr(self.commands,'recover_outcome',None)):
                 outcome = self.commands.recover_outcome(deepcopy(item['reference']))
             require(outcome is not None, 'hold dispatch/exit uncertain; no resend')

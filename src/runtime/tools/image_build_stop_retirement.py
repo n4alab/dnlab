@@ -34,7 +34,9 @@ def stop_state(db, *, hold_id, command_id, epoch, claim_present=True):
     for action, phase in (('disable_restart', 'completed'), ('stop', 'armed')):
         item = hold['actions'][action]
         value = commands._read(item['reference'], historical=True)
-        require(item['phase'] == value['phase'] == phase
+        require(value['phase'] == phase
+                and (item['phase'] == phase
+                     or (action == 'stop' and item['phase'] == 'release_requested'))
                 and value['command'] == item['command']
                 and value['outcome'] == item['outcome']
                 and value['epoch_id'] == epoch['id']

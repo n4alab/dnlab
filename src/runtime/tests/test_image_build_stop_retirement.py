@@ -130,3 +130,15 @@ def test_original_generation_requires_exact_saved_profile(observation):
     assert build(profile['capture']).observe(state['inspect']['HostConfig']['RestartPolicy'])['generation_verified']
     changed = deepcopy(profile['capture']); changed['process']['start_ticks'] = '999'
     with pytest.raises(TemplateError): build(changed)
+
+
+def test_parent_requested_but_worker_armed_allows_retirement(pending_stop):
+    hold, _, _, args, _, request, exited = pending_stop
+    value = hold.read(args['hold_id'])
+    value['actions']['stop']['phase'] = 'release_requested'
+    hold._save(value)
+    proof = stop_state(hold.journal.db, **args)
+    request['original_sha256'] = fingerprint(proof)
+    receipt = retire_stop(hold.journal.db, request, exited, **args, check=lambda: None)
+    assert receipt['stop_never_dispatched'] is True
+    assert stop_state(hold.journal.db, **args, claim_present=False) == proof

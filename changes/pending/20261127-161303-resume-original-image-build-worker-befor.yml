@@ -1,0 +1,15 @@
+id: 20261127-161303-resume-original-image-build-worker-befor
+type: none
+title: Resume original image-build worker before its first release
+description: Recover a saved parent release request only when its original worker
+  is still armed without dispatch or progress, retaining current preflight and forbidding
+  re-release of requested workers.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
+reason: Experimental custom-runtime recovery boundary; no release-line deployment.

@@ -301,6 +301,25 @@ class ImageBuildCommands:
                     'original command producer sources need separate qualification')
             return value
 
+    def resume_unreleased(self, reference):
+        """First release of an original arm after the parent checkpoint.
+
+        An already released worker is never dispatched here, even when no
+        native acknowledgement exists. Recovery of that worker is observational.
+        """
+        with self.journal.execution_lock:
+            value=self.qualified_snapshot(reference)
+            if value['phase']!='armed':return False
+            require(set(value)=={'id','command','reference','epoch_id','epoch_sha256',
+                                 'phase','outcome','details'},
+                    'original arm without dispatch or progress required')
+            _,item=self._bound(value['command'])
+            require(item['phase']=='release_requested' and item['reference']==reference,
+                    'original parent release request required')
+            self.verify(reference,value['command'])
+            self.release(deepcopy(reference))
+            return True
+
     def outcome(self, reference):
         with self.journal.execution_lock:
             value=self.qualified_snapshot(reference)
