@@ -273,3 +273,29 @@ def test_candidate_writer_failure_prevents_healthcheck_exemption(activity):
     driver.qualify_healthcheck=lambda *args:called.append(True)
     with pytest.raises(OSError,match='diagnostic write failed'):driver(value)
     assert called==[]
+
+
+@pytest.mark.parametrize('present', [False, True])
+@pytest.mark.parametrize('read_index', [1, 2])
+def test_esrch_during_proc_read_requires_confirmed_disappearance(activity, monkeypatch, present, read_index):
+    from image_build_activity import AccountWorkerObserver
+    driver, value, _, add, proc = activity
+    add(88, ['python3', 'unrelated'])
+    original = AccountWorkerObserver._read_file
+    triggered = []; reads = []
+    def read(root, name, limit):
+        if os.readlink('/proc/self/fd/'+str(root)) == str(proc/'88') and name == 'stat':
+            reads.append(True)
+        if len(reads) == read_index and not triggered:
+            triggered.append(True)
+            if not present:
+                for path in (proc/'88').iterdir(): path.unlink()
+                (proc/'88').rmdir()
+            raise ProcessLookupError(3, 'synthetic process exit')
+        return original(root, name, limit)
+    monkeypatch.setattr(AccountWorkerObserver, '_read_file', staticmethod(read))
+    if present:
+        with pytest.raises(RuntimeError, match='observation incomplete'): driver(value)
+    else:
+        assert driver(value) == dict(container_pids=[44], host_build_processes=[], complete=True)
+    assert triggered == [True]

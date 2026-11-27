@@ -186,7 +186,7 @@ class ImageBuildActivity:
                     if belongs or reason:
                         selected.append(dict(pid=pid,start_ticks=ticks,command_sha256=hashlib.sha256(command).hexdigest(),
                             cgroup_sha256=hashlib.sha256(cgroup).hexdigest(),container=belongs,reason=reason))
-                except FileNotFoundError:
+                except (FileNotFoundError,ProcessLookupError):
                     try:os.stat(name,dir_fd=proc,follow_symlinks=False)
                     except FileNotFoundError:continue
                     raise RuntimeError('live process activity observation incomplete') from None

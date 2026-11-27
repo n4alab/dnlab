@@ -1,0 +1,15 @@
+id: 20261127-202208-handle-confirmed-process-disappearance-o
+type: none
+title: Handle confirmed process disappearance on ESRCH during activity census
+description: Apply the existing absent-process verification to ESRCH from procfs reads;
+  continue only after confirming the PID directory is absent and preserve failure
+  for a visible PID.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
+reason: Experimental VM gate activity reader; no service rollout.
