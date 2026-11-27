@@ -87,6 +87,10 @@ class ImageBuildExecutor:
     def recover(self, reference):
         original=self.commands.qualified_snapshot(reference);command=original['command']
         if command['action']=='stop':return self.recover_stop(reference)
+        if command['action'] in ('disable_restart','restore_restart'):
+            require('policy_ack' in original, 'original durable policy acknowledgement required')
+            return self._finish_policy(command,reference,
+                check=lambda:self._current(command,reference,observation_only=True))
         require(command['action']=='start' and 'start_ack' in original and 'start_progress' in original,
                 'original durable start acknowledgement and first generation required')
         def check():return self._current(command,reference,observation_only=True)
@@ -96,6 +100,18 @@ class ImageBuildExecutor:
         check()
         return dict(evidence=dict(actor=deepcopy(proof['actor']),original_start_verified=True),
                     details=dict(startup=proof))
+
+    def _finish_policy(self, command, reference, *, check):
+        original=self.commands.qualified_snapshot(reference)
+        require('policy_ack' in original, 'original durable policy acknowledgement required')
+        value=check();observed=self.observation(value)
+        require(observed['actor']==command['actor'] and observed['running'] is True
+                and observed['restart_policy']==command['restart_policy'],
+                'original policy update not verified')
+        check()
+        return dict(evidence=dict(policy_verified=True),
+                    details=dict(restart_policy=deepcopy(command['restart_policy']),
+                                 policy_ack=deepcopy(original['policy_ack'])))
 
     def __call__(self, command, reference):
         with self.commands.journal.execution_lock:
@@ -113,11 +129,8 @@ class ImageBuildExecutor:
         require(self.engine.container_id==command['actor']['container_id'], 'original command container differs')
         if action in ('disable_restart','restore_restart'):
             self.engine.update_policy(command['restart_policy'])
-            value=self._current(command,reference)
-            observed=self.observation(value)
-            require(observed['actor']==command['actor'] and observed['running'] is True
-                    and observed['restart_policy']==command['restart_policy'], 'original policy update not verified')
-            return dict(evidence=dict(policy_verified=True),details=dict(restart_policy=deepcopy(command['restart_policy'])))
+            self.commands.checkpoint_policy_ack(reference)
+            return self._finish_policy(command,reference,check=lambda:self._current(command,reference))
         if action=='stop':
             profile=self.observation.profile
             with self.term.pin(profile['capture'],command['actor']['container_id'],profile['copies']) as pinned:

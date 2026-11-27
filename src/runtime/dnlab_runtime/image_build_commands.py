@@ -129,6 +129,17 @@ class ImageBuildCommands:
         if 'start_progress' in value:
             require('start_ack' in value, 'original start acknowledgement required before capture')
             self._start_proof(value['start_progress'],command,reference)
+        if 'policy_ack' in value:
+            ack=value['policy_ack']
+            fields(ack,('container_id','status','warnings_empty','restart_policy'),'original policy acknowledgement')
+            require(command['action'] in ('disable_restart','restore_restart')
+                    and value.get('native_dispatch_started') is True
+                    and value['phase'] in ('release_requested','completed')
+                    and type(ack['status']) is int and ack['status']==200
+                    and ack['warnings_empty'] is True
+                    and ack['container_id']==command['actor']['container_id']
+                    and ack['restart_policy']==command['restart_policy'],
+                    'original policy acknowledgement differs')
         source=self.journal.db.execute('SELECT * FROM vm_runtime_epochs WHERE id=?',(value['epoch_id'],)).fetchone()
         require(source is not None and source['fingerprint']==value['epoch_sha256'], 'original control runtime epoch missing')
         epoch=json.loads(source['payload'])
@@ -204,6 +215,24 @@ class ImageBuildCommands:
 
     def checkpoint_start(self, reference, proof):
         return self._checkpoint_start(reference,'start_progress',proof)
+
+    def checkpoint_policy_ack(self, reference):
+        """Persist only after HTTP 200 and the original empty-warnings response."""
+        with self.journal.execution_lock:
+            value=self._read(reference);command=value['command']
+            require(command['action'] in ('disable_restart','restore_restart')
+                    and value['phase']=='release_requested'
+                    and value.get('native_dispatch_started') is True,
+                    'original policy dispatch required')
+            self._epoch(command,value);self._claim(command)
+            ack=dict(container_id=command['actor']['container_id'],status=200,warnings_empty=True,
+                     restart_policy=deepcopy(command['restart_policy']))
+            if 'policy_ack' in value:
+                require(value['policy_ack']==ack, 'original policy acknowledgement cannot be replaced')
+                return deepcopy(ack)
+            value['policy_ack']=ack;self._save(value)
+            self._epoch(command,value);self._claim(command)
+            return deepcopy(ack)
 
     def arm(self, command):
         with self.journal.execution_lock:
@@ -282,7 +311,8 @@ class ImageBuildCommands:
         with self.journal.execution_lock:
             value=self.qualified_snapshot(reference)
             if value['outcome'] is not None:return deepcopy(value['outcome'])
-            key={'stop':'exit_progress','start':'start_progress'}.get(value['command']['action'])
+            key={'stop':'exit_progress','start':'start_progress',
+                 'disable_restart':'policy_ack','restore_restart':'policy_ack'}.get(value['command']['action'])
             if self.recover_callback is None or key is None or key not in value:return None
             require(value['phase']=='release_requested', 'original pending command required for observational recovery')
             progress=deepcopy(value[key]);self._claim(value['command'])

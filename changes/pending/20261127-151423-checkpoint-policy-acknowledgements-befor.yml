@@ -1,0 +1,16 @@
+id: 20261127-151423-checkpoint-policy-acknowledgements-befor
+type: none
+title: Checkpoint policy acknowledgements before subsequent hold observations
+description: Persist verified policy HTTP acknowledgements before activity checks
+  and recover the same dispatched command through fresh observations without another
+  update; retain uncertainty when no acknowledgement exists.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
+reason: Experimental runtime hold recovery on the dedicated replacement branch; no
+  installed service or public API rollout.

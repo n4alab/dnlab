@@ -49,7 +49,8 @@ def policy_state(db, *, hold_id, command_id, epoch, claim_present=True):
     pending = rows[-1]
     start = rows[2]
     require(pending['id'] == command_id and pending['outcome'] is None
-            and pending['details'] is None and 'start_ack' in start and 'start_progress' in start,
+            and pending['details'] is None and 'policy_ack' not in pending
+            and 'start_ack' in start and 'start_progress' in start,
             'original pending policy and acknowledged first start required')
     require(start['start_progress']['actor'] == start['outcome']['evidence']['actor']
             == pending['command']['actor'], 'policy must target the original qualified start')
