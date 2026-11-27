@@ -1,0 +1,16 @@
+id: 20261127-145105-retire-uncertain-image-build-policy-outc
+type: none
+title: Retire uncertain image-build policy outcomes by observation
+description: Add an experimental administrative path that preserves original stop/start
+  and uncertain policy history, requires qualified producer exit and observed policy,
+  and releases only the original claim after durable journal binding.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
+reason: Experimental-only recovery helper on the dedicated runtime replacement branch;
+  no release-line behavior or public API changes.
