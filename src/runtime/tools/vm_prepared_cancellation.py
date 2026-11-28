@@ -24,6 +24,20 @@ RETAINED = ('metadata', 'libvirt_loop_sdk_imports', 'libvirt_qemu_sdk_imports',
 
 def prepared_state(db, *, operation, hold_id, epoch):
     """SELECT only; absence providers must separately qualify physical state."""
+    return _prepared_state(db, operation=operation, hold_id=hold_id, epoch=epoch)
+
+
+def prepared_tap_state(db, *, operation, hold_id, epoch, session_profile):
+    """Separate administrative reader for TAP intents never released to a worker.
+
+    This does not expand the live-owner cancellation or its proof contract.
+    Post-boot callers must separately qualify the current absence of resources.
+    """
+    return _prepared_state(db, operation=operation, hold_id=hold_id, epoch=epoch,
+                           session_profile=session_profile)
+
+
+def _prepared_state(db, *, operation, hold_id, epoch, session_profile=None):
     tables = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     holders = _Holds(db)
     hold = holders.read(hold_id)
@@ -58,7 +72,9 @@ def prepared_state(db, *, operation, hold_id, epoch):
                                 'request_fingerprint', 'phase', 'creation_ack', 'ack', 'error_type'}
             and definition['phase'] == 'prepared' and definition['creation_ack'] is None
             and definition['ack'] is None and definition['error_type'] == ''
-            and initial['phase'] == 'pending' and initial['last_step'] in ('prepared', 'preflight')
+            and initial['phase'] == 'pending'
+            and initial['last_step'] in (('directory',) if session_profile is not None
+                                         else ('prepared', 'preflight'))
             and initial['receipt'] is None and initial['birth'] == birth
             and initial['definition_sha256'] == definition['request_fingerprint']
             and template_digest(initial['template']) == birth['template_sha256']
@@ -75,6 +91,29 @@ def prepared_state(db, *, operation, hold_id, epoch):
             'original VM and infrastructure claims differ')
     counts = dict(journal_identity=1, vm_runtime_epochs=1, vm_definition_intents=1,
                   vm_initial_starts=1, image_build_holds=1, image_build_control_commands=2)
+    tap_metadata = None
+    if session_profile is not None:
+        from dnlab_runtime.vm_taps import VMTaps
+        definitions.session = SimpleNamespace(profile=deepcopy(session_profile))
+        reader = object.__new__(VMTaps)
+        reader.journal, reader.definitions = view, definitions
+        taps = reader.read(operation)
+        require(taps['phase'] == 'prepared' and taps['items']
+                and all(item['phase'] == 'prepared' and item['proof'] is None
+                        for item in taps['items'])
+                and taps['context'] == dict(boot_id=epoch['snapshot']['record']['boot_id'],
+                                            **epoch['snapshot']['namespaces']['net']),
+                'only original TAP metadata without worker dispatch may retire')
+        indices = [dict(r) for r in db.execute('SELECT * FROM vm_tap_ifindices ORDER BY ifindex')]
+        expected_indices = sorted([dict(ifindex=item['spec']['tap']['ifindex'],
+                                        operation_id=operation,
+                                        interface_name=item['spec']['tap']['name'])
+                                   for item in taps['items']], key=lambda r:r['ifindex'])
+        require(indices == expected_indices, 'original TAP ifindex claims differ')
+        counts.update(vm_tap_intents=1, vm_tap_ifindices=len(indices))
+        tap_metadata = dict(intent=dict(db.execute('SELECT * FROM vm_tap_intents WHERE id=?',
+                                                   (operation,)).fetchone()),
+                            ifindices=indices, session_profile=deepcopy(session_profile))
     for table, count in counts.items():
         require(db.execute('SELECT COUNT(*) FROM '+table).fetchone()[0] == count,
                 'unexpected original records: '+table)
@@ -90,12 +129,15 @@ def prepared_state(db, *, operation, hold_id, epoch):
                     'unqualified resource/worker records remain: '+table)
     identity = db.execute('SELECT singleton,identity FROM journal_identity').fetchone()
     require(identity['singleton'] == 1, 'original journal identity differs')
-    return dict(journal_identity=identity['identity'], operation=operation, epoch=deepcopy(epoch),
+    result = dict(journal_identity=identity['identity'], operation=operation, epoch=deepcopy(epoch),
                 definition=dict(db.execute('SELECT * FROM vm_definition_intents WHERE id=?', (operation,)).fetchone()),
                 initial=dict(db.execute('SELECT * FROM vm_initial_starts WHERE id=?', (operation,)).fetchone()),
                 vm_claims=expected, infrastructure_claim=claim,
                 hold=dict(db.execute('SELECT * FROM image_build_holds WHERE id=?', (hold_id,)).fetchone()),
                 commands=command_rows, retained=retained)
+    if tap_metadata is not None:
+        result['prepared_taps'] = tap_metadata
+    return result
 
 
 def request_proof(request, original):

@@ -1,0 +1,15 @@
+id: 20261128-105329-retire-never-dispatched-vm-tap-metadata
+type: none
+title: Retire never-dispatched VM TAP metadata after a host reboot
+description: Add a separate administrative post-boot reader and atomic archival retirement
+  for VM and prepared TAP/ifindex metadata; retain original history and infrastructure
+  claims until qualified service restoration.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
+reason: Experimental custom runtime recovery; public deployment remains on Containerlab.
