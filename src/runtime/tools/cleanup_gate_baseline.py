@@ -1,24 +1,43 @@
 """Acquire a new gate baseline in its own original process before effects.
 
-Only past timestamp changes of the transient parent can differ from the
-historical qualification. Files, entries, permissions and identities must still
-match. The returned baseline retains current timestamps; later admission uses
-the ordinary exact comparison and qualified scope transitions.
+Past parent timestamps may differ. An explicitly supplied trusted SSH verifier
+may also qualify added session scopes before effects. Existing sources remain
+immutable. Later admission uses the ordinary exact comparison; this function
+does not grant an exception during execution of the gate.
 """
 from copy import deepcopy
 import os
+import re
 import stat
 
 from cleanup_execution import canonical_digest, require, sha
 from cleanup_scope_sources import ROOT, indexed
 
 
-def capture(previous, *, context, read_sources, verify_actors, read_owner, persist):
+class BaselineComparisonError(ValueError):
+    """Bounded evidence from the rejected read, without authorization."""
+    def __init__(self, message, before, current):
+        added, removed = set(current)-set(before), set(before)-set(current)
+        changed = {key for key in set(before) & set(current) if before[key] != current[key]}
+        self.diagnostic = dict(kind='scheduled-baseline-comparison-v1',
+            expected_sha256=canonical_digest(before), observed_sha256=canonical_digest(current))
+        for name, values in dict(added=added, removed=removed, changed=changed).items():
+            self.diagnostic[name] = sorted(values)[:128]
+            self.diagnostic[name+'_count'] = len(values)
+        super().__init__(message)
+
+
+def capture(previous, *, context, read_sources, verify_actors, read_owner, persist,
+            qualify_ssh=None):
     """All IO providers are trusted local code, never selected by a request.
 
     verify_actors freshly qualifies the original artifacts/generations and
     agreed window, returning their digest. persist must durably save the whole
     receipt. A failure, including after persistence, never returns a grant.
+    qualify_ssh is trusted local code, not a request field. It must freshly
+    verify the exact SSH unit definition, root session/leader, pidfd, process
+    starttime, namespace and source identity. Its proof is checked again before
+    return. No removed scope, drop-in or changed existing file is accepted.
     """
     require(all(callable(fn) for fn in (read_sources, verify_actors, read_owner, persist)),
             'explicit original baseline providers required')
@@ -46,18 +65,46 @@ def capture(previous, *, context, read_sources, verify_actors, read_owner, persi
     first, second = deepcopy(read_sources()), deepcopy(read_sources())
     require(first == second, 'scheduled sources changed during baseline capture')
     current = indexed(first)
-    require(current.keys() == before.keys(), 'historical scheduled source paths changed')
-    require(all(current[key] == before[key] for key in before if key != ROOT),
+    def compare(condition, message):
+        if not condition:
+            raise BaselineComparisonError(message, before, current)
+
+    added = set(current)-set(before)
+    compare(not (set(before)-set(current)) and (not added or callable(qualify_ssh)),
+            'historical scheduled source paths changed')
+    compare(all(current[key] == before[key] for key in before if key != ROOT),
             'qualified scheduled file or definition changed')
+    proofs = {}
+    for path in sorted(added):
+        match = re.fullmatch(re.escape(ROOT) + r'/session-(c[0-9]+)\.scope', path)
+        compare(match is not None, 'only qualified added SSH session scopes allowed')
+        row = current[path]
+        require(set(row) == {'source_id', 'kind', 'metadata', 'sha256'}
+                and row['kind'] == 'file' and sha(row['sha256'])
+                and type(row['metadata']) is list and len(row['metadata']) == 8
+                and all(type(v) is int and v >= 0 for v in row['metadata'])
+                and row['metadata'][2] == stat.S_IFREG | 0o644
+                and row['metadata'][3:5] == [0, 0], 'root-owned regular SSH scope required')
+        proof = deepcopy(qualify_ssh(match[1], deepcopy(row)))
+        require(type(proof) is dict and set(proof) == {
+                    'session_id', 'context_sha256', 'source_sha256', 'qualification_sha256'}
+                and proof['session_id'] == match[1]
+                and proof['context_sha256'] == canonical_digest(context)
+                and proof['source_sha256'] == canonical_digest(row)
+                and sha(proof['qualification_sha256']), 'complete current SSH qualification required')
+        proofs[path] = proof
     old, new = before[ROOT], current[ROOT]
     require(set(old) == set(new) == {'source_id', 'kind', 'metadata', 'names'}
-            and new['kind'] == 'directory' and new['names'] == old['names'],
+            and new['kind'] == 'directory' and type(old['names']) is list
+            and type(new['names']) is list
+            and len(set(new['names'])) == len(new['names'])
+            and set(new['names']) == set(old['names']) | {path[len(ROOT)+1:] for path in added},
             'transient directory entries changed')
     for row in (old, new):
         require(type(row['metadata']) is list and len(row['metadata']) == 8
                 and all(type(v) is int and v >= 0 for v in row['metadata'])
                 and stat.S_ISDIR(row['metadata'][2]), 'complete transient directory metadata required')
-    require(new['metadata'][:6] == old['metadata'][:6],
+    require(new['metadata'][:5 if added else 6] == old['metadata'][:5 if added else 6],
             'transient parent identity, permissions or size changed')
     require(owner() == original and verify_actors() == actors,
             'original gate owner or actor proof changed during capture')
@@ -65,7 +112,11 @@ def capture(previous, *, context, read_sources, verify_actors, read_owner, persi
                    historical_sha256=canonical_digest(historical),
                    current_sha256=canonical_digest(first), context_sha256=canonical_digest(context),
                    owner=original, actor_proof_sha256=actors)
+    if proofs:
+        receipt['prebaseline_ssh'] = proofs
     persist(deepcopy(receipt))
     require(owner() == original and verify_actors() == actors and read_sources() == first,
             'gate baseline changed after persistence')
+    require(all(qualify_ssh(proof['session_id'], deepcopy(current[path])) == proof
+                for path, proof in proofs.items()), 'SSH qualification changed after persistence')
     return deepcopy(receipt)

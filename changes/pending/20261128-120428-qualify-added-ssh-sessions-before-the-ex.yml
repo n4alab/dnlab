@@ -1,0 +1,15 @@
+id: 20261128-120428-qualify-added-ssh-sessions-before-the-ex
+type: none
+title: Qualify added SSH sessions before the experimental VM gate baseline
+description: Keep existing scheduled sources immutable, qualify added SSH sessions
+  before effects, recheck proofs after persistence and retain bounded rejection diagnostics.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
+reason: Experimental gate preparation only; no change to deployed services or execution-time
+  cleanup policy.

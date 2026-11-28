@@ -2,6 +2,7 @@
 from copy import deepcopy
 
 from cleanup_scope_sources import ScopeComparisonError
+from cleanup_gate_baseline import BaselineComparisonError
 
 
 def exception_chain(error):
@@ -11,6 +12,8 @@ def exception_chain(error):
         row = dict(type=type(error).__name__, module=type(error).__module__, message=str(error)[:4096])
         if isinstance(error, ScopeComparisonError):
             row['scope_comparison'] = deepcopy(error.diagnostic)
+        if isinstance(error, BaselineComparisonError):
+            row['baseline_comparison'] = deepcopy(error.diagnostic)
         result.append(row)
         error = error.__cause__ or (None if error.__suppress_context__ else error.__context__)
     return result
