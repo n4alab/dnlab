@@ -169,3 +169,21 @@ def test_rejected_read_keeps_its_actual_delta_in_exception_evidence():
     assert evidence['removed'] == [] and evidence['changed'] == [ROOT]
     current['candidates'].clear()
     assert exception_chain(caught.value)[0]['baseline_comparison'] == evidence
+
+
+def test_postpersist_rejection_records_the_actual_removed_scope():
+    context, owner, historical, current = case()
+    state = dict(sources=deepcopy(current))
+    saved = []
+
+    def persist(value):
+        saved.append(value)
+        state['sources']['candidates'].pop()
+        state['sources']['candidates'][0]['names'] = []
+
+    with pytest.raises(BaselineComparisonError, match='after persistence') as caught:
+        capture(historical, context=context, read_sources=lambda: deepcopy(state['sources']),
+                verify_actors=lambda: 'd'*64, read_owner=lambda: deepcopy(owner), persist=persist)
+    assert caught.value.diagnostic['removed'] == [ROOT+'/original.scope']
+    assert caught.value.diagnostic['added'] == []
+    assert len(saved) == 1

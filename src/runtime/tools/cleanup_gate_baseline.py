@@ -115,8 +115,11 @@ def capture(previous, *, context, read_sources, verify_actors, read_owner, persi
     if proofs:
         receipt['prebaseline_ssh'] = proofs
     persist(deepcopy(receipt))
-    require(owner() == original and verify_actors() == actors and read_sources() == first,
+    require(owner() == original and verify_actors() == actors,
             'gate baseline changed after persistence')
+    observed = indexed(read_sources())
+    if observed != current:
+        raise BaselineComparisonError('gate baseline changed after persistence', current, observed)
     require(all(qualify_ssh(proof['session_id'], deepcopy(current[path])) == proof
                 for path, proof in proofs.items()), 'SSH qualification changed after persistence')
     return deepcopy(receipt)
