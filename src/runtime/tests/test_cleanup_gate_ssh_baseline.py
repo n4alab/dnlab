@@ -68,3 +68,51 @@ def test_exact_session_profile_and_identity_boundaries(monkeypatch, fault):
         assert result['source_sha256'] == module.canonical_digest(row)
         assert result['session_id'] == sid and len(reads) == 4
     assert closed == ([] if fault == 'unit' else [999])
+
+
+@pytest.mark.parametrize('fault', [None, 'unwitnessed', 'pidfd_error', 'live', 'scope_present', 'unit_present', 'context'])
+def test_original_exit_requires_retained_pidfd_and_unit_absence(monkeypatch, fault):
+    context = dict(boot_id='original', namespaces={})
+    row = dict(source_id='/run/systemd/transient/session-c35.scope')
+    proof = dict(session_id='c35', context_sha256=module.canonical_digest(context),
+        source_sha256=module.canonical_digest(row), qualification_sha256='a'*64)
+    state = dict(context=deepcopy(context), events=[])
+    recorded, closed = [], []
+
+    def qualify(sid, value, *, retain, **kwargs):
+        assert value == row and sid == 'c35'
+        retain(99, deepcopy(proof))
+        return deepcopy(proof)
+
+    monkeypatch.setattr(module, 'qualify', qualify)
+    monkeypatch.setattr(module.os, 'dup', lambda fd: 100)
+    monkeypatch.setattr(module.os, 'close', closed.append)
+    monkeypatch.setattr(module.select, 'poll', lambda: N(register=lambda *args: None,
+        poll=lambda timeout: state['events']))
+    monkeypatch.setattr(module.os.path, 'lexists', lambda path: fault == 'scope_present')
+    monkeypatch.setattr(module, 'query', lambda *args: dict(Id='session-c35.scope',
+        LoadState='loaded' if fault == 'unit_present' else 'not-found',
+        ActiveState='inactive', SubState='dead', InvocationID=''))
+    witness = module.SessionWitnesses(context=context, read_context=lambda: state['context'],
+        systemctl_sha256='f'*64, loginctl_sha256='f'*64, record=recorded.append)
+    if fault != 'unwitnessed':
+        assert witness.qualify('c35', row) == proof
+    state['events'] = [] if fault == 'live' else [(100, 8 if fault == 'pidfd_error' else 1)]
+    if fault == 'context':
+        state['context']['boot_id'] = 'different'
+    try:
+        if fault:
+            with pytest.raises(ValueError):
+                witness.removed('c35', row)
+            assert recorded == []
+        else:
+            result = witness.removed('c35', row)
+            assert result == witness.removed('c35', row)
+            assert len(recorded) == 1 and result['qualification_sha256'] == proof['qualification_sha256']
+            witness.check_exits(dict(candidates=[]))
+            with pytest.raises(ValueError, match='retired'):
+                witness.qualify('c35', row)
+    finally:
+        witness.close()
+        witness.close()
+    assert closed == ([] if fault == 'unwitnessed' else [100])

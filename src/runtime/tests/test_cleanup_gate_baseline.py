@@ -9,7 +9,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'tools'))
 from cleanup_execution import canonical_digest
-from cleanup_gate_baseline import BaselineComparisonError, capture
+from cleanup_gate_baseline import BaselineComparisonError, capture, settle
 from cleanup_scope_sources import ROOT
 
 
@@ -187,3 +187,60 @@ def test_postpersist_rejection_records_the_actual_removed_scope():
     assert caught.value.diagnostic['removed'] == [ROOT+'/original.scope']
     assert caught.value.diagnostic['added'] == []
     assert len(saved) == 1
+
+
+def test_witnessed_removal_can_be_recorded_before_definitive_baseline():
+    context, owner, _, previous, qualify = ssh_case()
+    current = deepcopy(previous)
+    removed = current['candidates'].pop()
+    current['candidates'][0]['names'].remove('session-c35.scope')
+    exit_proof = dict(qualify('c35', removed), exit_sha256='e'*64)
+    saved = []
+    receipt = capture(previous, context=context, read_sources=lambda: deepcopy(current),
+        verify_actors=lambda: 'd'*64, read_owner=lambda: deepcopy(owner), persist=saved.append,
+        qualify_removed_ssh=lambda sid, row: exit_proof)
+    assert receipt['baseline'] == current and receipt['prebaseline_ssh_exits'] == {
+        removed['source_id']: exit_proof}
+
+
+def test_pre_effect_settling_keeps_attempts_and_rechecks_original_actors():
+    context, owner, previous, first, qualify = ssh_case()
+    state = dict(sources=deepcopy(first))
+    saved, actors = [], []
+
+    def persist(attempt, receipt):
+        saved.append((attempt, receipt))
+        if attempt == 0:
+            state['sources']['candidates'].pop()
+            state['sources']['candidates'][0]['names'].remove('session-c35.scope')
+            state['sources']['candidates'][0]['metadata'][5] -= 20
+
+    def verify():
+        actors.append('checked')
+        return 'd'*64
+
+    result = settle(previous, context=context, read_sources=lambda: deepcopy(state['sources']),
+        verify_actors=verify, read_owner=lambda: deepcopy(owner), persist_attempt=persist,
+        qualify_ssh=qualify, verify_ssh_history=lambda observed: observed)
+    assert [item[0] for item in saved] == [0, 1]
+    assert result == saved[-1][1] and len(actors) == 6
+    assert result['baseline'] == state['sources']
+
+
+def test_settling_never_retries_a_changed_non_ssh_source():
+    context, owner, previous, current = case()
+    reads, saved = [], []
+
+    def read():
+        reads.append('read')
+        return deepcopy(current)
+
+    def persist(attempt, receipt):
+        saved.append(attempt)
+        current['candidates'][1]['sha256'] = 'e'*64
+
+    with pytest.raises(BaselineComparisonError):
+        settle(previous, context=context, read_sources=read, verify_actors=lambda: 'd'*64,
+               read_owner=lambda: deepcopy(owner), persist_attempt=persist,
+               verify_ssh_history=lambda observed: observed)
+    assert saved == [0] and len(reads) == 3

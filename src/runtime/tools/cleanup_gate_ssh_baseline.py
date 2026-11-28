@@ -9,6 +9,7 @@ from pathlib import Path
 import re
 import select
 import subprocess
+from copy import deepcopy
 
 from cleanup_census_readers import read_regular
 from cleanup_execution import canonical_digest, require
@@ -45,7 +46,7 @@ def query(binary, args, expected_sha256):
     return rows
 
 
-def qualify(sid, row, *, context, systemctl_sha256, loginctl_sha256):
+def qualify(sid, row, *, context, systemctl_sha256, loginctl_sha256, retain=None):
     expected_bytes = definition(sid)
     scope = 'session-'+sid+'.scope'
     path = ROOT+'/'+scope
@@ -111,7 +112,90 @@ def qualify(sid, row, *, context, systemctl_sha256, loginctl_sha256):
         require(observe() == (session, unit) and leader() == original and not poll.poll(0),
                 'SSH session changed during qualification')
         proof = dict(session=session, unit=unit, leader=original, source=row)
-        return dict(session_id=sid, context_sha256=canonical_digest(context),
+        receipt = dict(session_id=sid, context_sha256=canonical_digest(context),
             source_sha256=canonical_digest(row), qualification_sha256=canonical_digest(proof))
+        if retain is not None:
+            retain(fd, deepcopy(receipt))
+        return receipt
     finally:
         os.close(fd)
+
+
+class SessionWitnesses:
+    """Keep original pidfds until the definitive baseline has been acquired."""
+    def __init__(self, *, context, read_context, systemctl_sha256, loginctl_sha256, record):
+        self.context, self.read_context = deepcopy(context), read_context
+        self.systemctl, self.loginctl, self.record = systemctl_sha256, loginctl_sha256, record
+        self.originals, self.exits = {}, {}
+        self.closed = False
+
+    def _check(self):
+        require(not self.closed and self.read_context() == self.context,
+                'original SSH witness context unavailable')
+
+    def qualify(self, sid, row):
+        self._check()
+        require(sid not in self.exits, 'retired SSH identity cannot be reused')
+        previous = self.originals.get(sid)
+
+        def retain(fd, proof):
+            if previous is not None:
+                require(previous['row'] == row and previous['proof'] == proof,
+                        'original SSH generation changed')
+                poll = select.poll()
+                poll.register(previous['fd'], select.POLLIN)
+                require(not poll.poll(0), 'original SSH witness exited or unavailable')
+            else:
+                self.originals[sid] = dict(fd=os.dup(fd), row=deepcopy(row), proof=proof)
+
+        return qualify(sid, row, context=self.context, systemctl_sha256=self.systemctl,
+                       loginctl_sha256=self.loginctl, retain=retain)
+
+    def removed(self, sid, row):
+        self._check()
+        require(sid in self.originals, 'SSH removal requires original live witness')
+        original = self.originals[sid]
+        require(original['row'] == row, 'removed SSH source differs from original witness')
+        poll = select.poll()
+        poll.register(original['fd'], select.POLLIN)
+        require(poll.poll(0) == [(original['fd'], select.POLLIN)],
+                'original SSH process exit not verified')
+        scope = 'session-'+sid+'.scope'
+        require(not os.path.lexists(ROOT+'/'+scope) and not os.path.lexists(ROOT+'/'+scope+'.d'),
+                'original SSH scope or drop-ins remain')
+        expected = dict(Id=scope, LoadState='not-found', ActiveState='inactive',
+                        SubState='dead', InvocationID='')
+        observed = query('/usr/bin/systemctl', ['show', scope,
+            *['--property='+key for key in expected]], self.systemctl)
+        require(observed == expected, 'original SSH unit absence not verified')
+        self._check()
+        proof = dict(original['proof'], exit_sha256=canonical_digest(dict(
+            original=original['proof'], unit=observed, pidfd_exit=True)))
+        if sid not in self.exits:
+            self.record(dict(kind='qualified-prebaseline-ssh-exit', proof=deepcopy(proof)))
+            self.exits[sid] = deepcopy(proof)
+        require(self.exits[sid] == proof, 'original SSH exit receipt differs')
+        return proof
+
+    def check_exits(self, sources):
+        """Also prove sessions born and gone entirely between acquisitions."""
+        self._check()
+        paths = {row['source_id'] for row in sources['candidates']}
+        for sid, original in list(self.originals.items()):
+            if original['row']['source_id'] not in paths:
+                self.removed(sid, original['row'])
+        return sources
+
+    def close(self):
+        if self.closed:
+            return
+        self.closed = True
+        try:
+            for original in self.originals.values():
+                try:
+                    os.close(original.pop('fd'))
+                except OSError:
+                    # Continue closing the other owned descriptors.
+                    pass
+        finally:
+            self.originals.clear()

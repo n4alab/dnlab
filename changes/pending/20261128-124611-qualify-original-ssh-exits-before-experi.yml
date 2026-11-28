@@ -1,0 +1,14 @@
+id: 20261128-124611-qualify-original-ssh-exits-before-experi
+type: none
+title: Qualify original SSH exits before experimental VM gate effects
+description: Retain original SSH pidfds, verify process exit and unit absence, and
+  bound baseline acquisition before effects without relaxing execution-time checks.
+components:
+- runtime
+audience:
+- developer
+visibility: internal
+breaking: false
+upgrade_notes: []
+references: []
+reason: Experimental first-VM gate preparation; deployed services unchanged.

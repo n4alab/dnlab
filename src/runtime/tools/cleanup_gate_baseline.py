@@ -17,6 +17,8 @@ from cleanup_scope_sources import ROOT, indexed
 class BaselineComparisonError(ValueError):
     """Bounded evidence from the rejected read, without authorization."""
     def __init__(self, message, before, current):
+        self.observed = {'complete': True, 'candidates': sorted(
+            deepcopy(list(current.values())), key=lambda row: row['source_id'])}
         added, removed = set(current)-set(before), set(before)-set(current)
         changed = {key for key in set(before) & set(current) if before[key] != current[key]}
         self.diagnostic = dict(kind='scheduled-baseline-comparison-v1',
@@ -28,7 +30,7 @@ class BaselineComparisonError(ValueError):
 
 
 def capture(previous, *, context, read_sources, verify_actors, read_owner, persist,
-            qualify_ssh=None):
+            qualify_ssh=None, qualify_removed_ssh=None):
     """All IO providers are trusted local code, never selected by a request.
 
     verify_actors freshly qualifies the original artifacts/generations and
@@ -37,7 +39,8 @@ def capture(previous, *, context, read_sources, verify_actors, read_owner, persi
     qualify_ssh is trusted local code, not a request field. It must freshly
     verify the exact SSH unit definition, root session/leader, pidfd, process
     starttime, namespace and source identity. Its proof is checked again before
-    return. No removed scope, drop-in or changed existing file is accepted.
+    return. qualify_removed_ssh may qualify only a previously witnessed SSH
+    process exit and unit absence. No drop-in or changed existing file is accepted.
     """
     require(all(callable(fn) for fn in (read_sources, verify_actors, read_owner, persist)),
             'explicit original baseline providers required')
@@ -69,13 +72,28 @@ def capture(previous, *, context, read_sources, verify_actors, read_owner, persi
         if not condition:
             raise BaselineComparisonError(message, before, current)
 
-    added = set(current)-set(before)
-    compare(not (set(before)-set(current)) and (not added or callable(qualify_ssh)),
+    added, removed = set(current)-set(before), set(before)-set(current)
+    compare((not removed or callable(qualify_removed_ssh)) and (not added or callable(qualify_ssh)),
             'historical scheduled source paths changed')
-    compare(all(current[key] == before[key] for key in before if key != ROOT),
+    compare(all(current[key] == before[key] for key in set(before) & set(current) if key != ROOT),
             'qualified scheduled file or definition changed')
-    proofs = {}
-    for path in sorted(added):
+    proofs, exits = {}, {}
+    pattern = re.escape(ROOT) + r'/session-(c[0-9]+)\.scope'
+    for path in sorted(removed):
+        match = re.fullmatch(pattern, path)
+        compare(match is not None, 'only witnessed SSH exits allowed before baseline')
+        proof = deepcopy(qualify_removed_ssh(match[1], deepcopy(before[path])))
+        require(type(proof) is dict and set(proof) == {
+            'session_id', 'context_sha256', 'source_sha256', 'qualification_sha256', 'exit_sha256'}
+            and proof['session_id'] == match[1]
+            and proof['context_sha256'] == canonical_digest(context)
+            and proof['source_sha256'] == canonical_digest(before[path])
+            and sha(proof['qualification_sha256']) and sha(proof['exit_sha256']),
+            'original SSH exit and absence proof required')
+        exits[path] = proof
+    # Witness existing SSH sessions too, so a later exit cannot be learned by name.
+    ssh_paths = {path for path in current if re.fullmatch(pattern, path)} if callable(qualify_ssh) else set()
+    for path in sorted(added | ssh_paths):
         match = re.fullmatch(re.escape(ROOT) + r'/session-(c[0-9]+)\.scope', path)
         compare(match is not None, 'only qualified added SSH session scopes allowed')
         row = current[path]
@@ -98,13 +116,14 @@ def capture(previous, *, context, read_sources, verify_actors, read_owner, persi
             and new['kind'] == 'directory' and type(old['names']) is list
             and type(new['names']) is list
             and len(set(new['names'])) == len(new['names'])
-            and set(new['names']) == set(old['names']) | {path[len(ROOT)+1:] for path in added},
+            and set(new['names']) == (set(old['names']) - {path[len(ROOT)+1:] for path in removed})
+                | {path[len(ROOT)+1:] for path in added},
             'transient directory entries changed')
     for row in (old, new):
         require(type(row['metadata']) is list and len(row['metadata']) == 8
                 and all(type(v) is int and v >= 0 for v in row['metadata'])
                 and stat.S_ISDIR(row['metadata'][2]), 'complete transient directory metadata required')
-    require(new['metadata'][:5 if added else 6] == old['metadata'][:5 if added else 6],
+    require(new['metadata'][:5 if added or removed else 6] == old['metadata'][:5 if added or removed else 6],
             'transient parent identity, permissions or size changed')
     require(owner() == original and verify_actors() == actors,
             'original gate owner or actor proof changed during capture')
@@ -114,6 +133,8 @@ def capture(previous, *, context, read_sources, verify_actors, read_owner, persi
                    owner=original, actor_proof_sha256=actors)
     if proofs:
         receipt['prebaseline_ssh'] = proofs
+    if exits:
+        receipt['prebaseline_ssh_exits'] = exits
     persist(deepcopy(receipt))
     require(owner() == original and verify_actors() == actors,
             'gate baseline changed after persistence')
@@ -122,4 +143,43 @@ def capture(previous, *, context, read_sources, verify_actors, read_owner, persi
         raise BaselineComparisonError('gate baseline changed after persistence', current, observed)
     require(all(qualify_ssh(proof['session_id'], deepcopy(current[path])) == proof
                 for path, proof in proofs.items()), 'SSH qualification changed after persistence')
+    require(all(qualify_removed_ssh(proof['session_id'], deepcopy(before[path])) == proof
+                for path, proof in exits.items()), 'SSH exit proof changed after persistence')
     return deepcopy(receipt)
+
+
+def settle(previous, *, persist_attempt, verify_ssh_history, max_attempts=3, **providers):
+    """Bounded pre-effect acquisition, never a retry of a workload operation.
+
+    Only rejected source comparisons containing SSH scope births/exits and the
+    transient parent can be reacquired. Each attempt runs full actor/owner and
+    SSH qualification; all provisional receipts are retained. On success callers
+    use the returned baseline exactly and must not call settle during execution.
+    """
+    require(type(max_attempts) is int and 1 <= max_attempts <= 3,
+            'bounded prebaseline acquisition required')
+    require(callable(verify_ssh_history), 'original SSH witness history verifier required')
+    initial = deepcopy(previous)
+    read_sources = providers.pop('read_sources')
+
+    def checked_sources():
+        observed = read_sources()
+        require(verify_ssh_history(deepcopy(observed)) == observed,
+                'SSH history verifier must preserve observed sources')
+        return observed
+
+    for attempt in range(max_attempts):
+        try:
+            return capture(initial, read_sources=checked_sources,
+                persist=lambda receipt: persist_attempt(attempt, receipt), **providers)
+        except BaselineComparisonError as error:
+            diagnostic = error.diagnostic
+            delta = diagnostic['added'] + diagnostic['removed']
+            allowed = (diagnostic['changed_count'] == len(diagnostic['changed'])
+                and set(diagnostic['changed']) <= {ROOT}
+                and diagnostic['added_count'] + diagnostic['removed_count'] == len(delta)
+                and all(re.fullmatch(re.escape(ROOT)+r'/session-c[0-9]+\.scope', p) for p in delta))
+            if not allowed or attempt+1 == max_attempts:
+                raise
+            # The next capture must qualify against the original sources, not
+            # silently turn an unqualified observation into a new authority.
